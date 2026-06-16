@@ -1,0 +1,25 @@
+# 运行期数据（会话 transcript 与 trace span）
+/data/
+
+# 环境变量与密钥（仅从 env 读取，严禁入库）
+.env
+.env.local
+
+# 编译产物
+/cogent
+*.exe
+*.test
+*.out
+
+# 覆盖率
+coverage.txt
+*.cover
+
+# 依赖目录（不提交 vendor）
+/vendor/
+
+# 编辑器 / 操作系统
+.DS_Store
+.idea/
+.vscode/
+*.swp

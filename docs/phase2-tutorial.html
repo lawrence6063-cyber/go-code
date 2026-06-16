@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 2 教学 · 从「会说」到「会做」</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #9da7b3;
+    --accent: #58a6ff;
+    --accent2: #7ee787;
+    --warn: #f0883e;
+    --danger: #ff7b72;
+    --purple: #d2a8ff;
+    --code-bg: #0b0f14;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 16px;
+  }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+
+  /* 侧边目录 */
+  aside {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    width: 268px;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 18px;
+    border-right: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a {
+    display: block;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin: 2px 0;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+  }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+
+  /* Hero */
+  .hero {
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent),
+                radial-gradient(800px 400px at 100% 0%, rgba(126,231,135,.08), transparent);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 38px;
+    margin-bottom: 40px;
+  }
+  .hero .tag {
+    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px;
+    padding: 3px 12px; margin-bottom: 16px;
+  }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+
+  h2 {
+    font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border); scroll-margin-top: 20px;
+  }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+
+  code:not(pre code) {
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple);
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+    font-family: var(--mono); position: relative; margin: 16px 0;
+  }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label {
+    position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim);
+    background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono);
+  }
+  /* 语法高亮 token */
+  .k { color: #ff7b72; }   /* keyword */
+  .s { color: #a5d6ff; }   /* string */
+  .c { color: #8b949e; font-style: italic; } /* comment */
+  .f { color: #d2a8ff; }   /* func/type */
+  .n { color: #79c0ff; }   /* number/const */
+
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 22px; margin: 16px 0;
+  }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(88,166,255,.07);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0;
+  }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-ro { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-ask { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+
+  /* 流程图 */
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step {
+    display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px;
+  }
+  .flow .step:not(:last-child)::before {
+    content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border);
+  }
+  .flow .dot {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1;
+    background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent);
+  }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+
+  @media (max-width: 980px) {
+    aside { display: none; }
+    main { padding: 28px 20px 80px; }
+    .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 2</div>
+    <div class="sub">从「会说」到「会做」</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#arch">① 架构全景</a>
+      <a href="#fc" class="lvl2">function calling 链路</a>
+      <a href="#loop" class="lvl2">工具化 ReAct 循环</a>
+      <a href="#llm">② LLM 层：流式工具解析</a>
+      <a href="#tool">③ tool 层：协议与工具池</a>
+      <a href="#failclosed" class="lvl2">fail-closed 默认</a>
+      <a href="#builtins" class="lvl2">6 个内建工具</a>
+      <a href="#perm">④ permission：权限三态</a>
+      <a href="#guard" class="lvl2">Guard 装饰器</a>
+      <a href="#sandbox">⑤ sandbox：安全边界</a>
+      <a href="#engine">⑥ engine：工具循环</a>
+      <a href="#cli">⑦ CLI：HITL 与档位</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 2 · Tools &amp; Permission</span>
+      <h1>cogent Phase 2：让 Agent 真正动手改代码</h1>
+      <p>Phase 1 的 cogent 只是一个「会流式对话」的壳。Phase 2 打通了 <b>function calling 全链路</b>，让模型能在真实仓库里读文件、检索、改文件、跑命令，并把结果回流给自己自我验证——同时用<b>权限三态 + 人在环（HITL）+ 沙箱边界</b>守住安全底线。</p>
+      <div class="stats">
+        <div class="stat"><b>3</b><span>新增包 tool / permission / sandbox</span></div>
+        <div class="stat"><b>6</b><span>内建工具</span></div>
+        <div class="stat"><b>3</b><span>运行档位 auto / plan / ask</span></div>
+        <div class="stat"><b>100%</b><span>go test -race 全绿</span></div>
+      </div>
+    </div>
+
+    <p>这份教学按「先看全景，再逐层拆解」的顺序展开。每一节都配有<b>真实代码片段</b>与<b>设计动机</b>，读完你能完整理解一个最小可用编码 Agent 的工具系统是怎么搭起来的。</p>
+
+    <h2 id="arch"><span class="num">01</span>架构全景</h2>
+    <p>Phase 2 的依赖方向严格单向，<b>engine 只依赖 <code>tool.Pool</code> 抽象</b>，权限与沙箱被「装配」进需要它们的工具里，而不是侵入内核。这是整个设计的骨架：</p>
+    <pre><span class="code-label">依赖方向</span><code>          ┌─────────────┐
+          │     CLI     │  装配一切：建工具池、注入 Prompter/Policy/Tracer、解析 --mode
+          └──────┬──────┘
+                 │ 注入 Deps{ LLM, Tools, Mode, ... }
+                 ▼
+          ┌─────────────┐      ┌──────────────┐
+          │   engine    │─────▶│  tool.Pool   │  仅依赖抽象，不认识具体工具
+          │ (ReAct loop)│      └──────┬───────┘
+          └──────┬──────┘             │
+                 │ Stream()           ├── readfile / listdir / grep  (只读, 直接入池)
+                 ▼                    └── Guard( writefile/editfile/bash )
+          ┌─────────────┐                      │ 包裹
+          │   llm 层    │                      ▼
+          │ function    │              ┌──────────────┐   ┌─────────────┐
+          │ calling     │              │  permission  │   │   sandbox   │
+          └─────────────┘              │  (三态裁决)   │   │ (路径/危险) │
+                                       └──────────────┘   └─────────────┘</code></pre>
+    <div class="callout"><b>关键取舍：</b>本阶段工具执行先做<b>串行</b>，bash 做<b>最小安全版</b>（ask + 路径校验 + 危险命令拦截 + 超时）。并发分批调度与完整命令沙箱留给 Phase 3。</div>
+
+    <h3 id="fc">什么是 function calling 链路？</h3>
+    <p>「function calling」是让 LLM 在回答时<b>不直接输出文本，而是输出「我想调用某个工具 + 参数」</b>的结构化请求。完整一轮闭环是：</p>
+    <div class="flow">
+      <div class="step"><div class="dot">1</div><div class="body"><b>声明工具</b><p>请求里带上每个工具的 name / description / 入参 JSON Schema，告诉模型「你有这些能力」。</p></div></div>
+      <div class="step"><div class="dot">2</div><div class="body"><b>模型发起调用</b><p>模型流式返回 <code>tool_calls</code>（分片到达），cogent 累积成完整的 <code>ToolUseBlock{ID, Name, Input}</code>。</p></div></div>
+      <div class="step"><div class="dot">3</div><div class="body"><b>本地执行工具</b><p>engine 查池、过权限、跑工具，拿到结果。</p></div></div>
+      <div class="step"><div class="dot">4</div><div class="body"><b>回流 tool_result</b><p>把结果按 <code>ID</code> 配对成 <code>role=tool</code> 消息塞回历史，再次请求模型。模型据此继续或收尾。</p></div></div>
+    </div>
+    <div class="callout warn"><b>不变量（最易踩的坑）：</b>assistant 的 <code>tool_calls</code> 与 <code>role=tool</code> 的 tool_result 必须<b>按 ID 一一配对完整</b>。少一个、多一个或顺序错乱，OpenAI 兼容接口都会直接报 400。</div>
+
+    <h2 id="llm"><span class="num">02</span>LLM 层：把流式分片拼回完整工具调用</h2>
+    <p>难点在于：OpenAI 流式协议里，一次 <code>tool_calls</code> 的 <code>arguments</code>（JSON 字符串）是<b>跨多个 SSE 帧分片到达</b>的——首帧带 <code>id</code>/<code>name</code>，后续帧只带 <code>arguments</code> 的一截。我们需要一个按 <code>index</code> 累积的「拼接器」。</p>
+
+    <h3>累积器 toolAcc</h3>
+    <pre><span class="code-label">internal/llm/client.go</span><code><span class="c">// toolAcc 按 index 累积一次流式响应里的多个并行工具调用，保序刷出。</span>
+<span class="k">type</span> <span class="f">toolAcc</span> <span class="k">struct</span> {
+    bufs  <span class="k">map</span>[<span class="k">int</span>]*toolCallBuf <span class="c">// index → 累积缓冲</span>
+    order []<span class="k">int</span>                <span class="c">// 首次出现顺序，保证刷出与模型请求一致</span>
+}
+
+<span class="c">// add 把一帧的 tool_calls 分片并入累积器；Index 标识所属调用。</span>
+<span class="k">func</span> (a *toolAcc) <span class="f">add</span>(calls []openai.ToolCall) {
+    <span class="k">for</span> _, c := <span class="k">range</span> calls {
+        idx := <span class="n">0</span>
+        <span class="k">if</span> c.Index != <span class="k">nil</span> { idx = *c.Index }
+        b, ok := a.bufs[idx]
+        <span class="k">if</span> !ok {                          <span class="c">// 首次见到这个 index</span>
+            b = &toolCallBuf{}
+            a.bufs[idx] = b
+            a.order = <span class="f">append</span>(a.order, idx)
+        }
+        <span class="k">if</span> c.ID != <span class="s">""</span>            { b.id = c.ID }            <span class="c">// 首片带 id</span>
+        <span class="k">if</span> c.Function.Name != <span class="s">""</span> { b.name = c.Function.Name } <span class="c">// 首片带 name</span>
+        b.args.<span class="f">WriteString</span>(c.Function.Arguments)              <span class="c">// 后续片拼 arguments</span>
+    }
+}</code></pre>
+
+    <h3>何时「刷出」一个完整调用？</h3>
+    <p>当某帧的 <code>finish_reason == tool_calls</code> 时，说明工具调用已集齐，把缓冲组装成 <code>ToolUseBlock</code> 上抛；流结束（EOF）时再兜底刷一次，防止漏掉。</p>
+    <pre><span class="code-label">internal/llm/client.go · processFrame</span><code>acc.<span class="f">add</span>(choice.Delta.ToolCalls)
+<span class="k">if</span> choice.FinishReason == openai.FinishReasonToolCalls && !acc.<span class="f">flush</span>(ctx, out) {
+    <span class="k">return</span> <span class="k">false</span>
+}</code></pre>
+    <div class="callout ok"><b>细节兜底：</b><code>flush</code> 里若 <code>arguments</code> 为空字符串，会规整为合法空对象 <code>"{}"</code>——这样无参工具调用（如 <code>list_dir</code> 列当前目录）也能产出可被 <code>json.Unmarshal</code> 解析的入参。</div>
+
+    <h3>请求侧：声明工具 + 配对消息</h3>
+    <p>请求映射要做两件事：① 把工具 schema 转成 OpenAI 的 <code>tools</code> 字段；② 让 assistant 消息携带 <code>tool_calls</code>、tool 消息携带 <code>ToolCallID</code>，保证配对完整。</p>
+    <pre><span class="code-label">internal/llm/client.go · toOpenAIMessage</span><code><span class="k">func</span> <span class="f">toOpenAIMessage</span>(m types.Message) openai.ChatCompletionMessage {
+    msg := openai.ChatCompletionMessage{Role: <span class="f">mapRole</span>(m.Role), Content: m.Text}
+    <span class="k">if</span> m.Role == types.RoleTool {        <span class="c">// tool_result 必须带 ID 才能配对</span>
+        msg.ToolCallID = m.ToolUseID
+        msg.Name = m.ToolName
+    }
+    <span class="k">if</span> <span class="f">len</span>(m.ToolCalls) > <span class="n">0</span> {            <span class="c">// assistant 携带它发起的 tool_calls</span>
+        msg.ToolCalls = <span class="f">toOpenAIToolCalls</span>(m.ToolCalls)
+    }
+    <span class="k">return</span> msg
+}</code></pre>
+
+    <h2 id="tool"><span class="num">03</span>tool 层：统一协议、工具池与 fail-closed 默认</h2>
+    <p>所有工具——内建的、未来 MCP 接入的外部工具——都实现同一个 <code>Tool</code> 接口、进同一个 <code>Pool</code>。<b>新增能力 = 实现接口 + 注册，内核零改动。</b></p>
+    <pre><span class="code-label">internal/tool/tool.go</span><code><span class="k">type</span> <span class="f">Tool</span> <span class="k">interface</span> {
+    <span class="f">Name</span>() <span class="k">string</span>                          <span class="c">// 唯一标识（function calling 名）</span>
+    <span class="f">Description</span>() <span class="k">string</span>                   <span class="c">// 给模型看的用途描述</span>
+    <span class="f">InputSchema</span>() json.RawMessage          <span class="c">// 入参 JSON Schema</span>
+
+    <span class="f">IsConcurrencySafe</span>(input json.RawMessage) <span class="k">bool</span> <span class="c">// 默认 false</span>
+    <span class="f">IsReadOnly</span>(input json.RawMessage) <span class="k">bool</span>        <span class="c">// 默认 false</span>
+
+    <span class="f">CheckPermission</span>(ctx, input) (permission.Decision, <span class="k">error</span>)
+    <span class="f">Call</span>(ctx, input, sink ProgressSink) (types.ToolResult, <span class="k">error</span>)
+}</code></pre>
+
+    <h3 id="failclosed">fail-closed：把「安全」从约定变成语言层兜底</h3>
+    <p>这是本层最精妙的设计。<code>Defaults</code> 提供一组<b>最保守</b>的默认实现：非并发安全、非只读、权限 ask。工具<b>匿名嵌入</b>它，只覆写自己需要「放开」的方法。<b>忘记覆写 = 自动退化为最安全行为</b>，而不是最危险行为。</p>
+    <div class="grid cols2">
+      <div class="card">
+        <pre style="margin:0;border:none;background:transparent;padding:0"><span class="c">// 保守默认</span>
+<span class="k">type</span> <span class="f">Defaults</span> <span class="k">struct</span>{}
+<span class="k">func</span> (Defaults) <span class="f">IsReadOnly</span>(...) <span class="k">bool</span> {
+    <span class="k">return</span> <span class="k">false</span>   <span class="c">// 默认不是只读</span>
+}
+<span class="k">func</span> (Defaults) <span class="f">CheckPermission</span>(...) {
+    <span class="k">return</span> ask     <span class="c">// 默认要问</span>
+}</pre>
+      </div>
+      <div class="card">
+        <pre style="margin:0;border:none;background:transparent;padding:0"><span class="c">// 只读工具只覆写需要放开的</span>
+<span class="k">type</span> <span class="f">ReadFile</span> <span class="k">struct</span> {
+    Defaults  <span class="c">// 匿名嵌入</span>
+    ...
+}
+<span class="k">func</span> (ReadFile) <span class="f">IsReadOnly</span>(...) <span class="k">bool</span> {
+    <span class="k">return</span> <span class="k">true</span>   <span class="c">// 显式放开</span>
+}</pre>
+      </div>
+    </div>
+    <div class="callout"><b>工具池 <code>Pool</code> 的并发模型：</b>启动期一次性装配（<code>NewPool</code>），运行期<b>只读</b>——切片 + map 索引，无锁、无竞态。同名工具保留先出现者（内建优先于 MCP）。</div>
+
+    <h3 id="builtins">6 个内建工具</h3>
+    <table>
+      <tr><th>工具</th><th>作用</th><th>只读/并发安全</th><th>权限</th></tr>
+      <tr><td><code>read_file</code></td><td>读取工作区文件</td><td><span class="badge b-ro">只读</span></td><td>自动放行</td></tr>
+      <tr><td><code>list_dir</code></td><td>列出目录条目</td><td><span class="badge b-ro">只读</span></td><td>自动放行</td></tr>
+      <tr><td><code>grep</code></td><td>正则检索文件内容</td><td><span class="badge b-ro">只读</span></td><td>自动放行</td></tr>
+      <tr><td><code>write_file</code></td><td>创建 / 覆盖文件</td><td>否</td><td><span class="badge b-ask">ask · HITL</span></td></tr>
+      <tr><td><code>edit_file</code></td><td>按旧串精确替换</td><td>否</td><td><span class="badge b-ask">ask · HITL</span></td></tr>
+      <tr><td><code>bash</code></td><td>执行 shell 命令（最小安全版）</td><td>否</td><td><span class="badge b-ask">ask</span> <span class="badge b-deny">危险直接拒</span></td></tr>
+    </table>
+
+    <h2 id="perm"><span class="num">04</span>permission：权限三态</h2>
+    <p>权限模型只有三个状态，简单但够用：</p>
+    <div class="grid cols3">
+      <div class="card"><b style="color:var(--accent2)">allow</b><p style="color:var(--text-dim);margin:6px 0 0">直接放行执行。只读工具走这条路。</p></div>
+      <div class="card"><b style="color:var(--warn)">ask</b><p style="color:var(--text-dim);margin:6px 0 0">中断，征询人类（HITL）：Approve / Edit / Reject。</p></div>
+      <div class="card"><b style="color:var(--danger)">deny</b><p style="color:var(--text-dim);margin:6px 0 0">拒绝，把原因规整为错误结果回流给模型改道。</p></div>
+    </div>
+    <p>裁决由 <code>StaticPolicy</code>（静态策略，<b>Deny 优先</b>）与工具内建 <code>CheckPermission</code> 共同决定：策略命中 allow/deny 即采纳，否则回落到工具自身判定。</p>
+
+    <h3 id="guard">Guard：把权限 + HITL 收敛到一处</h3>
+    <p>不在每个工具里散落权限逻辑，而是用一个<b>装饰器</b> <code>Guard</code> 包裹写/执行类工具。Guard 自身也实现 <code>Tool</code>（元数据全透传内层），只在 <code>Call</code> 时插入权限闸门：</p>
+    <pre><span class="code-label">internal/tool/guard.go · Call</span><code><span class="k">func</span> (g *Guard) <span class="f">Call</span>(ctx, input, sink) (types.ToolResult, <span class="k">error</span>) {
+    dec := g.<span class="f">decide</span>(ctx, input)   <span class="c">// 在 permission.check span 内裁决</span>
+    <span class="k">switch</span> dec.Behavior {
+    <span class="k">case</span> permission.BehaviorAllow:
+        <span class="k">return</span> g.inner.<span class="f">Call</span>(ctx, <span class="f">pickInput</span>(input, dec.UpdatedInput), sink)
+    <span class="k">case</span> permission.BehaviorDeny:
+        <span class="k">return</span> types.ToolResult{Content: <span class="f">denyMessage</span>(dec.Reason), IsError: <span class="k">true</span>}, <span class="k">nil</span>
+    <span class="k">default</span>: <span class="c">// ask → 走 HITL</span>
+        <span class="k">return</span> g.<span class="f">askAndRun</span>(ctx, input, dec, sink)
+    }
+}</code></pre>
+    <div class="callout danger"><b>fail-closed 再兜底：</b>若 <code>ask</code> 但<b>没有配置 Prompter</b>（比如非交互环境），Guard 直接返回错误结果而非放行。安全永远是默认值。</div>
+
+    <h2 id="sandbox"><span class="num">05</span>sandbox：路径与危险命令边界</h2>
+    <p>所有文件操作和命令执行都先过 sandbox 校验，三道防线：</p>
+    <div class="flow">
+      <div class="step"><div class="dot">A</div><div class="body"><b>ValidatePath — 防越界</b><p>把目标路径解析为绝对路径后，校验它仍位于 <code>workRoot</code> 之内。<code>../../etc/passwd</code> 这类穿越会被 <code>ErrPathEscape</code> 拒绝。</p></div></div>
+      <div class="step"><div class="dot">B</div><div class="body"><b>控制面写禁止</b><p><code>.cogent/</code>、<code>.git/</code> 等控制面目录的<b>写入</b>被禁止——防止 Agent 改坏自己的配置或仓库元数据。</p></div></div>
+      <div class="step"><div class="dot">C</div><div class="body"><b>危险命令识别</b><p>bash 命令按复合分隔符逐子命令检查破坏性片段（<code>rm -rf /</code>、<code>mkfs</code>、<code>dd if=</code>…），并单独整命令匹配 fork bomb <code>:(){:|:&amp;};:</code> 与管道执行 <code>curl ... | sh</code>。</p></div></div>
+    </div>
+    <div class="callout warn"><b>设计原则：宁可误拦，不可漏放。</b>危险命令用小写子串匹配，复合命令任一子命令危险即整体判危。这是保守的「最小安全版」，Phase 3 会换成真正的命令沙箱。</div>
+
+    <h2 id="engine"><span class="num">06</span>engine：工具化 ReAct 主循环</h2>
+    <p id="loop">这是 Phase 2 的「心脏」。Phase 1 的 loop 在没有工具调用时就结束；Phase 2 改为：<b>有工具调用 → 串行执行 → 回流 tool_result → 进入下一轮</b>，<code>maxSteps</code> 作为防失控空转的护栏。</p>
+    <div class="flow">
+      <div class="step"><div class="dot">1</div><div class="body"><b>streamAssistant</b><p>流式调 LLM，文本即时上抛为 <code>EventText</code>，同时累积模型发起的 <code>toolUses</code>。</p></div></div>
+      <div class="step"><div class="dot">2</div><div class="body"><b>appendAssistant</b><p>把助手回复（含 tool_calls）落入消息历史——<b>tool_calls 必须和 assistant 消息一起入历史</b>，否则下一轮配对断裂。</p></div></div>
+      <div class="step"><div class="dot">3</div><div class="body"><b>无工具 → 结束</b><p><code>len(toolUses)==0</code> 时发 <code>EventDone</code>，本次任务收尾。</p></div></div>
+      <div class="step"><div class="dot">4</div><div class="body"><b>executeTools（串行）</b><p>逐个执行，每个工具发成对的 <code>ToolStart</code>/<code>ToolResult</code> 事件，结果规整为 <code>role=tool</code> 消息按 ID 配对回流。</p></div></div>
+    </div>
+    <pre><span class="code-label">internal/engine/exec.go · 核心不变量</span><code><span class="c">// 工具失败规范化为 tool_result(IsError) 让模型自我修正，不中断主循环</span>
+<span class="k">func</span> <span class="f">toolResultMessage</span>(block types.ToolUseBlock, res types.ToolResult) types.Message {
+    <span class="k">return</span> types.Message{
+        Role:      types.RoleTool,
+        Text:      content,
+        ToolUseID: block.ID,   <span class="c">// ← 与 assistant 的 tool_call.ID 配对</span>
+        ToolName:  block.Name,
+    }
+}</code></pre>
+    <div class="callout ok"><b>容错哲学：</b>工具报错<b>不抛异常中断循环</b>，而是把错误写进 <code>tool_result</code> 回给模型，让模型「看到报错后自己改方法重试」。这正是 Agent 自我修正能力的来源。</div>
+
+    <h2 id="cli"><span class="num">07</span>CLI：人在环交互与运行档位</h2>
+    <h3>三种运行档位 --mode</h3>
+    <table>
+      <tr><th>档位</th><th>暴露的工具</th><th>典型用途</th></tr>
+      <tr><td><code>auto</code>（默认）</td><td>全部工具，可写</td><td>放手让 Agent 自主完成改造</td></tr>
+      <tr><td><code>plan</code></td><td>仅只读工具</td><td>探索仓库、产出改造计划，不落盘</td></tr>
+      <tr><td><code>ask</code></td><td>仅只读工具</td><td>只读问答</td></tr>
+    </table>
+    <p>档位过滤在两处生效：<code>toolsForMode</code> 决定<b>声明给模型</b>哪些工具；<code>toolAllowedInMode</code> 在执行前<b>二次兜底</b>，即便模型硬调了写工具也会被挡回——再次体现 fail-closed。</p>
+
+    <h3>HITL 中断交互</h3>
+    <p>写/执行类工具触发 <code>ask</code> 时，<code>cliPrompter</code> 在终端暂停征询：</p>
+    <pre><span class="code-label">交互示例</span><code>[permission] tool <span class="s">"write_file"</span> requests execution:
+  input: {<span class="s">"path"</span>:<span class="s">"main.go"</span>,<span class="s">"content"</span>:<span class="s">"..."</span>}
+  approve / edit / reject? [a/e/r]</code></pre>
+    <ul style="color:#c9d1d9">
+      <li><b>a (Approve)</b>：原样批准执行。</li>
+      <li><b>e (Edit)</b>：输入修正后的 JSON 入参，再执行修正版。</li>
+      <li><b>r (Reject)</b>：拒绝，可附一段指引文本回流给模型，让它改道。</li>
+    </ul>
+    <div class="callout"><b>并发读 stdin 的坑：</b>REPL 主循环和 HITL 都要读标准输入。这里用<b>单一共享 <code>inputReader</code></b>，避免两个 goroutine 同时读 stdin 产生竞争——<code>go test -race</code> 能发现这类问题。</div>
+
+    <h2 id="test"><span class="num">08</span>测试策略</h2>
+    <div class="grid cols2">
+      <div class="card">
+        <h3 style="margin-top:0">单元测试</h3>
+        <p style="color:var(--text-dim)">流式 tool_calls 分片解析、<code>ValidatePath</code> 越界、permission 三态裁决、工具 schema/只读标志、危险命令识别——表驱动为主。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">组件测试</h3>
+        <p style="color:var(--text-dim)">engine 注入 <b>Fake LLM</b>（脚本化按轮返回 tool_use/文本）+ <b>真实工具</b>，断言事件序列：<code>ToolStart→ToolResult→Text→Done</code>，并验证 msgs 里 tool_result 配对完整。</p>
+      </div>
+    </div>
+    <pre><span class="code-label">验证命令</span><code>go build ./...
+go vet ./...
+go test -race ./...   <span class="c"># 单元 + 组件测试，含 goroutine 泄漏 / 数据竞争检测</span></code></pre>
+    <div class="callout ok"><b>结果：</b>全绿，无 lint 错误。严格遵循 Go 规范：error 末位且必处理、fail-closed 默认、导出符号带注释、禁循环内 defer、函数 &lt; 80 行、嵌套 &lt; 4 层。</div>
+
+    <h2 id="takeaway">设计要点回顾</h2>
+    <div class="grid cols2">
+      <div class="card"><b style="color:var(--accent)">① fail-closed 贯穿全程</b><p style="color:var(--text-dim)">Defaults 保守默认 + 嵌入覆写、ask 无 Prompter 即拒、档位执行前二次兜底——「忘了配置」永远退化到最安全行为。</p></div>
+      <div class="card"><b style="color:var(--accent)">② 配对完整是硬约束</b><p style="color:var(--text-dim)">tool_calls 与 tool_result 按 ID 一一配对，assistant 消息必须携带它发起的 tool_calls。</p></div>
+      <div class="card"><b style="color:var(--accent)">③ 装饰器收敛横切关注点</b><p style="color:var(--text-dim)">Guard 把权限 + HITL + 埋点收敛到一处，工具本身只管「做事」，不掺权限逻辑。</p></div>
+      <div class="card"><b style="color:var(--accent)">④ 错误即上下文</b><p style="color:var(--text-dim)">工具失败不中断循环，而是回流 IsError 结果让模型自我修正——这是 Agent 韧性的核心。</p></div>
+      <div class="card"><b style="color:var(--accent)">⑤ 依赖单向、内核纯净</b><p style="color:var(--text-dim)">engine 只认 tool.Pool 抽象；permission/sandbox 随工具装配注入，不污染内核 Deps。</p></div>
+      <div class="card"><b style="color:var(--accent)">⑥ 启动装配、运行只读</b><p style="color:var(--text-dim)">Pool 一次装配、运行期无锁只读，从结构上消除并发竞态。</p></div>
+    </div>
+
+    <h3>下一站：Phase 3</h3>
+    <p>
+      <span class="pill">orchestrate 并发/串行分批调度</span>
+      <span class="pill">errgroup + 槽位</span>
+      <span class="pill">完整命令沙箱 sandbox</span>
+    </p>
+
+    <footer>
+      cogent · Phase 2 教学文档 · 生成于 2026-06-16 · 进度 13/22（59%），Phase 0/1/2 均 100%
+    </footer>
+  </main>
+</div>
+</body>
+</html>
