@@ -6,6 +6,7 @@ require (
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/goleak v1.3.0
+	golang.org/x/sync v0.10.0
 )
 
 require (

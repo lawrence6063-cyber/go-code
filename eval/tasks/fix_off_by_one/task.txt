@@ -1,0 +1,6 @@
+修复 repo/sum.go 中 SumTo 函数的 off-by-one 缺陷。
+
+SumTo(n) 应返回 1..n 的闭区间累加和（包含 n 本身），
+例如 SumTo(5) 应等于 15（1+2+3+4+5）。当前实现漏掉了 n，结果偏小。
+
+要求：仅修改 repo/sum.go，使 repo 下的单元测试全部通过。

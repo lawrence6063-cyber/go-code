@@ -14,6 +14,7 @@ import (
 	"github.com/alaindong/cogent/internal/llm"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
+	"github.com/alaindong/cogent/internal/sandbox"
 	"github.com/alaindong/cogent/internal/tool"
 	"github.com/alaindong/cogent/internal/types"
 )
@@ -148,16 +149,18 @@ func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engin
 }
 
 // buildToolPool 装配内建工具池：只读类直接入池；写/执行类经 Guard 注入权限闸门与 HITL。
+// bash 经统一的 sandbox.Sandbox 执行（危险拦截 + 受限环境 + 工作目录约束 + 超时 + 执行后清理）。
 func buildToolPool(workRoot string, prompter permission.Prompter, tracer observe.Tracer) tool.Pool {
 	policy := permission.StaticPolicy{}
 	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: true})
 	return tool.NewPool(
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
-		guard(tool.NewBash(workRoot)),
+		guard(tool.NewBash(sb, tracer)),
 	)
 }
 

@@ -1,34 +1,34 @@
-// Package tool 中的 bash.go 实现 bash 工具的最小安全版：默认 ask + 危险命令拦截 + 工作目录 + 超时。
-// 完整的命令沙箱（受限环境 + 执行后清理 + 隔离）留待 Phase 3 在 internal/sandbox 补全。
+// Package tool 中的 bash.go 实现 bash 工具：经统一的 sandbox.Sandbox 执行 shell 命令，
+// 由沙箱负责危险命令拦截、工作目录约束、超时与执行后清理；本文件只做入参解析、span 埋点与输出格式化。
 package tool
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os/exec"
-	"time"
+	"strings"
 
+	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
 	"github.com/alaindong/cogent/internal/types"
 )
 
-// bash 执行约束常量。
-const (
-	defaultBashTimeout = 30 * time.Second // 单条命令执行超时
-	maxBashOutput      = 32 * 1024        // 回流输出上限，防止撑爆上下文
-)
+// maxBashOutput 是回流输出上限，防止撑爆上下文。
+const maxBashOutput = 32 * 1024
 
-// bashTool 在工作目录内执行 shell 命令；默认非只读、权限 ask、危险命令直接拒绝。
+// bashTool 经 sandbox 在工作目录内执行 shell 命令；默认非只读、权限 ask、危险命令直接拒绝。
 type bashTool struct {
 	Defaults
-	workRoot string
+	sb     sandbox.Sandbox
+	tracer observe.Tracer
 }
 
-// NewBash 构造 bash 工具。
-func NewBash(workRoot string) Tool { return &bashTool{workRoot: workRoot} }
+// NewBash 用沙箱与 tracer 构造 bash 工具。
+func NewBash(sb sandbox.Sandbox, tracer observe.Tracer) Tool {
+	return &bashTool{sb: sb, tracer: tracer}
+}
 
 func (t *bashTool) Name() string { return "bash" }
 func (t *bashTool) Description() string {
@@ -39,7 +39,7 @@ func (t *bashTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"shell command to execute"}},"required":["command"]}`)
 }
 
-// CheckPermission 危险命令直接拒绝，其余走默认 ask。
+// CheckPermission 危险命令直接拒绝，其余走默认 ask（与沙箱内的确定性拦截形成双重兜底）。
 func (t *bashTool) CheckPermission(_ context.Context, input json.RawMessage) (permission.Decision, error) {
 	cmd, err := parseCommand(input)
 	if err != nil {
@@ -51,32 +51,60 @@ func (t *bashTool) CheckPermission(_ context.Context, input json.RawMessage) (pe
 	return permission.Decision{Behavior: permission.BehaviorAsk}, nil
 }
 
-// Call 在工作目录内带超时执行命令，回流截断后的合并输出。
+// Call 经沙箱执行命令并回流格式化后的输出；危险命令被沙箱拦截时规整为错误结果。
 func (t *bashTool) Call(ctx context.Context, input json.RawMessage, _ ProgressSink) (types.ToolResult, error) {
 	cmd, err := parseCommand(input)
 	if err != nil {
 		return types.ToolResult{Content: fmt.Sprintf("invalid input: %v", err), IsError: true}, nil
 	}
-	if sandbox.IsDangerousCommand(cmd) {
+	ctx, end := t.tracer.Start(ctx, "sandbox.exec", observe.Attr{Key: "command.first", Value: firstWord(cmd)})
+	res, execErr := t.sb.Exec(ctx, cmd)
+	end(execErr)
+	if errors.Is(execErr, sandbox.ErrDangerousCommand) {
 		return types.ToolResult{Content: "dangerous command blocked", IsError: true}, nil
 	}
-	tctx, cancel := context.WithTimeout(ctx, defaultBashTimeout)
-	defer cancel()
+	if execErr != nil {
+		return types.ToolResult{Content: fmt.Sprintf("sandbox exec: %v", execErr), IsError: true}, nil
+	}
+	return formatExecResult(res), nil
+}
 
-	var buf bytes.Buffer
-	c := exec.CommandContext(tctx, "bash", "-c", cmd)
-	c.Dir = t.workRoot
-	c.Stdout = &buf
-	c.Stderr = &buf
-	runErr := c.Run()
-	out := truncate(buf.String(), maxBashOutput)
-	if runErr != nil {
-		return types.ToolResult{Content: fmt.Sprintf("%s\n[exit error: %v]", out, runErr), IsError: true}, nil
+// formatExecResult 把沙箱执行结果合并为回流文本：非零退出码标记为错误并附带退出码。
+func formatExecResult(res sandbox.ExecResult) types.ToolResult {
+	out := truncate(mergeOutput(res.Stdout, res.Stderr), maxBashOutput)
+	if res.ExitCode != 0 {
+		if out == "" {
+			out = "[no output]"
+		}
+		return types.ToolResult{Content: fmt.Sprintf("%s\n[exit code: %d]", out, res.ExitCode), IsError: true}
 	}
 	if out == "" {
 		out = "[no output]"
 	}
-	return types.ToolResult{Content: out}, nil
+	return types.ToolResult{Content: out}
+}
+
+// mergeOutput 合并 stdout 与 stderr，stderr 以分节标注便于模型区分。
+func mergeOutput(stdout, stderr string) string {
+	var sb strings.Builder
+	sb.WriteString(stdout)
+	if strings.TrimSpace(stderr) != "" {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("[stderr]\n")
+		sb.WriteString(stderr)
+	}
+	return sb.String()
+}
+
+// firstWord 返回命令的首个空白分隔词，用作 span 属性。
+func firstWord(command string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
 }
 
 // parseCommand 从入参解析出 command 字段。
@@ -88,7 +116,7 @@ func parseCommand(input json.RawMessage) (string, error) {
 		return "", err
 	}
 	if in.Command == "" {
-		return "", fmt.Errorf("empty command")
+		return "", errors.New("empty command")
 	}
 	return in.Command, nil
 }

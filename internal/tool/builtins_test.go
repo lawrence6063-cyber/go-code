@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/alaindong/cogent/internal/permission"
+	"github.com/alaindong/cogent/internal/sandbox"
 )
 
 func mustJSON(t *testing.T, v any) json.RawMessage {
@@ -121,7 +122,8 @@ func TestGrep(t *testing.T) {
 
 func TestBash_DangerousBlockedAndRun(t *testing.T) {
 	dir := t.TempDir()
-	tl := NewBash(dir)
+	sb := sandbox.New(sandbox.Config{WorkRoot: dir, Enabled: true})
+	tl := NewBash(sb, testTracer())
 	// 危险命令 CheckPermission 应 Deny。
 	dec, _ := tl.CheckPermission(context.Background(), mustJSON(t, map[string]string{"command": "rm -rf /"}))
 	if dec.Behavior != permission.BehaviorDeny {
