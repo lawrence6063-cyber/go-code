@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,9 +18,13 @@ import (
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
+	"github.com/alaindong/cogent/internal/session"
 	"github.com/alaindong/cogent/internal/tool"
 	"github.com/alaindong/cogent/internal/types"
 )
+
+// dataDirName 是会话 transcript 与 trace 的运行期数据目录（.gitignore 已排除）。
+const dataDirName = "data"
 
 // defaultLLMBaseURL 是未配置 COGENT_LLM_BASE_URL 时的回退地址（对齐 .env.example）。
 const defaultLLMBaseURL = "https://api.deepseek.com/v1"
@@ -53,7 +58,7 @@ func newRunCmd() *cobra.Command {
 			if len(args) == 1 {
 				first = args[0]
 			}
-			return runREPL(cmd.Context(), first, m)
+			return runREPL(cmd.Context(), replOptions{first: first, mode: m})
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
@@ -74,16 +79,23 @@ func parseMode(s string) (engine.Mode, error) {
 	}
 }
 
-// newResumeCmd 构造 resume 子命令（Phase 5 实现，当前占位）。
+// newResumeCmd 构造 resume 子命令：从已有会话 transcript 重建上下文并续跑。
 func newResumeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "resume [session-id]",
-		Short: "从中断处恢复一个已有会话（尚未实现）",
+	var mode string
+	cmd := &cobra.Command{
+		Use:   "resume <session-id>",
+		Short: "从中断处恢复一个已有会话并继续对话（无损接续）",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("resume not implemented yet (planned for Phase 5)")
+			m, err := parseMode(mode)
+			if err != nil {
+				return err
+			}
+			return runREPL(cmd.Context(), replOptions{mode: m, resumeID: args[0]})
 		},
 	}
+	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
+	return cmd
 }
 
 // newMCPCmd 构造 mcp 子命令（Phase 6 实现，当前占位）。
@@ -97,8 +109,15 @@ func newMCPCmd() *cobra.Command {
 	}
 }
 
-// runREPL 装配依赖并进入交互式对话循环；first 非空时作为第一轮输入，mode 选择运行档位。
-func runREPL(ctx context.Context, first string, mode engine.Mode) error {
+// replOptions 聚合 REPL 的启动选项：首轮输入、运行档位与可选的 resume 会话 ID。
+type replOptions struct {
+	first    string      // 非空时作为第一轮输入
+	mode     engine.Mode // 运行档位
+	resumeID string      // 非空时从该会话恢复
+}
+
+// runREPL 装配依赖并进入交互式对话循环；按 opts 决定新建会话或从 resumeID 恢复。
+func runREPL(ctx context.Context, opts replOptions) error {
 	prov, err := observe.New(observe.Config{Enabled: false})
 	if err != nil {
 		return fmt.Errorf("init observe: %w", err)
@@ -107,7 +126,11 @@ func runREPL(ctx context.Context, first string, mode engine.Mode) error {
 
 	in := newInputReader(os.Stdin)
 	prompter := newCLIPrompter(in)
-	eng, err := buildEngine(prov, prompter, mode)
+	sid := opts.resumeID
+	if sid == "" {
+		sid = session.NewSessionID()
+	}
+	eng, err := buildEngine(prov, prompter, opts.mode, sid)
 	if err != nil {
 		return err
 	}
@@ -116,17 +139,37 @@ func runREPL(ctx context.Context, first string, mode engine.Mode) error {
 	var runErr error
 	defer func() { end(runErr) }()
 
-	slog.Info("repl started", "mode", mode)
-	fmt.Println("cogent — type 'exit' or 'quit' (or Ctrl-C) to leave.")
-	runErr = replLoop(ctx, eng, in, first)
+	slog.Info("repl started", "mode", opts.mode, "session", sid)
+	fmt.Printf("cogent — session %s — type 'exit' or 'quit' (or Ctrl-C) to leave.\n", sid)
+	fmt.Printf("  (resume later with: cogent resume %s)\n", sid)
+	runErr = driveREPL(ctx, eng, in, opts)
 	if errors.Is(runErr, context.Canceled) {
 		return nil
 	}
 	return runErr
 }
 
-// buildEngine 按环境变量装配 LLM 客户端、工具池与执行内核。
-func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engine.Mode) (engine.Engine, error) {
+// driveREPL 根据是否 resume 选择启动方式，随后进入共享的多轮输入循环。
+func driveREPL(ctx context.Context, eng engine.Engine, in *inputReader, opts replOptions) error {
+	if opts.resumeID != "" {
+		fmt.Print("cogent> ")
+		events, err := eng.Resume(ctx, opts.resumeID)
+		if err != nil {
+			return fmt.Errorf("resume: %w", err)
+		}
+		if err := consumeEvents(ctx, events); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+			fmt.Fprintln(os.Stderr, "\ncogent: resume error:", err)
+		}
+		return inputLoop(ctx, eng, in)
+	}
+	return replLoop(ctx, eng, in, opts.first)
+}
+
+// buildEngine 按环境变量装配 LLM 客户端、工具池、会话存储与执行内核。
+func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engine.Mode, sessionID string) (engine.Engine, error) {
 	baseURL := os.Getenv("COGENT_LLM_BASE_URL")
 	if baseURL == "" {
 		baseURL = defaultLLMBaseURL
@@ -142,6 +185,8 @@ func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engin
 		Context:      contextmgr.New(),
 		Memory:       memory.New(),
 		MemoryWriter: memory.NewWriter(),
+		Session:      session.NewStore(filepath.Join(wd, dataDirName)),
+		SessionID:    sessionID,
 		Observe:      prov,
 		Mode:         mode,
 		Model:        os.Getenv("COGENT_MODEL"),
@@ -169,14 +214,18 @@ func buildToolPool(workRoot string, prompter permission.Prompter, tracer observe
 	)
 }
 
-// replLoop 驱动对话循环：先处理 first（若有），再循环读取共享输入。
-// Ctrl-C 在等待输入时也能即时退出（共用 inputReader）。
+// replLoop 驱动对话循环：先处理 first（若有），再进入共享的多轮输入循环。
 func replLoop(ctx context.Context, eng engine.Engine, in *inputReader, first string) error {
 	if strings.TrimSpace(first) != "" {
 		if err := runTurn(ctx, eng, first); err != nil {
 			return err
 		}
 	}
+	return inputLoop(ctx, eng, in)
+}
+
+// inputLoop 循环读取共享输入并逐轮执行；Ctrl-C 在等待输入时也能即时退出。
+func inputLoop(ctx context.Context, eng engine.Engine, in *inputReader) error {
 	for {
 		fmt.Print("\nyou> ")
 		line, ok := in.next(ctx)

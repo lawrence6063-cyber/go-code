@@ -191,11 +191,12 @@ func TestEngine_RunRejectsEmptyTask(t *testing.T) {
 	}
 }
 
-func TestEngine_ResumeNotImplemented(t *testing.T) {
+func TestEngine_ResumeRequiresSessionStore(t *testing.T) {
 	f := &fakeLLM{}
 	eng := newTestEngine(t, f)
+	// 未配置 Session 时 Resume 应明确报错（而非静默成功）。
 	if _, err := eng.Resume(context.Background(), "sid"); err == nil {
-		t.Error("expected resume to be unimplemented")
+		t.Error("expected resume to require a session store, got nil")
 	}
 }
 

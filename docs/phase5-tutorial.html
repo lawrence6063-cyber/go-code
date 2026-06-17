@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 5 教学 · 会话持久化与可中断可恢复</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #9da7b3;
+    --accent: #58a6ff;
+    --accent2: #7ee787;
+    --warn: #f0883e;
+    --danger: #ff7b72;
+    --purple: #d2a8ff;
+    --code-bg: #0b0f14;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 16px;
+  }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+
+  aside {
+    position: sticky; top: 0; align-self: flex-start; width: 268px; height: 100vh;
+    overflow-y: auto; padding: 28px 18px; border-right: 1px solid var(--border); flex-shrink: 0;
+  }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a {
+    display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px;
+    border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s;
+  }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+
+  .hero {
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent),
+                radial-gradient(800px 400px at 100% 0%, rgba(210,168,255,.08), transparent);
+    border: 1px solid var(--border); border-radius: 16px; padding: 40px 38px; margin-bottom: 40px;
+  }
+  .hero .tag {
+    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px;
+    padding: 3px 12px; margin-bottom: 16px;
+  }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+
+  h2 { font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+
+  code:not(pre code) {
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple);
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+    font-family: var(--mono); position: relative; margin: 16px 0;
+  }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label {
+    position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim);
+    background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono);
+  }
+  .k { color: #ff7b72; }
+  .s { color: #a5d6ff; }
+  .c { color: #8b949e; font-style: italic; }
+  .f { color: #d2a8ff; }
+  .n { color: #79c0ff; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+
+  .callout { border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-safe { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-warn { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step { display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px; }
+  .flow .step:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border); }
+  .flow .dot {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1;
+    background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent);
+  }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+
+  @media (max-width: 980px) {
+    aside { display: none; }
+    main { padding: 28px 20px 80px; }
+    .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 5</div>
+    <div class="sub">会话持久化与可中断可恢复</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#why">① 为什么需要可恢复</a>
+      <a href="#philosophy" class="lvl2">写简单 / 恢复复杂</a>
+      <a href="#arch">② 模块全景与依赖方向</a>
+      <a href="#event">③ 事件模型与 JSONL</a>
+      <a href="#store" class="lvl2">Store 接口 + 落盘</a>
+      <a href="#redact" class="lvl2">密钥脱敏与路径防护</a>
+      <a href="#record">④ 内核如何记录事件</a>
+      <a href="#resume">⑤ Resume：重建与续跑</a>
+      <a href="#pairing" class="lvl2">配对修复算法 ★</a>
+      <a href="#cmd">⑥ CLI 装配与 resume 命令</a>
+      <a href="#orthogonal">⑦ 与 trace 正交</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">⑨ 设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 5 · Session Persistence &amp; Resume</span>
+      <h1>cogent Phase 5：让长任务「断了能接着干」</h1>
+      <p>前四阶段的 cogent 能对话、能动手、能并发安全、能跑长任务，但任务一旦被 <code>Ctrl-C</code> 中断或进程崩溃，所有上下文就灰飞烟灭、只能从头再来。Phase 5 给它装上<b>可中断可恢复</b>能力：每一步交互以 <b>append-only JSONL 事件流</b>落盘，<code>cogent resume &lt;id&gt;</code> 时重放重建上下文、<b>修复 function calling 配对</b>、注入"从中断处继续"提示后交回同一主循环——无损接着干。</p>
+      <div class="stats">
+        <div class="stat"><b>1</b><span>新包 session</span></div>
+        <div class="stat"><b>append-only</b><span>JSONL 事件流</span></div>
+        <div class="stat"><b>0</b><span>新增第三方依赖</span></div>
+        <div class="stat"><b>0</b><span>go test -race 告警</span></div>
+      </div>
+    </div>
+
+    <p>这份教学按「问题背景 → 设计哲学 → 事件模型 → 内核记录 → 恢复路径 → CLI → 测试」的顺序展开。每节先讲<b>为什么这么设计</b>（取舍 + 面试话术），再展示<b>怎么做</b>（核心代码），最后用 callout 钉死不变量。</p>
+
+    <!-- ========== 01 为什么 ========== -->
+    <h2 id="why"><span class="num">01</span>为什么自主 Agent 必须「可恢复」</h2>
+    <p>自主编码任务往往是<b>长链路、多轮、耗时</b>的：探索代码、改文件、跑测试、自我修正，可能要几十轮 LLM 调用。这条链路上有太多中断点——用户主动 <code>Ctrl-C</code>、网络抖动、进程被杀、机器重启。如果中断就意味着"从头再来"，那么"自主跑长任务"就失去了实用价值（既费钱又费时）。</p>
+
+    <div class="grid cols2">
+      <div class="card">
+        <h3 style="margin-top:0">没有持久化</h3>
+        <p style="color:var(--text-dim)">上下文只活在内存的 <code>e.msgs</code> 里。进程一退，几十轮积累的探索成果、已做的改动决策全部蒸发，下次只能重跑——重复烧 token、重复踩坑。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">cogent 的做法</h3>
+        <p style="color:var(--text-dim)">每一步交互即时追加到 <code>./data/&lt;id&gt;.jsonl</code>。中断后 <code>cogent resume &lt;id&gt;</code> 重放事件重建消息列表，注入"继续"提示，交回<b>同一 ReAct 主循环</b>续跑。</p>
+      </div>
+    </div>
+
+    <h3 id="philosophy">核心哲学：写入路径做简单，复杂性压到恢复路径</h3>
+    <p>这是蓝本 Claude Code <code>sessionStorage.ts</code> 的关键工程取舍，cogent 照搬其精神：</p>
+    <table>
+      <tr><th>路径</th><th>特性</th><th>设计取舍</th></tr>
+      <tr><td><b>写入</b>（热路径）</td><td>每轮都跑、要快要稳</td><td>只做最简单的事：<b>顺序 append 一行 JSON</b>。无锁、无事务、append-only 天然崩溃安全（写到一半崩了，最多丢最后一行，已写的行完好）。</td></tr>
+      <tr><td><b>恢复</b>（冷路径）</td><td>只在 resume 时跑一次</td><td>可以承担复杂度：去重、链路修复、剥离悬空 <code>tool_use</code>、丢弃孤立 <code>tool_result</code>。复杂性集中在这里，不污染热路径。</td></tr>
+    </table>
+    <div class="callout"><b>面试杠杆点：</b>"为什么写简单、恢复复杂？"——因为写在每轮的热路径上，必须快且崩溃安全；恢复是冷路径，只跑一次，可承担修复成本。append-only 是这套取舍的载体：单向追加既最快又最抗崩溃。</div>
+
+    <!-- ========== 02 架构 ========== -->
+    <h2 id="arch"><span class="num">02</span>模块全景与依赖方向</h2>
+    <p>Phase 5 新增一个<b>内层包</b> <code>internal/session</code>，engine 只做薄集成。严格守 §4.4 依赖方向：<code>engine → session → types</code>，session 绝不反依赖 engine。</p>
+
+    <pre><span class="code-label">依赖方向（Phase 5 新增以 ★ 标记）</span><code>          ┌─────────────┐  buildEngine: session.NewStore(data) + NewSessionID()
+          │     CLI     │  注入 Deps{ Session, SessionID, ... }
+          │  run/resume │
+          └──────┬──────┘
+                 │
+                 ▼
+          ┌──────────────┐   ★ ┌────────────────────────┐
+          │   engine     │────▶│        session         │  Store{Append/Load/Resolve}
+          │  Run / Resume│     │  jsonlStore            │  ./data/&lt;id&gt;.jsonl
+          │  step()      │     │  Event{UUID,Parent,...}│  O_APPEND 0o600
+          │  record()    │     │  NewSessionID / 脱敏    │
+          │  rebuild()   │     └───────────┬────────────┘
+          │  filter…()   │                 │ 依赖
+          └──────────────┘                 ▼
+                                      ┌──────────┐
+                                      │  types   │  Message / ToolUseBlock
+                                      └──────────┘</code></pre>
+
+    <table>
+      <tr><th>位置</th><th>核心抽象</th><th>职责</th></tr>
+      <tr><td><code>internal/session/store.go</code></td><td><code>Store</code> 接口 + <code>jsonlStore</code></td><td>Append/Load/Resolve、JSONL 落盘、UUID 去重、密钥脱敏、<code>NewSessionID</code>、<code>ErrSessionNotFound</code></td></tr>
+      <tr><td><code>engine/session_event.go</code></td><td>（engine 私有方法）</td><td><code>Message↔Event</code> 转换、<code>record</code>、<code>rebuildMessages</code>、<code>filterUnresolvedToolUses</code>、<code>genUUID</code></td></tr>
+      <tr><td><code>engine/engine.go</code></td><td><code>Run</code> / <code>Resume</code> / <code>step</code></td><td>把 <code>loop</code> 拆成不追加 task 的 <code>step</code>，Run/Resume 各自 bootstrap 后复用</td></tr>
+    </table>
+
+    <!-- ========== 03 事件模型 ========== -->
+    <h2 id="event"><span class="num">03</span>事件模型与 JSONL 落盘</h2>
+    <p>transcript（会话记录）是一条 <b>append-only 的事件流</b>，每行一个 JSON 事件。事件按 <code>ParentUUID</code> 串成链，按 <code>UUID</code> 去重——这让"同一事件被重复写入"（如重试）在恢复时被自动幂等处理。</p>
+
+    <pre><span class="code-label">internal/session/store.go · Event</span><code><span class="k">type</span> <span class="n">Event</span> <span class="k">struct</span> {
+    <span class="n">UUID</span>       <span class="k">string</span>          <span class="s">`json:"uuid"`</span>        <span class="c">// 唯一标识，用于去重</span>
+    <span class="n">ParentUUID</span> <span class="k">string</span>          <span class="s">`json:"parent_uuid"`</span> <span class="c">// 父事件 UUID，串成会话链</span>
+    <span class="n">Type</span>       <span class="k">string</span>          <span class="s">`json:"type"`</span>        <span class="c">// user/assistant/tool_result/summary/meta</span>
+    <span class="n">Payload</span>    <span class="n">json</span>.<span class="n">RawMessage</span> <span class="s">`json:"payload"`</span>     <span class="c">// 序列化后的消息</span>
+    <span class="n">Timestamp</span>  <span class="k">int64</span>           <span class="s">`json:"ts"`</span>          <span class="c">// Unix 纳秒</span>
+}</code></pre>
+
+    <div class="callout"><b>为什么 Payload 直接存整条 <code>types.Message</code>？</b>恢复时只需 <code>json.Unmarshal</code> 回 <code>Message</code>，无需任何字段映射——序列化即"消息快照"，反序列化即重建。Type 由 Role 派生（<code>RoleTool → "tool_result"</code>），便于人读与按类型过滤。</div>
+
+    <h3 id="store">Store 接口与 Append 落盘</h3>
+    <pre><span class="code-label">internal/session/store.go · Store / Append</span><code><span class="k">type</span> <span class="n">Store</span> <span class="k">interface</span> {
+    <span class="f">Append</span>(ctx <span class="n">context</span>.<span class="n">Context</span>, sessionID <span class="k">string</span>, e <span class="n">Event</span>) <span class="k">error</span>
+    <span class="f">Load</span>(ctx <span class="n">context</span>.<span class="n">Context</span>, sessionID <span class="k">string</span>) ([]<span class="n">Event</span>, <span class="k">error</span>)
+    <span class="f">Resolve</span>(sessionID <span class="k">string</span>) <span class="k">string</span> <span class="c">// transcript 文件路径</span>
+}
+
+<span class="k">func</span> (s *<span class="n">jsonlStore</span>) <span class="f">Append</span>(ctx <span class="n">context</span>.<span class="n">Context</span>, sessionID <span class="k">string</span>, e <span class="n">Event</span>) <span class="k">error</span> {
+    path, err := s.<span class="f">safePath</span>(sessionID)        <span class="c">// 防 ../ 穿越</span>
+    <span class="c">// ... os.MkdirAll(dir, 0o700) ...</span>
+    e.<span class="n">Payload</span> = <span class="f">redactSecrets</span>(e.<span class="n">Payload</span>)   <span class="c">// 落盘前脱敏</span>
+    line, _ := <span class="n">json</span>.<span class="f">Marshal</span>(e)
+    f, _ := <span class="n">os</span>.<span class="f">OpenFile</span>(path, <span class="n">os</span>.<span class="n">O_APPEND</span>|<span class="n">os</span>.<span class="n">O_CREATE</span>|<span class="n">os</span>.<span class="n">O_WRONLY</span>, <span class="n">0o600</span>)
+    <span class="k">defer</span> f.<span class="f">Close</span>()
+    _, err = f.<span class="f">Write</span>(<span class="f">append</span>(line, <span class="s">'\n'</span>))  <span class="c">// 单行 JSON 追加，就是全部</span>
+    <span class="k">return</span> err
+}</code></pre>
+    <p><code>Load</code> 用 <code>bufio.Scanner</code>（放大 buffer 到 8MiB 容忍超长工具结果）单遍扫描，按 UUID <b>去重保序</b>；坏行容错跳过（尽量恢复其余历史）；文件缺失返回 <code>ErrSessionNotFound</code>。</p>
+
+    <h3 id="redact">两道落盘安全：密钥脱敏 + 路径防护</h3>
+    <div class="grid cols2">
+      <div class="card">
+        <h3 style="margin-top:0"><span class="badge b-deny">T6</span> 密钥脱敏（§7.5）</h3>
+        <p style="color:var(--text-dim)">落盘前用正则把 <code>sk-XXXX</code> 令牌、<code>"api_key"/"token"/"secret"/"password"</code> 字段值替换为 <code>[REDACTED]</code>，杜绝密钥泄露进 transcript。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0"><span class="badge b-deny">T1</span> 路径穿越防护</h3>
+        <p style="color:var(--text-dim)"><code>safePath</code> 用字符白名单 <code>^[A-Za-z0-9_-]+$</code> 校验 sessionID，拒绝 <code>../evil</code>、<code>a/b</code>、空串等，再拼 <code>&lt;dataDir&gt;/&lt;id&gt;.jsonl</code>。</p>
+      </div>
+    </div>
+    <pre><span class="code-label">UUID / sessionID 生成（零依赖）</span><code><span class="c">// 不引入 uuid 库，用标准库 crypto/rand 生成 hex</span>
+<span class="k">func</span> <span class="f">genUUID</span>() <span class="k">string</span> {
+    <span class="k">var</span> buf [<span class="n">16</span>]<span class="k">byte</span>
+    <span class="k">if</span> _, err := <span class="n">rand</span>.<span class="f">Read</span>(buf[:]); err != <span class="k">nil</span> { <span class="c">/* 时间戳兜底 */</span> }
+    <span class="k">return</span> <span class="n">hex</span>.<span class="f">EncodeToString</span>(buf[:])
+}
+<span class="c">// 会话 ID 带时间前缀（可读 + 唯一）：20260617-171500-a1b2c3d4e5f6</span>
+<span class="k">func</span> <span class="f">NewSessionID</span>() <span class="k">string</span> { <span class="k">return</span> <span class="n">ts</span> + <span class="s">"-"</span> + <span class="n">hex</span> }</code></pre>
+
+    <!-- ========== 04 内核记录 ========== -->
+    <h2 id="record"><span class="num">04</span>内核如何记录事件（最小侵入）</h2>
+    <p>关键设计：<b>Session 是可选依赖</b>（<code>Deps.Session</code> 为 nil 时 <code>record</code> 直接跳过）。这保证了既有组件测试（注入 Fake LLM、不带 Session）和纯对话场景完全不受影响——向后兼容。</p>
+
+    <pre><span class="code-label">engine/session_event.go · record</span><code><span class="k">func</span> (e *<span class="n">engine</span>) <span class="f">record</span>(ctx <span class="n">context</span>.<span class="n">Context</span>, msg <span class="n">types</span>.<span class="n">Message</span>) {
+    <span class="k">if</span> e.<span class="n">session</span> == <span class="k">nil</span> || e.<span class="n">sessionID</span> == <span class="s">""</span> {
+        <span class="k">return</span> <span class="c">// 未配置会话：纯对话 / 单测，零侵入</span>
+    }
+    payload, _ := <span class="n">json</span>.<span class="f">Marshal</span>(msg)
+    ev := <span class="n">session</span>.<span class="n">Event</span>{
+        <span class="n">UUID</span>: <span class="f">genUUID</span>(), <span class="n">ParentUUID</span>: e.<span class="n">lastUUID</span>, <span class="c">// 链到上一条</span>
+        <span class="n">Type</span>: <span class="f">eventType</span>(msg.<span class="n">Role</span>), <span class="n">Payload</span>: payload, <span class="n">Timestamp</span>: <span class="n">time</span>.<span class="f">Now</span>().<span class="f">UnixNano</span>(),
+    }
+    <span class="k">if</span> err := e.<span class="n">session</span>.<span class="f">Append</span>(ctx, e.<span class="n">sessionID</span>, ev); err != <span class="k">nil</span> {
+        <span class="n">slog</span>.<span class="f">Warn</span>(<span class="s">"append session event"</span>, <span class="s">"err"</span>, err)
+        <span class="k">return</span> <span class="c">// 落盘失败仅告警，不中断主循环</span>
+    }
+    e.<span class="n">lastUUID</span> = ev.<span class="n">UUID</span> <span class="c">// 刷新链尾</span>
+}</code></pre>
+
+    <p>记录点嵌在三处（<code>step</code> 主循环里），覆盖一轮交互的全部消息：</p>
+    <div class="flow">
+      <div class="step"><div class="dot">1</div><div class="body"><b>Run 追加用户任务</b><p>进入 <code>step</code> 前 <code>append(user) + record(user)</code>。</p></div></div>
+      <div class="step"><div class="dot">2</div><div class="body"><b>appendAssistant 记录助手回复</b><p>含 <code>tool_calls</code> 的 assistant 消息追加后立即 <code>record</code>，保证调用与回复一同落盘。</p></div></div>
+      <div class="step"><div class="dot">3</div><div class="body"><b>appendResults 逐条记录工具结果</b><p>本批 <code>tool_result</code> 保请求序逐条 <code>record</code>，与 <code>tool_use</code> 配对完整。</p></div></div>
+    </div>
+    <div class="callout warn"><b>落盘失败不致命：</b>持久化是<b>增强而非内核正确性前提</b>。<code>Append</code> 出错只 <code>slog.Warn</code>，主循环继续跑——磁盘满了也不该让正在进行的任务崩掉，最多失去 resume 能力。</div>
+
+    <!-- ========== 05 Resume ========== -->
+    <h2 id="resume"><span class="num">05</span>Resume：重建上下文并续跑</h2>
+    <p>守住<b>单一真相源不变量</b>（§4.4）：Resume <b>不分叉主循环</b>，只在 bootstrap 阶段做"重放重建"，随后交回与 Run 共用的 <code>step</code>。这正是把 <code>loop</code> 拆成"不追加 task 的 <code>step</code>"的意义。</p>
+
+    <pre><span class="code-label">engine/engine.go · Resume</span><code><span class="k">func</span> (e *<span class="n">engine</span>) <span class="f">Resume</span>(ctx <span class="n">context</span>.<span class="n">Context</span>, sessionID <span class="k">string</span>) (&lt;-<span class="k">chan</span> <span class="n">types</span>.<span class="n">StreamEvent</span>, <span class="k">error</span>) {
+    <span class="k">if</span> e.<span class="n">session</span> == <span class="k">nil</span> { <span class="k">return</span> <span class="k">nil</span>, <span class="n">errors</span>.<span class="f">New</span>(<span class="s">"resume requires a configured session store"</span>) }
+    events, err := e.<span class="n">session</span>.<span class="f">Load</span>(ctx, sessionID)   <span class="c">// 读 transcript</span>
+    <span class="k">if</span> err != <span class="k">nil</span> { <span class="k">return</span> <span class="k">nil</span>, <span class="n">fmt</span>.<span class="f">Errorf</span>(<span class="s">"load session: %w"</span>, err) }
+
+    e.<span class="n">sessionID</span> = sessionID
+    rebuilt, lastUUID := <span class="f">rebuildMessages</span>(events)        <span class="c">// 事件 → 消息</span>
+    rebuilt = <span class="f">filterUnresolvedToolUses</span>(rebuilt)        <span class="c">// ★ 修复配对</span>
+    e.<span class="n">msgs</span> = <span class="f">append</span>(e.<span class="n">msgs</span>[:<span class="n">1</span>:<span class="n">1</span>], rebuilt...)        <span class="c">// 保留 system，接上历史</span>
+    e.<span class="n">lastUUID</span> = lastUUID                            <span class="c">// 续上事件链，不重复记录历史</span>
+
+    out := <span class="f">make</span>(<span class="k">chan</span> <span class="n">types</span>.<span class="n">StreamEvent</span>, <span class="n">16</span>)
+    <span class="k">go</span> <span class="k">func</span>() {
+        <span class="k">defer</span> <span class="f">close</span>(out)
+        cont := <span class="n">types</span>.<span class="n">Message</span>{<span class="n">Role</span>: <span class="n">types</span>.<span class="n">RoleUser</span>, <span class="n">Text</span>: <span class="n">continuePrompt</span>}
+        e.<span class="n">msgs</span> = <span class="f">append</span>(e.<span class="n">msgs</span>, cont)
+        e.<span class="f">record</span>(ctx, cont)                            <span class="c">// 仅记录新的 continue，不重放旧事件</span>
+        e.<span class="f">step</span>(ctx, out)                              <span class="c">// 交回同一主循环</span>
+    }()
+    <span class="k">return</span> out, <span class="k">nil</span>
+}</code></pre>
+    <div class="callout"><b>两个易错点都已规避：</b>① <code>e.msgs[:1:1]</code> 保留内核重新注入的 system 提示（含最新 MEMORY.md），再接重建历史——system 不入 transcript，始终用最新的。② Resume <b>不重新 record 重建的历史</b>（它们已在文件里），只把 <code>lastUUID</code> 续到链尾、仅记录新的 continue 消息——否则会产生重复事件。</div>
+
+    <h3 id="pairing">★ filterUnresolvedToolUses：恢复路径的核心</h3>
+    <p>中断最危险的后果是留下<b>"半截"的工具调用</b>：模型已请求 <code>tool_use</code> 但结果还没回流，或反过来有孤立的 <code>tool_result</code>。直接把这种历史交给 LLM，<code>toOpenAIMessage</code> 会生成"孤立 tool_result"，DeepSeek API <b>直接报错</b>。所以重建后必须修复 function calling 配对不变量——这与 Phase 4 的 compact 切点修复同等重要。</p>
+
+    <pre><span class="code-label">中断现场（坏）</span><code>user:      "重构 X 模块"
+assistant: tool_use(c1=read) tool_use(c2=edit)
+tool:      c1 → "文件内容"
+           ✗ c2 的结果还没回来，进程就被 Ctrl-C 了
+           ────────── 中断 ──────────
+直接 resume → c2 是悬空 tool_use → API 报错</code></pre>
+
+    <pre><span class="code-label">engine/session_event.go · 三步修复</span><code><span class="k">func</span> <span class="f">filterUnresolvedToolUses</span>(msgs []<span class="n">types</span>.<span class="n">Message</span>) []<span class="n">types</span>.<span class="n">Message</span> {
+    <span class="c">// ① 收集所有"有结果"的 ToolUseID</span>
+    resolved := <span class="f">collectResolvedIDs</span>(msgs)
+    kept := <span class="f">make</span>(<span class="k">map</span>[<span class="k">string</span>]<span class="k">bool</span>)
+    out := <span class="f">make</span>([]<span class="n">types</span>.<span class="n">Message</span>, <span class="n">0</span>, <span class="f">len</span>(msgs))
+    <span class="k">for</span> _, m := <span class="k">range</span> msgs {
+        <span class="k">if</span> m.<span class="n">Role</span> == <span class="n">types</span>.<span class="n">RoleAssistant</span> &amp;&amp; <span class="f">len</span>(m.<span class="n">ToolCalls</span>) &gt; <span class="n">0</span> {
+            <span class="c">// ② 只保留有结果的调用；记下被保留的 ID</span>
+            m.<span class="n">ToolCalls</span> = <span class="f">keepResolvedCalls</span>(m.<span class="n">ToolCalls</span>, resolved, kept)
+            <span class="k">if</span> m.<span class="n">Text</span> == <span class="s">""</span> &amp;&amp; <span class="f">len</span>(m.<span class="n">ToolCalls</span>) == <span class="n">0</span> { <span class="k">continue</span> } <span class="c">// 空壳丢弃</span>
+        }
+        <span class="c">// ③ 丢弃指向已剥离调用的孤立 tool_result</span>
+        <span class="k">if</span> m.<span class="n">Role</span> == <span class="n">types</span>.<span class="n">RoleTool</span> &amp;&amp; !kept[m.<span class="n">ToolUseID</span>] { <span class="k">continue</span> }
+        out = <span class="f">append</span>(out, m)
+    }
+    <span class="k">return</span> out
+}</code></pre>
+    <div class="callout ok"><b>修复后保证：</b>每个保留下来的 assistant <code>tool_call</code> 都有配对的 <code>tool_result</code>，且没有任何孤立 <code>tool_result</code>。交回 <code>llm.toOpenAIMessage</code> 时协议完整，API 不报错。续跑时模型看到的是一个干净、自洽的历史。</div>
+
+    <!-- ========== 06 CLI ========== -->
+    <h2 id="cmd"><span class="num">06</span>CLI 装配与 resume 子命令</h2>
+    <p><code>buildEngine</code> 注入 <code>session.NewStore(&lt;wd&gt;/data)</code> 与一个 sessionID（run 用 <code>NewSessionID()</code>，resume 用传入 id）；REPL 启动时打印 sessionID，并提示如何 resume。</p>
+    <pre><span class="code-label">cmd/cogent · REPL 启动提示</span><code>$ cogent run "重构 X 模块"
+cogent — session 20260617-171500-a1b2c3d4e5f6 — type 'exit' or 'quit' (or Ctrl-C) to leave.
+  (resume later with: cogent resume 20260617-171500-a1b2c3d4e5f6)
+cogent&gt; ...干到一半 Ctrl-C...
+
+$ cogent resume 20260617-171500-a1b2c3d4e5f6   <span class="c"># 无损接着干</span></code></pre>
+    <p><code>newResumeCmd</code> 取 <code>ExactArgs(1)</code> 的 id，装配引擎后调 <code>eng.Resume</code>、复用 <code>consumeEvents</code> 渲染，随后进入抽出的 <code>inputLoop</code> 支持继续多轮追问。<code>run</code> 与 <code>resume</code> 共用一套 <code>replOptions</code> 与渲染逻辑，零分叉。</p>
+
+    <!-- ========== 07 正交 ========== -->
+    <h2 id="orthogonal"><span class="num">07</span>Session Transcript 与 Trace 正交（§8.5）</h2>
+    <p>容易混淆的两条流，目的与约束完全不同，用 <code>session_id</code> 关联：</p>
+    <table>
+      <tr><th></th><th>Session Transcript（本阶段）</th><th>Trace（Phase 8）</th></tr>
+      <tr><td>目的</td><td><b>业务恢复</b>：可中断可 resume</td><td><b>可观测</b>：性能/成本/调用链分析</td></tr>
+      <tr><td>内容</td><td>消息事件（user/assistant/tool_result）</td><td>span 树（耗时/token/父子/错误）</td></tr>
+      <tr><td>不变量</td><td><span class="badge b-deny">强</span> function calling 配对完整</td><td><span class="badge b-warn">弱</span> 尽力而为，丢 span 不影响正确性</td></tr>
+      <tr><td>落盘</td><td><code>data/&lt;id&gt;.jsonl</code>（append-only）</td><td><code>data/traces/&lt;id&gt;.jsonl</code> 或 OTLP</td></tr>
+    </table>
+    <div class="callout"><b>排障姿势：</b>定位坏 case 时，先用 trace 看"哪轮哪工具慢/错"，再用 transcript 看"那轮模型说了什么、给了什么 tool_result"——一物一职，互为补充。</div>
+
+    <!-- ========== 08 测试 ========== -->
+    <h2 id="test"><span class="num">08</span>测试策略</h2>
+    <div class="grid cols2">
+      <div class="card">
+        <h3 style="margin-top:0">单元测试（session 包）</h3>
+        <p style="color:var(--text-dim)">往返写读、UUID 去重、缺失返回 <code>ErrSessionNotFound</code>、<b>密钥脱敏</b>（表驱动覆盖 api_key/token/sk-）、文件权限 <code>0o600</code>、Resolve 路径、<b>路径穿越</b>拒绝、ID 生成唯一。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">组件测试（engine 包）</h3>
+        <p style="color:var(--text-dim)">真实 <code>jsonlStore</code> + <code>t.TempDir()</code>：① Run 把 4 类事件落盘且 <code>ParentUUID</code> 串成链；② 跑一轮→新引擎 Resume，断言<b>重建历史 + 注入 continue + 续跑</b>，第二段 LLM 请求携带完整历史；③ resume 不存在的会话报错。</p>
+      </div>
+    </div>
+    <pre><span class="code-label">filterUnresolvedToolUses 表驱动单测</span><code><span class="c">// 三种情形锁死配对修复：</span>
+{<span class="s">"drop unresolved tool_use without result"</span>}  <span class="c">// 悬空调用 → 整条 assistant 丢弃</span>
+{<span class="s">"keep resolved, drop orphan result"</span>}        <span class="c">// 保留 c1、剥离 c2、丢孤立 result</span>
+{<span class="s">"fully paired untouched"</span>}                    <span class="c">// 已配对 → 原样不动</span></code></pre>
+    <div class="callout ok"><b>验证结果：</b><code>gofmt -l</code> 无输出；<code>go build / vet / test -race ./...</code> 全绿；新增包带 <code>goleak.VerifyTestMain</code>，无 goroutine 泄漏。</div>
+
+    <!-- ========== 09 回顾 ========== -->
+    <h2 id="takeaway"><span class="num">09</span>设计要点回顾</h2>
+    <div class="grid cols3">
+      <div class="card"><h3 style="margin-top:0">① 写简单恢复复杂</h3><p style="color:var(--text-dim)">热路径只 append 一行 JSON（崩溃安全），把去重/配对修复压到冷的恢复路径。</p></div>
+      <div class="card"><h3 style="margin-top:0">② append-only JSONL</h3><p style="color:var(--text-dim)">单向追加、按 UUID 去重、ParentUUID 串链，人可读、可审计、可增量。</p></div>
+      <div class="card"><h3 style="margin-top:0">③ 单一真相源</h3><p style="color:var(--text-dim)">Resume 不分叉主循环，仅 bootstrap 重建，交回与 Run 共用的 <code>step</code>。</p></div>
+      <div class="card"><h3 style="margin-top:0">④ 配对不变量</h3><p style="color:var(--text-dim)">重建必经 <code>filterUnresolvedToolUses</code>，剥离悬空 tool_use、丢孤立 result，否则 API 报错。</p></div>
+      <div class="card"><h3 style="margin-top:0">⑤ 落盘安全</h3><p style="color:var(--text-dim)">密钥脱敏 + 路径白名单 + 0o600/0o700；密钥绝不进 transcript。</p></div>
+      <div class="card"><h3 style="margin-top:0">⑥ 零新依赖</h3><p style="color:var(--text-dim)">UUID 用 <code>crypto/rand</code> 自生成，持久化仅靠标准库 <code>os</code>/<code>encoding/json</code>。</p></div>
+    </div>
+
+    <h3>面试 STAR（可中断可恢复）</h3>
+    <table>
+      <tr><th>维度</th><th>要点</th></tr>
+      <tr><td><b>S</b> 情境</td><td>自主编码任务长链路多轮，中途 Ctrl-C / 崩溃就得从头再来，重复烧钱踩坑。</td></tr>
+      <tr><td><b>T</b> 任务</td><td>让长任务可中断、可无损恢复。</td></tr>
+      <tr><td><b>A</b> 行动</td><td>"写入简单、恢复复杂"——会话以 append-only JSONL 事件流落盘；<code>signal.NotifyContext</code> 把 Ctrl-C 变成 ctx 取消、全链路优雅收尾；resume 时重放事件、按 UUID 去重、<code>filterUnresolvedToolUses</code> 修复配对、注入"继续"提示再交回同一主循环。</td></tr>
+      <tr><td><b>R</b> 结果</td><td>中断后 <code>resume</code> 无损接着干；事件流还一物多用——既是恢复依据，又是可观测/回放数据源（与 trace 用 session_id 关联）。</td></tr>
+    </table>
+
+    <footer>
+      cogent · Phase 5 教学文档 · 会话持久化与可中断可恢复 ｜ 配套源码见 <code>internal/session/</code>、<code>internal/engine/session_event.go</code>、<code>cmd/cogent/commands.go</code><br>
+      下一阶段：Phase 6 · MCP client（接入外部生态工具）。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -13,6 +13,7 @@ import (
 	"github.com/alaindong/cogent/internal/llm"
 	"github.com/alaindong/cogent/internal/memory"
 	"github.com/alaindong/cogent/internal/observe"
+	"github.com/alaindong/cogent/internal/session"
 	"github.com/alaindong/cogent/internal/tool"
 	"github.com/alaindong/cogent/internal/types"
 )
@@ -55,13 +56,14 @@ const (
 )
 
 // Deps 是构造 Engine 所需的依赖集合，便于测试注入替身。
-// 注：Session 等依赖随后续 Phase 增量补入。
 type Deps struct {
 	LLM          llm.Client          // LLM 提供方
 	Tools        tool.Pool           // 启动期装配、运行期只读的工具池；为 nil 时退化为无工具纯对话
 	Context      *contextmgr.Manager // 上下文窗口与自动压缩；为 nil 时不压缩
 	Memory       memory.Loader       // 分层记忆加载（读）；为 nil 时不注入记忆
 	MemoryWriter memory.Writer       // 分层记忆写入；为 nil 时不持久化运行时记忆（工具层使用）
+	Session      session.Store       // 会话事件落盘与 resume；为 nil 时不持久化（纯对话/测试）
+	SessionID    string              // 当前会话 ID；Session 非 nil 时用于定位 transcript
 	Observe      observe.Provider    // 可观测（trace/指标）；可传 no-op 关闭
 	Mode         Mode                // 运行档位；默认 ModeAuto
 	Model        string              // 模型名，用于窗口计算与请求
@@ -78,14 +80,16 @@ func New(deps Deps) (Engine, error) {
 		return nil, errors.New("nil observe provider")
 	}
 	e := &engine{
-		llm:      deps.LLM,
-		tools:    deps.Tools,
-		ctxmgr:   deps.Context,
-		tracer:   deps.Observe.Tracer(),
-		mode:     deps.Mode,
-		model:    deps.Model,
-		workRoot: deps.WorkRoot,
-		maxSteps: deps.MaxSteps,
+		llm:       deps.LLM,
+		tools:     deps.Tools,
+		ctxmgr:    deps.Context,
+		session:   deps.Session,
+		sessionID: deps.SessionID,
+		tracer:    deps.Observe.Tracer(),
+		mode:      deps.Mode,
+		model:     deps.Model,
+		workRoot:  deps.WorkRoot,
+		maxSteps:  deps.MaxSteps,
 	}
 	if e.maxSteps <= 0 {
 		e.maxSteps = defaultMaxSteps
@@ -116,16 +120,19 @@ func buildSystemPrompt(mem memory.Loader, workRoot string) string {
 
 // engine 是 Engine 的具体实现，持有跨轮的消息历史作为单一真相源。
 type engine struct {
-	llm      llm.Client
-	tools    tool.Pool
-	ctxmgr   *contextmgr.Manager
-	tracer   observe.Tracer
-	mode     Mode
-	model    string
-	workRoot string
-	maxSteps int
-	used     int // 最近一次调用的上下文 token 估计，用于压缩判定
-	msgs     []types.Message
+	llm       llm.Client
+	tools     tool.Pool
+	ctxmgr    *contextmgr.Manager
+	session   session.Store
+	tracer    observe.Tracer
+	mode      Mode
+	model     string
+	workRoot  string
+	sessionID string
+	lastUUID  string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
+	maxSteps  int
+	used      int // 最近一次调用的上下文 token 估计，用于压缩判定
+	msgs      []types.Message
 }
 
 // Run 见 Engine 接口说明。
@@ -134,27 +141,57 @@ func (e *engine) Run(ctx context.Context, task string) (<-chan types.StreamEvent
 		return nil, errors.New("empty task")
 	}
 	out := make(chan types.StreamEvent, 16)
-	go e.loop(ctx, task, out)
+	go func() {
+		defer close(out)
+		userMsg := types.Message{Role: types.RoleUser, Text: task}
+		e.msgs = append(e.msgs, userMsg)
+		e.record(ctx, userMsg)
+		e.step(ctx, out)
+	}()
 	return out, nil
 }
 
-// Resume 在 Phase 5 实现，当前返回未实现占位错误。
-func (e *engine) Resume(context.Context, string) (<-chan types.StreamEvent, error) {
-	return nil, errors.New("resume not implemented yet (planned for Phase 5)")
+// Resume 加载已有会话事件，重建并修复 function calling 配对后，注入"继续"提示，
+// 交回同一 ReAct 步进循环续跑（守单一真相源：不分叉主循环，仅 bootstrap 不同）。
+func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.StreamEvent, error) {
+	if e.session == nil {
+		return nil, errors.New("resume requires a configured session store")
+	}
+	if strings.TrimSpace(sessionID) == "" {
+		return nil, errors.New("empty session id")
+	}
+	events, err := e.session.Load(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("load session: %w", err)
+	}
+	e.sessionID = sessionID
+	rebuilt, lastUUID := rebuildMessages(events)
+	rebuilt = filterUnresolvedToolUses(rebuilt)
+	e.msgs = append(e.msgs[:1:1], rebuilt...) // 保留内核重新注入的 system 提示，接上重建历史
+	e.lastUUID = lastUUID
+
+	out := make(chan types.StreamEvent, 16)
+	go func() {
+		defer close(out)
+		cont := types.Message{Role: types.RoleUser, Text: continuePrompt}
+		e.msgs = append(e.msgs, cont)
+		e.record(ctx, cont)
+		e.step(ctx, out)
+	}()
+	return out, nil
 }
 
-// loop 是 ReAct 主循环：组装上下文 → 流式调 LLM → 文本上抛 →
-// 无工具调用则结束；有则串行执行工具、回流 tool_result 后进入下一轮，直至触达 maxSteps。
-func (e *engine) loop(ctx context.Context, task string, out chan<- types.StreamEvent) {
-	defer close(out)
-	e.msgs = append(e.msgs, types.Message{Role: types.RoleUser, Text: task})
+// step 是 ReAct 主循环的核心步进（不负责追加初始消息，由 Run/Resume 各自 bootstrap 后调用）：
+// 流式调 LLM → 文本上抛 → 无工具调用则结束；有则串行/并发执行工具、回流 tool_result 后进入下一轮，
+// 直至触达 maxSteps。每一步产生的消息同步 record 为 append-only 事件。
+func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
 	for step := 0; step < e.maxSteps; step++ {
 		if ctx.Err() != nil {
 			return
 		}
 		sctx, end := e.tracer.Start(ctx, "react.step", observe.Attr{Key: "step.index", Value: step})
 		reply, toolUses, err := e.streamAssistant(sctx, out)
-		e.appendAssistant(reply, toolUses)
+		e.appendAssistant(ctx, reply, toolUses)
 		if err != nil {
 			end(err)
 			emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: err})
@@ -167,7 +204,7 @@ func (e *engine) loop(ctx context.Context, task string, out chan<- types.StreamE
 		}
 		results := e.executeTools(sctx, toolUses, out)
 		end(nil)
-		e.msgs = append(e.msgs, results...)
+		e.appendResults(ctx, results)
 		e.maybeCompact(ctx, out)
 	}
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: ErrMaxStepsExceeded})
@@ -198,13 +235,23 @@ func (e *engine) maybeCompact(ctx context.Context, out chan<- types.StreamEvent)
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventCompacted})
 }
 
-// appendAssistant 把本轮助手回复（含可能的工具调用）追加进消息历史；
+// appendAssistant 把本轮助手回复（含可能的工具调用）追加进消息历史并记录为事件；
 // 工具调用随 assistant 消息一并落入，保证 function calling 配对完整。
-func (e *engine) appendAssistant(reply string, toolUses []types.ToolUseBlock) {
+func (e *engine) appendAssistant(ctx context.Context, reply string, toolUses []types.ToolUseBlock) {
 	if reply == "" && len(toolUses) == 0 {
 		return
 	}
-	e.msgs = append(e.msgs, types.Message{Role: types.RoleAssistant, Text: reply, ToolCalls: toolUses})
+	msg := types.Message{Role: types.RoleAssistant, Text: reply, ToolCalls: toolUses}
+	e.msgs = append(e.msgs, msg)
+	e.record(ctx, msg)
+}
+
+// appendResults 追加本批工具结果到历史并逐条记录为 tool_result 事件（保请求序）。
+func (e *engine) appendResults(ctx context.Context, results []types.Message) {
+	e.msgs = append(e.msgs, results...)
+	for _, r := range results {
+		e.record(ctx, r)
+	}
 }
 
 // streamAssistant 发起一次流式 LLM 调用：文本增量即时上抛，并累积模型发起的工具调用。
