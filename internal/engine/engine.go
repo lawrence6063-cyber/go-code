@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/alaindong/cogent/internal/contextmgr"
 	"github.com/alaindong/cogent/internal/llm"
+	"github.com/alaindong/cogent/internal/memory"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/tool"
 	"github.com/alaindong/cogent/internal/types"
@@ -53,15 +55,18 @@ const (
 )
 
 // Deps 是构造 Engine 所需的依赖集合，便于测试注入替身。
-// 注：Context/Memory/Session 等依赖随后续 Phase 增量补入。
+// 注：Session 等依赖随后续 Phase 增量补入。
 type Deps struct {
-	LLM      llm.Client       // LLM 提供方
-	Tools    tool.Pool        // 启动期装配、运行期只读的工具池；为 nil 时退化为无工具纯对话
-	Observe  observe.Provider // 可观测（trace/指标）；可传 no-op 关闭
-	Mode     Mode             // 运行档位；默认 ModeAuto
-	Model    string           // 模型名，用于窗口计算与请求
-	WorkRoot string           // 工作根目录，路径校验与 memory 加载基准
-	MaxSteps int              // ReAct 最大轮数，防失控空转
+	LLM          llm.Client          // LLM 提供方
+	Tools        tool.Pool           // 启动期装配、运行期只读的工具池；为 nil 时退化为无工具纯对话
+	Context      *contextmgr.Manager // 上下文窗口与自动压缩；为 nil 时不压缩
+	Memory       memory.Loader       // 分层记忆加载（读）；为 nil 时不注入记忆
+	MemoryWriter memory.Writer       // 分层记忆写入；为 nil 时不持久化运行时记忆（工具层使用）
+	Observe      observe.Provider    // 可观测（trace/指标）；可传 no-op 关闭
+	Mode         Mode                // 运行档位；默认 ModeAuto
+	Model        string              // 模型名，用于窗口计算与请求
+	WorkRoot     string              // 工作根目录，路径校验与 memory 加载基准
+	MaxSteps     int                 // ReAct 最大轮数，防失控空转
 }
 
 // New 构造一个 Engine 实例；deps 中除 Observe 外的核心依赖必填（Tools 可选）。
@@ -75,6 +80,7 @@ func New(deps Deps) (Engine, error) {
 	e := &engine{
 		llm:      deps.LLM,
 		tools:    deps.Tools,
+		ctxmgr:   deps.Context,
 		tracer:   deps.Observe.Tracer(),
 		mode:     deps.Mode,
 		model:    deps.Model,
@@ -87,19 +93,38 @@ func New(deps Deps) (Engine, error) {
 	if e.model == "" {
 		e.model = defaultModel
 	}
-	e.msgs = []types.Message{{Role: types.RoleSystem, Text: systemPrompt}}
+	e.msgs = []types.Message{{Role: types.RoleSystem, Text: buildSystemPrompt(deps.Memory, e.workRoot)}}
 	return e, nil
+}
+
+// buildSystemPrompt 把基础系统提示与项目记忆（若有）拼成最终系统提示。
+// 记忆是可选增强，加载失败仅告警不影响内核启动。
+func buildSystemPrompt(mem memory.Loader, workRoot string) string {
+	if mem == nil {
+		return systemPrompt
+	}
+	text, err := mem.Build(context.Background(), workRoot)
+	if err != nil {
+		slog.Warn("load memory", "err", err)
+		return systemPrompt
+	}
+	if strings.TrimSpace(text) == "" {
+		return systemPrompt
+	}
+	return systemPrompt + "\n\n# Project memory (.cogent/MEMORY.md)\n" + text
 }
 
 // engine 是 Engine 的具体实现，持有跨轮的消息历史作为单一真相源。
 type engine struct {
 	llm      llm.Client
 	tools    tool.Pool
+	ctxmgr   *contextmgr.Manager
 	tracer   observe.Tracer
 	mode     Mode
 	model    string
 	workRoot string
 	maxSteps int
+	used     int // 最近一次调用的上下文 token 估计，用于压缩判定
 	msgs     []types.Message
 }
 
@@ -143,8 +168,34 @@ func (e *engine) loop(ctx context.Context, task string, out chan<- types.StreamE
 		results := e.executeTools(sctx, toolUses, out)
 		end(nil)
 		e.msgs = append(e.msgs, results...)
+		e.maybeCompact(ctx, out)
 	}
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: ErrMaxStepsExceeded})
+}
+
+// maybeCompact 在配置了上下文管理器且触达阈值时压缩历史，成功后上抛 EventCompacted。
+// 压缩失败仅告警并保留原历史（绝不丢历史）；熔断后 ShouldCompact 恒 false 自然跳过。
+func (e *engine) maybeCompact(ctx context.Context, out chan<- types.StreamEvent) {
+	if e.ctxmgr == nil {
+		return
+	}
+	used := e.used
+	if used == 0 {
+		used = contextmgr.EstimateTokens(e.msgs)
+	}
+	if !e.ctxmgr.ShouldCompact(used, e.model) {
+		return
+	}
+	cctx, end := e.tracer.Start(ctx, "ctx.compact")
+	compacted, err := e.ctxmgr.Compact(cctx, e.msgs, e.llm)
+	end(err)
+	if err != nil {
+		slog.Warn("context compact failed", "err", err)
+		return
+	}
+	e.msgs = compacted
+	e.used = contextmgr.EstimateTokens(e.msgs)
+	emitEvent(ctx, out, types.StreamEvent{Type: types.EventCompacted})
 }
 
 // appendAssistant 把本轮助手回复（含可能的工具调用）追加进消息历史；
@@ -190,6 +241,7 @@ func (e *engine) streamAssistant(
 				}
 			}
 			if d.Usage != nil {
+				e.used = d.Usage.PromptTokens + d.Usage.CompletionTokens
 				slog.Debug("llm usage", "prompt", d.Usage.PromptTokens, "completion", d.Usage.CompletionTokens)
 			}
 		}

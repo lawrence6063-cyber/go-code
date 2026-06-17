@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 4 教学 · 上下文工程与分层记忆</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #9da7b3;
+    --accent: #58a6ff;
+    --accent2: #7ee787;
+    --warn: #f0883e;
+    --danger: #ff7b72;
+    --purple: #d2a8ff;
+    --code-bg: #0b0f14;
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 16px;
+  }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+
+  aside {
+    position: sticky; top: 0; align-self: flex-start; width: 268px; height: 100vh;
+    overflow-y: auto; padding: 28px 18px; border-right: 1px solid var(--border); flex-shrink: 0;
+  }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a {
+    display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px;
+    border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s;
+  }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+
+  .hero {
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent),
+                radial-gradient(800px 400px at 100% 0%, rgba(210,168,255,.08), transparent);
+    border: 1px solid var(--border); border-radius: 16px; padding: 40px 38px; margin-bottom: 40px;
+  }
+  .hero .tag {
+    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px;
+    padding: 3px 12px; margin-bottom: 16px;
+  }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+
+  h2 { font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+
+  code:not(pre code) {
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple);
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+    font-family: var(--mono); position: relative; margin: 16px 0;
+  }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label {
+    position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim);
+    background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono);
+  }
+  .k { color: #ff7b72; }
+  .s { color: #a5d6ff; }
+  .c { color: #8b949e; font-style: italic; }
+  .f { color: #d2a8ff; }
+  .n { color: #79c0ff; }
+
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+
+  .callout { border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-safe { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-warn { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step { display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px; }
+  .flow .step:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border); }
+  .flow .dot {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1;
+    background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent);
+  }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+
+  @media (max-width: 980px) {
+    aside { display: none; }
+    main { padding: 28px 20px 80px; }
+    .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 4</div>
+    <div class="sub">上下文工程与分层记忆</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#why">① 为什么需要上下文工程</a>
+      <a href="#arch">② 模块全景与依赖方向</a>
+      <a href="#window">③ 窗口模型与 ShouldCompact</a>
+      <a href="#circuit" class="lvl2">熔断机制</a>
+      <a href="#compact">④ Compact 四步流程</a>
+      <a href="#pairing" class="lvl2">切点平移保配对</a>
+      <a href="#reinject">⑤ 状态重注入</a>
+      <a href="#memory">⑥ 分层 Memory</a>
+      <a href="#engine">⑦ engine 集成</a>
+      <a href="#token" class="lvl2">token 估算</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">⑨ 设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 4 · Context Engineering &amp; Memory</span>
+      <h1>cogent Phase 4：让 Agent 跑得动「长任务」</h1>
+      <p>前三阶段的 cogent 能对话、能动手、能并发安全地干活，但长任务的对话历史会无情地撑爆模型上下文窗口。Phase 4 引入<b>自动压缩（auto-compact）+ 分层记忆（MEMORY.md）</b>：历史超窗时压成摘要并<b>重注入关键状态</b>，跨会话从 <code>.cogent/MEMORY.md</code> 加载项目约定——压缩后模型仍"站在工作台旁"，而不是失忆重来。</p>
+      <div class="stats">
+        <div class="stat"><b>2</b><span>新包 contextmgr / memory</span></div>
+        <div class="stat"><b>128K</b><span>DeepSeek 窗口（调参基准）</span></div>
+        <div class="stat"><b>3</b><span>连续失败即熔断</span></div>
+        <div class="stat"><b>0</b><span>go test -race 告警</span></div>
+      </div>
+    </div>
+
+    <p>这份教学按「问题背景 → 窗口模型 → 压缩流程 → 配对不变量 → 记忆 → 内核集成 → 测试」的顺序展开。每节先讲<b>为什么这么设计</b>（取舍 + 面试话术），再展示<b>怎么做</b>（核心代码），最后用 callout 钉死不变量。</p>
+
+    <!-- ========== 01 为什么 ========== -->
+    <h2 id="why"><span class="num">01</span>为什么需要上下文工程</h2>
+    <p>LLM 的上下文窗口是有限且昂贵的资源。一个自主 Agent 在长任务里会不断累积：用户任务、每轮模型回复、每次工具调用的 <code>tool_use</code> 与回流的 <code>tool_result</code>（文件内容、命令输出动辄上千 token）。轮数一多，历史就会突破窗口上限，请求直接报错。</p>
+
+    <div class="grid cols2">
+      <div class="card">
+        <h3 style="margin-top:0">朴素做法的问题</h3>
+        <p style="color:var(--text-dim)">简单<b>截断</b>头部历史 → 模型"失忆"：忘了在读哪个文件、计划进行到哪一步；更糟的是可能切断 <code>tool_use ↔ tool_result</code> 配对，让 API 直接报"孤立 tool_result"错误。</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">cogent 的做法</h3>
+        <p style="color:var(--text-dim)">阈值触发时把<b>旧历史压成摘要</b>（调 LLM），保留尾部最近原文，并<b>重注入关键状态</b>；切点向头部平移以<b>绝不拆散配对</b>；连续失败则<b>熔断</b>止损。</p>
+      </div>
+    </div>
+
+    <div class="callout warn"><b>DeepSeek 的特殊性：</b><code>deepseek-chat</code> 窗口约 <b>128K</b>、单次输出上限 ~8K，仍比 Claude 的 200K 紧张——这让压缩策略是"长任务能否跑通"的关键。所以 cogent 的窗口常量以 128K 调参。</div>
+
+    <!-- ========== 02 架构 ========== -->
+    <h2 id="arch"><span class="num">02</span>模块全景与依赖方向</h2>
+    <p>Phase 4 新增两个<b>内层包</b>，engine 只做薄集成。严格守 §4.4 依赖方向：<code>engine → {contextmgr, memory} → {llm, types}</code>，下层绝不反依赖 engine。</p>
+
+    <pre><span class="code-label">依赖方向（Phase 4 新增以 ★ 标记）</span><code>          ┌─────────────┐  buildEngine 构造 contextmgr.New() / memory.New()
+          │     CLI     │  注入 Deps{ Context, Memory, ... }
+          └──────┬──────┘
+                 │
+                 ▼
+          ┌─────────────┐    ★ ┌────────────────────┐
+          │   engine    │─────▶│    contextmgr      │  窗口计算 / ShouldCompact
+          │  loop       │      │  Manager           │  Compact（调 llm 摘要）
+          │  maybeCompact│     │  ctx.compact span  │
+          │  buildSystem │     └─────────┬──────────┘
+          │   Prompt    │               │ 依赖
+          │             │    ★ ┌─────────▼──────────┐   ┌──────────┐
+          │             │─────▶│      memory        │   │   llm    │
+          └─────────────┘      │  Loader.Build      │   │  Client  │
+                               │  .cogent/MEMORY.md │   └──────────┘
+                               │  行/字节双截断      │
+                               └────────────────────┘</code></pre>
+
+    <table>
+      <tr><th>包</th><th>核心抽象</th><th>职责</th></tr>
+      <tr><td><code>internal/contextmgr</code></td><td><code>Manager</code> 结构体</td><td>有效窗口计算、<code>ShouldCompact</code> 判定、<code>Compact</code> 压缩 + 熔断</td></tr>
+      <tr><td><code>internal/memory</code></td><td><code>Loader</code> 接口</td><td>读 <code>.cogent/MEMORY.md</code>，行/字节双重硬截断，路径穿越防护</td></tr>
+      <tr><td><code>internal/engine</code> <span class="badge b-warn">改</span></td><td>—</td><td><code>Deps</code> 增 Context/Memory；记忆注入系统提示；每轮 <code>maybeCompact</code></td></tr>
+    </table>
+
+    <!-- ========== 03 窗口模型 ========== -->
+    <h2 id="window"><span class="num">03</span>窗口模型与 ShouldCompact</h2>
+    <p>核心公式：<b>有效窗口 = 总窗口 − 摘要预留</b>。再留一个<b>缓冲</b>提前触发，避免"刚好到顶才压缩"时连摘要请求都发不出去。</p>
+
+    <pre><span class="code-label">internal/contextmgr/manager.go</span><code><span class="c">// 以 DeepSeek 128K 为基准，均可经 env 覆盖。</span>
+<span class="k">const</span> (
+    ContextWindowDefault   = <span class="n">131072</span> <span class="c">// 总窗口：DeepSeek 128K</span>
+    ReservedForSummary     = <span class="n">8000</span>   <span class="c">// 摘要预留（同时作摘要调用 MaxTokens 上限）</span>
+    AutoCompactBufferToken = <span class="n">8000</span>   <span class="c">// 提前触发压缩的缓冲</span>
+    MaxConsecutiveFailures = <span class="n">3</span>      <span class="c">// 压缩连续失败熔断阈值</span>
+    KeepRecentTokens       = <span class="n">24000</span>  <span class="c">// 尾部保留下限（随窗口翻倍）</span>
+)
+
+<span class="k">func</span> (m *Manager) <span class="f">effectiveWindow</span>() <span class="k">int</span> { <span class="k">return</span> m.window - m.reserved }
+
+<span class="c">// ShouldCompact 依据已用 token 与有效窗口判断是否压缩；熔断后恒 false。</span>
+<span class="k">func</span> (m *Manager) <span class="f">ShouldCompact</span>(usedTokens <span class="k">int</span>, _ <span class="k">string</span>) <span class="k">bool</span> {
+    <span class="k">if</span> m.failures &gt;= m.maxFail {
+        <span class="k">return</span> <span class="k">false</span> <span class="c">// 熔断</span>
+    }
+    <span class="k">return</span> usedTokens+m.buffer &gt;= m.<span class="f">effectiveWindow</span>()
+}</code></pre>
+
+    <div class="callout"><b>env 可覆盖：</b><span class="pill">COGENT_CONTEXT_WINDOW</span><span class="pill">COGENT_CONTEXT_RESERVE</span><span class="pill">COGENT_CONTEXT_BUFFER</span><span class="pill">COGENT_CONTEXT_KEEP</span>—— 换模型（如 Claude 200K）只需调环境变量，不改代码；单测也靠它把窗口收到极小值来稳定触发压缩。</div>
+
+    <h3 id="circuit">熔断机制：为什么重要</h3>
+    <p>如果压缩本身一直失败（如摘要请求超时、模型抽风），还反复触发压缩，就会陷入"<b>越压越失败、越失败越压</b>"的死循环，白白烧钱。所以 <code>failures</code> 累加到阈值后，<code>ShouldCompact</code> 直接返回 <code>false</code> 永久止损（成功一次则归零）。</p>
+    <div class="callout warn"><b>面试杠杆：</b>蓝本（Claude Code auto-compact）的公开数据是熔断每天省下约 <b>25 万次</b>"死锁"API 调用。这是"生产级而非玩具"的成本意识体现。</div>
+
+    <!-- ========== 04 Compact 流程 ========== -->
+    <h2 id="compact"><span class="num">04</span>Compact 四步流程</h2>
+    <p><code>Compact</code> 被拆成四个 &lt; 80 行的小函数，职责单一、便于单测：</p>
+
+    <div class="flow">
+      <div class="step"><div class="dot">1</div><div class="body"><b>findCutPoint</b><p>从尾部向头累加 token，直到达到 <code>KeepRecentTokens</code>，该索引即切点 <code>cut</code>：<code>msgs[cut:]</code> 为保留段。切点不越过系统提示（<code>cut ≥ 1</code>）。</p></div></div>
+      <div class="step"><div class="dot">2</div><div class="body"><b>adjustForPairing</b><p>把切点向头部平移，避免保留段以<b>孤立 tool_result</b> 开头（详见下节）。</p></div></div>
+      <div class="step"><div class="dot">3</div><div class="body"><b>summarize</b><p>把被丢弃段 <code>msgs[1:cut]</code> 序列化为文本，调 LLM 生成一条状态摘要；<code>range</code> channel 收齐全部增量。失败则累加 failures。</p></div></div>
+      <div class="step"><div class="dot">4</div><div class="body"><b>rebuild</b><p>重建为 <code>[系统提示] + [摘要(RoleUser)] + [尾部最近消息]</code>。成功后 failures 归零。</p></div></div>
+    </div>
+
+    <pre><span class="code-label">internal/contextmgr/manager.go</span><code><span class="k">func</span> (m *Manager) <span class="f">Compact</span>(ctx context.Context, msgs []types.Message, llmc llm.Client) ([]types.Message, <span class="k">error</span>) {
+    <span class="k">if</span> <span class="f">len</span>(msgs) &lt; <span class="n">2</span> {
+        <span class="k">return</span> msgs, <span class="k">nil</span> <span class="c">// 仅有系统提示，无可压缩历史</span>
+    }
+    cut := <span class="f">adjustForPairing</span>(msgs, m.<span class="f">findCutPoint</span>(msgs))
+    <span class="k">if</span> cut &lt;= <span class="n">1</span> {
+        <span class="k">return</span> msgs, <span class="k">nil</span> <span class="c">// 尾部已覆盖全部历史，无需压缩</span>
+    }
+    summary, err := <span class="f">summarize</span>(ctx, llmc, msgs[<span class="n">1</span>:cut])
+    <span class="k">if</span> err != <span class="k">nil</span> {
+        <span class="k">return</span> m.<span class="f">recordFailure</span>(msgs, err) <span class="c">// 累加失败；达阈值返回 ErrCompactGiveUp</span>
+    }
+    m.failures = <span class="n">0</span>
+    <span class="k">return</span> <span class="f">rebuild</span>(msgs, cut, summary), <span class="k">nil</span>
+}</code></pre>
+
+    <div class="callout ok"><b>fail-safe 不变量：</b>任何失败路径都<b>返回原始消息列表</b>，绝不丢历史——压缩是"优化"，失败只是"没优化成"，决不能因优化失败而破坏任务。</div>
+
+    <h3 id="pairing">切点平移：保住 function calling 配对</h3>
+    <p>这是整个 Phase 最微妙、也最值钱的不变量。OpenAI 兼容协议要求：每个 <code>tool</code>（结果）消息，必须紧跟在携带对应 <code>tool_calls</code> 的 <code>assistant</code> 消息之后。若切点恰好落在配对中间，保留段就会以一个"<b>没有爹</b>"的 tool_result 开头，<code>llm/client.go</code> 的 <code>toOpenAIMessage</code> 会把它发出去，API 直接报错。</p>
+
+    <pre><span class="code-label">配对平移示意</span><code>  index:  0       1        2                    3              4
+        [system] [user] [assistant(tool_calls c1)] [tool c1] [user]
+                                                    ▲
+                          findCutPoint 落在 index 3 ─┘（tool_result）
+                          ✗ 保留段 = [tool c1, user] → 孤立 tool_result！
+
+  adjustForPairing：cut 是 tool → 向头部平移 cut-- 直到非 tool
+                                            ▼
+                          cut = 2（assistant 含 tool_calls）
+                          ✓ 保留段 = [assistant(c1), tool c1, user] → 配对完整</code></pre>
+
+    <pre><span class="code-label">internal/contextmgr/manager.go</span><code><span class="c">// adjustForPairing 把切点向头部平移，避免保留段以孤立 tool_result 开头。</span>
+<span class="k">func</span> <span class="f">adjustForPairing</span>(msgs []types.Message, cut <span class="k">int</span>) <span class="k">int</span> {
+    <span class="k">for</span> cut &gt; <span class="n">1</span> &amp;&amp; msgs[cut].Role == types.RoleTool {
+        cut--
+    }
+    <span class="k">return</span> cut
+}</code></pre>
+    <div class="callout"><b>对应单测：</b><code>TestAdjustForPairing</code> 直接断言"切点落在 tool_result 上 → 平移到 assistant"；<code>TestManager_Compact_PreservesPairing</code> 端到端断言重建后<b>不存在孤立 tool_result</b>。</div>
+
+    <!-- ========== 05 重注入 ========== -->
+    <h2 id="reinject"><span class="num">05</span>状态重注入：压缩后仍"站在工作台旁"</h2>
+    <p>压缩不是简单丢弃，而是把旧历史的<b>关键状态</b>蒸馏进摘要。cogent v1 通过精心设计的摘要 system prompt 实现"软重注入"——明确要求模型保留正在读/改的文件、进行中的计划、关键决策与待办：</p>
+
+    <pre><span class="code-label">internal/contextmgr/manager.go · summaryPrompt</span><code><span class="s">"You are compacting an autonomous coding agent's conversation history... "</span>
+<span class="s">"Preserve: the user's overall goal, files currently being read or edited, "</span>
+<span class="s">"the in-progress plan, key decisions and findings, and any pending next steps. "</span>
+<span class="s">"Omit chit-chat. Output only the summary text."</span></code></pre>
+    <div class="callout"><b>为什么工具声明无需重注入？</b>因为 engine 每轮请求都会重新下发 <code>toolSchemas()</code>（运行期只读的工具池），工具声明天然"常驻"，不在历史里，自然不受压缩影响。</div>
+
+    <!-- ========== 06 Memory ========== -->
+    <h2 id="memory"><span class="num">06</span>分层 Memory：读写双向 + 跨会话沉淀又不臃肿</h2>
+    <p>记忆若无限注入会再次撑爆上下文。cogent 的分层记忆同时覆盖<b>读</b>与<b>写</b>——借鉴 CodeBuddy 的双层设计：</p>
+
+    <div class="grid cols2">
+      <div class="card"><h3 style="margin-top:0">读 · <code>Loader.Build</code></h3>
+        <p style="color:var(--text-dim)">从 <code>.cogent/MEMORY.md</code> 读取长期记忆入口，注入系统提示。行数(200)+字节(25000)双重硬截断取严，缺失返空不报错。</p>
+      </div>
+      <div class="card"><h3 style="margin-top:0">写 · <code>Writer</code></h3>
+        <p style="color:var(--text-dim)">让 agent 运行中把决策/教训持久化。两个动作：<code>AppendDaily</code>（追加到 daily/YYYY-MM-DD.md，append-only 保审计链）+ <code>UpdateMemory</code>（覆写 MEMORY.md，curated 长期记忆）。</p>
+      </div>
+    </div>
+
+    <div class="callout warn"><b>设计借鉴：</b>CodeBuddy（IDE Agent 运行时）自身在 <code>.codebuddy/memory/</code> 落了双层记忆——daily（append-only + 纠正条目，保审计可追溯）+ MEMORY.md（curated 长期）。cogent 的 <code>Writer</code> 对齐这一设计：daily 追加不重写，MEMORY 覆写由调用方合并内容。future 可在此基础上做 30 天 distill（日志蒸馏进长期记忆）。</div>
+
+    <div class="grid cols3">
+      <div class="card"><h3 style="margin-top:0">行截断</h3><p style="color:var(--text-dim)">最多 <b>200</b> 行（<code>MaxEntrypointLines</code>），<code>bufio.Scanner</code> 逐行计数。</p></div>
+      <div class="card"><h3 style="margin-top:0">字节截断</h3><p style="color:var(--text-dim)">最多 <b>25000</b> 字节（<code>MaxEntrypointBytes</code>），且不切断 UTF-8 字符。</p></div>
+      <div class="card"><h3 style="margin-top:0">路径防护</h3><p style="color:var(--text-dim)"><code>filepath.Clean</code> + 前缀校验，读写均防 <code>..</code> 穿越出工作根。</p></div>
+    </div>
+
+    <pre><span class="code-label">internal/memory/memory.go · 读（Loader）</span><code><span class="k">func</span> (l *fileLoader) <span class="f">Build</span>(_ context.Context, projectRoot <span class="k">string</span>) (<span class="k">string</span>, <span class="k">error</span>) {
+    path, err := <span class="f">entrypointPath</span>(projectRoot) <span class="c">// 解析 + 前缀校验防穿越</span>
+    <span class="k">if</span> err != <span class="k">nil</span> { <span class="k">return</span> <span class="s">""</span>, err }
+    data, err := os.<span class="f">ReadFile</span>(path)
+    <span class="k">if</span> errors.<span class="f">Is</span>(err, os.ErrNotExist) {
+        <span class="k">return</span> <span class="s">""</span>, <span class="k">nil</span> <span class="c">// 缺失不算错误</span>
+    }
+    <span class="k">return</span> <span class="f">truncate</span>(<span class="f">string</span>(data)), err
+}</code></pre>
+
+    <pre><span class="code-label">internal/memory/memory.go · 写（Writer）</span><code><span class="c">// Writer 让 agent 在运行中持久化决策与教训到分层记忆。</span>
+<span class="k">type</span> Writer <span class="k">interface</span> {
+    <span class="c">// AppendDaily 向 .cogent/daily/&lt;date&gt;.md 追加一条记录（append-only 审计链）。</span>
+    <span class="f">AppendDaily</span>(ctx context.Context, projectRoot, date, content <span class="k">string</span>) <span class="k">error</span>
+    <span class="c">// UpdateMemory 覆写 .cogent/MEMORY.md（curated 长期记忆）。</span>
+    <span class="f">UpdateMemory</span>(ctx context.Context, projectRoot, content <span class="k">string</span>) <span class="k">error</span>
+}</code></pre>
+
+    <div class="callout"><b>不变量：</b>① AppendDaily <b>绝不覆写</b>已有内容（O_APPEND），确保审计链完整；② UpdateMemory 是覆写，调用方负责先读再合并——与 CodeBuddy 的 MEMORY.md 语义一致；③ 目录 0o700、文件 0o600，自动创建。</div>
+
+    <!-- ========== 07 engine 集成 ========== -->
+    <h2 id="engine"><span class="num">07</span>engine 集成：最小侵入</h2>
+    <p>遵循<b>向后兼容</b>原则——<code>Deps.Context</code> 与 <code>Deps.Memory</code> 都是可选的，为 <code>nil</code> 时跳过，不破坏 Phase 0–3 的既有测试。</p>
+
+    <h3>① 记忆注入系统提示（New 时一次性）</h3>
+    <pre><span class="code-label">internal/engine/engine.go</span><code><span class="c">// buildSystemPrompt 把基础系统提示与项目记忆（若有）拼成最终系统提示。</span>
+<span class="k">func</span> <span class="f">buildSystemPrompt</span>(mem memory.Loader, workRoot <span class="k">string</span>) <span class="k">string</span> {
+    <span class="k">if</span> mem == <span class="k">nil</span> {
+        <span class="k">return</span> systemPrompt
+    }
+    text, err := mem.<span class="f">Build</span>(context.<span class="f">Background</span>(), workRoot)
+    <span class="k">if</span> err != <span class="k">nil</span> {
+        slog.<span class="f">Warn</span>(<span class="s">"load memory"</span>, <span class="s">"err"</span>, err) <span class="c">// 记忆失败仅告警，不阻塞内核</span>
+        <span class="k">return</span> systemPrompt
+    }
+    <span class="k">if</span> strings.<span class="f">TrimSpace</span>(text) == <span class="s">""</span> {
+        <span class="k">return</span> systemPrompt
+    }
+    <span class="k">return</span> systemPrompt + <span class="s">"\n\n# Project memory (.cogent/MEMORY.md)\n"</span> + text
+}</code></pre>
+
+    <h3>② 主循环每轮判断压缩</h3>
+    <pre><span class="code-label">internal/engine/engine.go · loop</span><code>        results := e.<span class="f">executeTools</span>(sctx, toolUses, out)
+        <span class="f">end</span>(<span class="k">nil</span>)
+        e.msgs = <span class="f">append</span>(e.msgs, results...)
+        e.<span class="f">maybeCompact</span>(ctx, out) <span class="c">// ★ Phase 4 新增</span>
+    }
+
+<span class="c">// maybeCompact 在触达阈值时压缩历史，成功后上抛 EventCompacted。</span>
+<span class="k">func</span> (e *engine) <span class="f">maybeCompact</span>(ctx context.Context, out <span class="k">chan&lt;-</span> types.StreamEvent) {
+    <span class="k">if</span> e.ctxmgr == <span class="k">nil</span> {
+        <span class="k">return</span>
+    }
+    used := e.used
+    <span class="k">if</span> used == <span class="n">0</span> {
+        used = contextmgr.<span class="f">EstimateTokens</span>(e.msgs) <span class="c">// 无真实 usage 时回退估算</span>
+    }
+    <span class="k">if</span> !e.ctxmgr.<span class="f">ShouldCompact</span>(used, e.model) {
+        <span class="k">return</span>
+    }
+    cctx, end := e.tracer.<span class="f">Start</span>(ctx, <span class="s">"ctx.compact"</span>) <span class="c">// 可观测 span</span>
+    compacted, err := e.ctxmgr.<span class="f">Compact</span>(cctx, e.msgs, e.llm)
+    <span class="f">end</span>(err)
+    <span class="k">if</span> err != <span class="k">nil</span> {
+        slog.<span class="f">Warn</span>(<span class="s">"context compact failed"</span>, <span class="s">"err"</span>, err)
+        <span class="k">return</span>
+    }
+    e.msgs = compacted
+    e.used = contextmgr.<span class="f">EstimateTokens</span>(e.msgs)
+    <span class="f">emitEvent</span>(ctx, out, types.StreamEvent{Type: types.EventCompacted})
+}</code></pre>
+
+    <h3 id="token">③ token 估算与校准</h3>
+    <p><code>used</code> 优先取自 LLM 返回的<b>真实 usage</b>（<code>streamAssistant</code> 里把 <code>Delta.Usage.PromptTokens + CompletionTokens</code> 写回 <code>e.used</code>）；fake/无 usage 时回退 <code>len([]rune)/4</code> 的粗估。压缩后用估算重置 <code>e.used</code>，反映新的（更小的）上下文规模。</p>
+    <div class="callout"><b>为什么 used 是"设置"而非"累加"？</b>因为 <code>PromptTokens</code> 已经包含了完整发送的历史规模——它本身就是"当前上下文有多大"的最佳信号；累加会无界增长、误判。</div>
+
+    <!-- ========== 08 测试 ========== -->
+    <h2 id="test"><span class="num">08</span>测试策略</h2>
+    <p>把所有不确定性（LLM）挡在内核外，用 <b>Fake LLM</b> 让 contextmgr 与 engine 退化为可确定性测试的纯状态机。窗口常量靠 <code>t.Setenv</code> 收到极小值来稳定触发压缩，无需构造海量 token。</p>
+
+    <table>
+      <tr><th>测试</th><th>对象</th><th>断言要点</th></tr>
+      <tr><td><code>TestManager_ShouldCompact</code></td><td>阈值判定</td><td>表驱动：低于/恰好/高于阈值的边界</td></tr>
+      <tr><td><code>TestManager_CircuitBreaker</code></td><td>熔断</td><td>连续 3 次失败后返回 <code>ErrCompactGiveUp</code>，之后 ShouldCompact 恒 false</td></tr>
+      <tr><td><code>TestAdjustForPairing</code></td><td>配对平移</td><td>切点落在 tool_result → 平移到 assistant；不越过 system</td></tr>
+      <tr><td><code>TestManager_Compact_*</code></td><td>压缩重建</td><td>结构 = [system]+[摘要]+[尾部]；保留段无孤立 tool_result</td></tr>
+      <tr><td><code>TestBuild_Truncates*</code></td><td>记忆截断</td><td>超 200 行/超 25000 字节被截；缺文件返空</td></tr>
+      <tr><td><code>TestEngine_CompactTriggered</code></td><td>内核集成</td><td>触发恰好 1 次 <code>EventCompacted</code>，压缩后历史配对完整、含摘要</td></tr>
+      <tr><td><code>TestEngine_NoCompactWhenManagerNil</code></td><td>向后兼容</td><td>未注入 manager 时零压缩、照常跑</td></tr>
+    </table>
+
+    <pre><span class="code-label">internal/engine/engine_compact_test.go · 区分 ReAct / 摘要调用</span><code><span class="c">// 通过系统提示内容判定是否为压缩摘要调用，让一个 fake 同时充当两种角色。</span>
+<span class="k">func</span> <span class="f">isSummaryReq</span>(req llm.Request) <span class="k">bool</span> {
+    <span class="k">return</span> <span class="f">len</span>(req.Messages) &gt; <span class="n">0</span> &amp;&amp; strings.<span class="f">Contains</span>(req.Messages[<span class="n">0</span>].Text, <span class="s">"compacting"</span>)
+}</code></pre>
+    <div class="callout ok"><b>验证：</b><code>gofmt -l .</code> 无输出 · <code>go vet ./...</code> 无告警 · <code>go test -race ./...</code> 全绿；每个新包 <code>TestMain</code> 都挂 <code>goleak.VerifyTestMain</code> 验无 goroutine 泄漏。</div>
+
+    <!-- ========== 09 回顾 ========== -->
+    <h2 id="takeaway"><span class="num">09</span>设计要点回顾</h2>
+    <div class="grid cols2">
+      <div class="card"><h3 style="margin-top:0">① 有效窗口 + 缓冲</h3><p style="color:var(--text-dim)">总窗口 − 摘要预留 − 缓冲提前触发，给摘要请求留出发送空间，避免"到顶才压"的死局。</p></div>
+      <div class="card"><h3 style="margin-top:0">② 配对不变量优先</h3><p style="color:var(--text-dim)">切点向头部平移，绝不拆散 <code>tool_use ↔ tool_result</code>——这是 function calling 协议的硬约束，由专门单测守护。</p></div>
+      <div class="card"><h3 style="margin-top:0">③ 熔断止损</h3><p style="color:var(--text-dim)">连续失败达阈值即停手，把"越压越败"的烧钱风暴掐死，体现生产级成本意识。</p></div>
+      <div class="card"><h3 style="margin-top:0">④ fail-safe</h3><p style="color:var(--text-dim)">任何失败都返回原历史，压缩是优化而非义务，决不因优化失败破坏任务。</p></div>
+      <div class="card"><h3 style="margin-top:0">⑤ 状态重注入</h3><p style="color:var(--text-dim)">摘要 prompt 显式要求保留在读文件/计划/决策，让模型压缩后仍"站在工作台旁"。</p></div>
+      <div class="card"><h3 style="margin-top:0">⑥ 可选 + 向后兼容</h3><p style="color:var(--text-dim)">Context/Memory 为 nil 即跳过，旧测试零改动通过；env 可覆盖窗口参数，换模型零代码改动。</p></div>
+    </div>
+
+    <footer>
+      cogent · Phase 4 教学文档 · 上下文工程与分层记忆 ｜ 配套源码：<code>internal/contextmgr</code>、<code>internal/memory</code>、<code>internal/engine</code> ｜ 本页自包含、无外部依赖，可直接用浏览器打开。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

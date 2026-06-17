@@ -10,8 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/alaindong/cogent/internal/contextmgr"
 	"github.com/alaindong/cogent/internal/engine"
 	"github.com/alaindong/cogent/internal/llm"
+	"github.com/alaindong/cogent/internal/memory"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
@@ -135,12 +137,15 @@ func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engin
 	}
 	wd, _ := os.Getwd()
 	eng, err := engine.New(engine.Deps{
-		LLM:      llmc,
-		Tools:    buildToolPool(wd, prompter, prov.Tracer()),
-		Observe:  prov,
-		Mode:     mode,
-		Model:    os.Getenv("COGENT_MODEL"),
-		WorkRoot: wd,
+		LLM:          llmc,
+		Tools:        buildToolPool(wd, prompter, prov.Tracer()),
+		Context:      contextmgr.New(),
+		Memory:       memory.New(),
+		MemoryWriter: memory.NewWriter(),
+		Observe:      prov,
+		Mode:         mode,
+		Model:        os.Getenv("COGENT_MODEL"),
+		WorkRoot:     wd,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("init engine: %w", err)

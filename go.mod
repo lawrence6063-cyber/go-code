@@ -1,6 +1,6 @@
 module github.com/alaindong/cogent
 
-go 1.23
+go 1.26
 
 require (
 	github.com/sashabaranov/go-openai v1.41.2
