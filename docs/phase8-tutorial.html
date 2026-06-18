@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 8 教学 · 可观测 Trace 体系（OpenTelemetry）</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --bg-card: #1c2128; --border: #30363d;
+    --text: #e6edf3; --text-dim: #9da7b3;
+    --accent: #58a6ff; --accent2: #7ee787; --warn: #f0883e; --danger: #ff7b72; --purple: #d2a8ff;
+    --code-bg: #0b0f14; --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 16px; }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+  aside { position: sticky; top: 0; align-self: flex-start; width: 268px; height: 100vh; overflow-y: auto; padding: 28px 18px; border-right: 1px solid var(--border); flex-shrink: 0; }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a { display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s; }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+  .hero { background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent), radial-gradient(800px 400px at 100% 0%, rgba(210,168,255,.08), transparent); border: 1px solid var(--border); border-radius: 16px; padding: 40px 38px; margin-bottom: 40px; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px; padding: 3px 12px; margin-bottom: 16px; }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+  h2 { font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+  code:not(pre code) { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; font-family: var(--mono); position: relative; margin: 16px 0; }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label { position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim); background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono); }
+  .k { color: #ff7b72; } .s { color: #a5d6ff; } .c { color: #8b949e; font-style: italic; } .f { color: #d2a8ff; } .n { color: #79c0ff; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .callout { border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-safe { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-warn { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step { display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px; }
+  .flow .step:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border); }
+  .flow .dot { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1; background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent); }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+  @media (max-width: 980px) { aside { display: none; } main { padding: 28px 20px 80px; } .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; } .hero h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 8</div>
+    <div class="sub">可观测 Trace 体系（OpenTelemetry）</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#why">① 为什么 trace 对 Agent 关键</a>
+      <a href="#choice">② 为何这次改用 OTel SDK ★</a>
+      <a href="#model">③ span 树模型与字段</a>
+      <a href="#ctx">④ ctx 双重职责 ★</a>
+      <a href="#impl">⑤ 换内胆不换接口</a>
+      <a href="#exporter" class="lvl2">exporter 三态 + Jaeger</a>
+      <a href="#slog">⑥ slog 对齐 trace_id</a>
+      <a href="#meter">⑦ Meter 指标</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">⑨ 设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 8 · Observability with OpenTelemetry</span>
+      <h1>cogent Phase 8：把 ReAct 决策链变成可视化调用树</h1>
+      <p>Agent 任务是<b>长链路、多轮、并发</b>的——一个任务跑了 20 轮、烧了 5 万 token、最后失败，黑盒化后你无法回答"慢在哪、钱花在哪、错在哪"。Phase 8 用 <b>OpenTelemetry SDK</b> 把整条决策链建成一棵 span 树（<code>cogent.session → react.step → llm.stream / tool.call / agent.spawn …</code>），落本地文件或一键推到 <b>Jaeger</b> 看火焰图；并复用 <code>context.Context</code> 让 span 自动父子串联——与取消传播共用同一条管线。这是把后端最硬的"分布式链路追踪"直接迁移到 Agent 内核。</p>
+      <div class="stats">
+        <div class="stat"><b>0</b><span>内核 span 调用点新增</span></div>
+        <div class="stat"><b>3</b><span>exporter：file/stdout/otlp</span></div>
+        <div class="stat"><b>9</b><span>span 类型构成调用树</span></div>
+        <div class="stat"><b>22/22</b><span>项目里程碑完成</span></div>
+      </div>
+    </div>
+
+    <p>这一阶段收尾整个 cogent v1（22/22 = 100%）。它的独特之处不在"写埋点"——埋点早在 Phase 0~7 就以 no-op 写好了——而在<b>把 no-op 内胆换成真正的 OTel 实现，且不改任何接口</b>。</p>
+
+    <!-- 01 -->
+    <h2 id="why"><span class="num">01</span>为什么 trace 对 Agent 尤其关键</h2>
+    <table>
+      <tr><th>维度</th><th>没有 Trace</th><th>有 Trace</th></tr>
+      <tr><td>性能定位</td><td>只知道"任务花了 90s"</td><td>80s 耗在第 7 轮某个 <code>bash</code>，12s 在 LLM 首字延迟</td></tr>
+      <tr><td>成本归因</td><td>只知道"总共 5 万 token"</td><td>哪一轮把上下文撑大、compact 是否生效</td></tr>
+      <tr><td>行为审计</td><td>只知道"失败了"</td><td>回放完整决策链：第几轮选了哪个工具、为什么</td></tr>
+      <tr><td>并发调试</td><td>并发批某工具卡死难复现</td><td>span 树清晰展示并发批内每个工具的起止与父子关系</td></tr>
+    </table>
+    <div class="callout"><b>核心洞察：</b>ReAct 循环天然就是一棵 span 树，与 OpenTelemetry 的 trace 模型同构。把它建成 OTel span 树，是顺水推舟，而非生搬硬套。</div>
+
+    <!-- 02 -->
+    <h2 id="choice"><span class="num">02</span>为何这次改用 OTel SDK（一次有意的反向取舍）★</h2>
+    <p>Phase 6（MCP）与 Phase 7（SubAgent）我们都坚持"<b>手写核心、零新增依赖</b>"。但 Phase 8 我们<b>有意打破</b>这条原则，引入 <code>go.opentelemetry.io/otel</code> 全家桶。为什么？因为取舍的天平这次倒向了另一边：</p>
+    <div class="grid cols2">
+      <div class="card">
+        <b style="color:var(--text-dim)">若自实现 trace</b>
+        <p style="color:var(--text-dim);font-size:14px">能保住零依赖，但要自己定义 span 数据结构、序列化格式、采样、批量导出——而且<b>接不进 Jaeger/Tempo 生态</b>，火焰图得自己写。可视化价值大打折扣。</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--accent2)">引入 OTel SDK ✅</b>
+        <p style="color:var(--text-dim);font-size:14px">业界事实标准；<code>file/stdout/otlp</code> exporter 现成；一行 env 切到 Jaeger 看火焰图；面试时"上来就是 OTel"比自造结构更有说服力。代价：主 go.mod 多一批传递依赖。</p>
+      </div>
+    </div>
+    <div class="callout warn"><b>取舍逻辑（可讲）：</b>MCP 那次自实现，是因为"亲手写协议"能讲清原理、且生态收益有限；Trace 这次用 SDK，是因为<b>可观测的价值恰恰在于接入标准生态（Jaeger 火焰图）</b>——自造一套谁都不认识的格式，反而丢掉了 trace 最大的价值。<b>同一个工程师，两次相反的决定，背后是同一套"按收益权衡"的判断框架</b>，而不是"凡事都手写"的教条。这本身就是成熟度的体现。</div>
+
+    <!-- 03 -->
+    <h2 id="model"><span class="num">03</span>span 树模型与字段约定</h2>
+    <p>一次任务（session）对应一棵 trace，span 层级如下——这些埋点 Phase 0~7 早已写好（以 no-op 形式），Phase 8 只是给它们换上真 exporter：</p>
+    <pre><span class="code-label">ReAct span 树</span><code><span class="n">cogent.session</span>                       <span class="c"># 根 span：一次任务（trace_id 贯穿全程）</span>
+└── <span class="n">react.step</span> (step=0..N)
+    ├── <span class="n">llm.stream</span>                   <span class="c"># model / tokens / 首字延迟 / finish_reason</span>
+    ├── <span class="n">tool.batch</span> (concurrent=bool)
+    │   └── <span class="n">tool.call</span> (name=read_file)   <span class="c"># tool.name / is_error / duration</span>
+    │       ├── <span class="n">permission.check</span>        <span class="c"># allow/ask/deny</span>
+    │       └── <span class="n">agent.spawn</span>             <span class="c"># SubAgent 子树（Phase 7）</span>
+    │           └── <span class="n">react.step</span> ...       <span class="c">#   子 Agent 自己的循环，经 ctx 自动挂接</span>
+    └── <span class="n">ctx.compact</span> (triggered=bool)   <span class="c"># 上下文压缩</span></code></pre>
+    <p>所有 span 出错时统一 <code>RecordError(err)</code> + <code>SetStatus(codes.Error)</code>，便于在可视化里红色高亮失败节点。敏感字段（task 原文、文件内容、命令明文）落 span 前先脱敏（§7.5）。</p>
+
+    <!-- 04 -->
+    <h2 id="ctx"><span class="num">04</span>context 的双重职责：取消 + trace 共用一条管线 ★</h2>
+    <p>这是 Phase 8 最值钱的认知点，也是 Go 做 Agent 的天然优势。<code>Tracer.Start</code> 返回一个<b>派生 ctx</b>（绑入新 span）；把它继续往下传，子 span 自动认这个父亲——<b>无需手动传 trace_id</b>。而这个 ctx 同时还是<b>取消信号</b>的载体。</p>
+    <pre><span class="code-label">internal/observe/otel.go</span><code><span class="k">func</span> (t <span class="k">*</span>otelTracer) <span class="f">Start</span>(ctx context.Context, name <span class="k">string</span>, attrs ...Attr) (context.Context, EndFunc) {
+    ctx, span := t.tracer.<span class="f">Start</span>(ctx, name)   <span class="c">// 派生 ctx 携带新 span</span>
+    <span class="k">if</span> <span class="f">len</span>(attrs) &gt; <span class="n">0</span> { span.<span class="f">SetAttributes</span>(<span class="f">toKeyValues</span>(attrs)...) }
+    <span class="k">return</span> ctx, <span class="k">func</span>(err <span class="k">error</span>) {
+        <span class="k">if</span> err != <span class="n">nil</span> {
+            span.<span class="f">RecordError</span>(err)
+            span.<span class="f">SetStatus</span>(codes.Error, err.<span class="f">Error</span>())
+        }
+        span.<span class="f">End</span>()
+    }
+}</code></pre>
+    <div class="grid cols3">
+      <div class="card"><b style="color:var(--accent)">父子自动串联</b><p style="color:var(--text-dim);font-size:14px">派生 ctx 沿 engine→exec→tool→sandbox 一路传，每层 Start 自己的子 span，OTel 自动认父。</p></div>
+      <div class="card"><b style="color:var(--accent)">取消即终止</b><p style="color:var(--text-dim);font-size:14px"><code>Ctrl-C</code> 取消同一个 ctx，进行中的 span 也带 cancelled 状态，链路与生命周期一致。</p></div>
+      <div class="card"><b style="color:var(--accent)">并发不串味</b><p style="color:var(--text-dim);font-size:14px">并发批每个 goroutine 各从父 ctx 派生独立子 span，OTel span 上下文值传递、协程安全。</p></div>
+    </div>
+
+    <!-- 05 -->
+    <h2 id="impl"><span class="num">05</span>换内胆不换接口</h2>
+    <p>cogent 从 Phase 0 起就把可观测抽象成<b>不暴露任何 OTel 类型</b>的薄接口。Phase 8 的全部改动收敛在 <code>observe</code> 包内——内核各层（engine/exec/tool/orchestrate/agent/mcp）<b>一个 import 都不用改</b>。</p>
+    <pre><span class="code-label">internal/observe —— 导出接口签名一字未改</span><code><span class="k">type</span> <span class="n">Tracer</span> <span class="k">interface</span> { <span class="f">Start</span>(ctx, name, ...Attr) (context.Context, EndFunc) }
+<span class="k">type</span> <span class="n">Meter</span>  <span class="k">interface</span> { <span class="f">Count</span>(name, delta <span class="k">int64</span>, ...Attr); <span class="f">Record</span>(name, value <span class="k">float64</span>, ...Attr) }
+<span class="k">type</span> <span class="n">Provider</span> <span class="k">interface</span> { <span class="f">Tracer</span>() Tracer; <span class="f">Meter</span>() Meter; <span class="f">Shutdown</span>(ctx) <span class="k">error</span> }
+
+<span class="c">// New：关闭 → 零开销 no-op；开启 → OTel SDK 支撑的真实现</span>
+<span class="k">func</span> <span class="f">New</span>(cfg Config) (Provider, <span class="k">error</span>) {
+    <span class="k">if</span> !cfg.Enabled || cfg.Exporter == <span class="s">"none"</span> { <span class="k">return</span> noopProvider{}, <span class="n">nil</span> }
+    <span class="k">return</span> <span class="f">newOTelProvider</span>(cfg)
+}</code></pre>
+    <div class="callout ok"><b>解耦红利：</b>OTel 类型被严格封在 <code>observe</code> 包内（otel.go/exporter.go）。这意味着——① 内核可单测（注入 no-op）；② 未来想换 trace 后端只改一个包；③ <code>Enabled=false</code> 时 <code>Start</code> 调用点恒定存在但<b>零开销、无 if 分支</b>污染业务代码。这正是 §5.11 的设计意图落地。</div>
+
+    <h3 id="exporter">exporter 三态 + 接 Jaeger</h3>
+    <p><code>exporter.go</code> 按 <code>Config.Exporter</code> 装配底层 OTel exporter；<code>TracerProvider</code> 用 <code>BatchSpanProcessor</code>（异步批量、热路径低开销），<code>Shutdown</code> 时强制 flush 保证最后一批不丢。</p>
+    <table>
+      <tr><th>exporter</th><th>底层</th><th>用途</th></tr>
+      <tr><td><span class="pill">file</span></td><td>stdouttrace/stdoutmetric → <code>data/traces/*.jsonl</code></td><td>本地零依赖，<code>jq</code> 可查</td></tr>
+      <tr><td><span class="pill">stdout</span></td><td>同上，写 os.Stdout</td><td>快速调试</td></tr>
+      <tr><td><span class="pill">otlp</span></td><td>otlptracegrpc/otlpmetricgrpc → gRPC</td><td>接 Jaeger/Tempo 看火焰图</td></tr>
+      <tr><td><span class="pill">none / 关闭</span></td><td>noopProvider</td><td>默认，零开销</td></tr>
+    </table>
+    <pre><span class="code-label">接 Jaeger 看火焰图</span><code><span class="c"># 1) 起本地 Jaeger（UI 16686 + OTLP gRPC 4317）</span>
+docker run -d --name jaeger -p <span class="n">16686</span>:16686 -p <span class="n">4317</span>:4317 jaegertracing/all-in-one:latest
+
+<span class="c"># 2) 让 cogent 把 trace 推过去</span>
+COGENT_OBSERVE_ENABLED=true COGENT_TRACE_EXPORTER=otlp COGENT_OTLP_ENDPOINT=localhost:4317 \
+  go run ./cmd/cogent run <span class="s">"修复这个 bug 并跑测试"</span>
+
+<span class="c"># 3) 打开 http://localhost:16686 ，service=cogent 看 span 树 / 火焰图</span></code></pre>
+
+    <!-- 06 -->
+    <h2 id="slog"><span class="num">06</span>slog 对齐 trace_id</h2>
+    <p>光有 trace 还不够——排查时常要在"看 span"和"看日志"之间跳。我们用一个 <code>slog.Handler</code> 包装器，让每条日志自动带上当前 span 的 <code>trace_id</code>/<code>span_id</code>，两边就能互相对照。</p>
+    <pre><span class="code-label">internal/observe/slog.go</span><code><span class="k">func</span> (h traceHandler) <span class="f">Handle</span>(ctx context.Context, r slog.Record) <span class="k">error</span> {
+    <span class="k">if</span> sc := trace.<span class="f">SpanContextFromContext</span>(ctx); sc.<span class="f">IsValid</span>() {
+        r.<span class="f">AddAttrs</span>(
+            slog.<span class="f">String</span>(<span class="s">"trace_id"</span>, sc.<span class="f">TraceID</span>().<span class="f">String</span>()),
+            slog.<span class="f">String</span>(<span class="s">"span_id"</span>, sc.<span class="f">SpanID</span>().<span class="f">String</span>()),
+        )
+    }
+    <span class="k">return</span> h.inner.<span class="f">Handle</span>(ctx, r)
+}</code></pre>
+    <div class="callout warn"><b>易踩的坑：</b><code>WithAttrs</code>/<code>WithGroup</code> 必须<b>重新包一层</b> <code>traceHandler</code>（而不是直接返回 inner 的结果），否则 <code>slog.With(...)</code> 之后注入能力就丢了——这是包装 slog.Handler 的经典陷阱。</div>
+
+    <!-- 07 -->
+    <h2 id="meter"><span class="num">07</span>Meter 指标</h2>
+    <p>除了 trace，engine 还 emit 几个关键指标（§8.7 最小集），用于成本/效率画像。Meter 惰性创建并缓存仪表（<code>sync.Mutex</code> 保护）。</p>
+    <table>
+      <tr><th>指标</th><th>类型</th><th>用途</th></tr>
+      <tr><td><code>cogent.react.steps</code></td><td>Histogram</td><td>ReAct 轮数分布，任务复杂度画像</td></tr>
+      <tr><td><code>cogent.tool.calls</code></td><td>Counter（带 tool.name/is_error 标签）</td><td>工具调用次数 / 成功率</td></tr>
+      <tr><td><code>cogent.tokens</code></td><td>Counter</td><td>token 消耗，配合 maxSteps 防失控烧钱</td></tr>
+    </table>
+    <pre><span class="code-label">engine 中最小侵入地 emit（span 调用点不动）</span><code><span class="c">// step 循环结束时记录轮数</span>
+<span class="k">defer</span> <span class="k">func</span>() { e.meter.<span class="f">Record</span>(<span class="s">"cogent.react.steps"</span>, <span class="k">float64</span>(stepsTaken)) }()
+<span class="c">// 每次工具调用计数（runOne 内）</span>
+e.meter.<span class="f">Count</span>(<span class="s">"cogent.tool.calls"</span>, <span class="n">1</span>,
+    observe.Attr{Key: <span class="s">"tool.name"</span>, Value: block.Name},
+    observe.Attr{Key: <span class="s">"is_error"</span>, Value: res.IsError || err != <span class="n">nil</span>})</code></pre>
+    <p>因为 <code>e.meter</code> 取自 <code>deps.Observe.Meter()</code>，关闭时它是 no-op，这些 emit 调用零开销。</p>
+
+    <!-- 08 -->
+    <h2 id="test"><span class="num">08</span>测试策略</h2>
+    <p>可观测代码也要测，重点是验证"span 父子关系、错误状态、属性"真的被正确导出。用 <b>file exporter 写临时目录 → 读回 JSON 断言</b>，零外部依赖。</p>
+    <div class="grid cols2">
+      <div class="card"><b>no-op 降级</b><p style="color:var(--text-dim);font-size:14px"><code>Enabled=false</code> / <code>none</code> → 类型断言为 noopProvider；调用零开销不 panic。未知 exporter 返回 error。</p></div>
+      <div class="card"><b>file exporter 父子 span 往返 ★</b><p style="color:var(--text-dim);font-size:14px">起 parent→child，child 标错误；Shutdown 后用 <code>json.Decoder</code> 串联解码 jsonl，断言 trace_id 相同、child.parent=parent.span、Status=Error、attr k=v。</p></div>
+      <div class="card"><b>Attr 转换</b><p style="color:var(--text-dim);font-size:14px">表驱动覆盖 string/bool/int/int64/float64 + 结构体兜底，断言 Key 与 Emit 输出。</p></div>
+      <div class="card"><b>goleak + race</b><p style="color:var(--text-dim);font-size:14px">BatchSpanProcessor/PeriodicReader 的后台 goroutine 须随 <code>Shutdown</code> 退出，<code>goleak.VerifyTestMain</code> 把关。</p></div>
+    </div>
+    <pre><span class="code-label">读回断言（核心）</span><code>spans := <span class="f">readSpans</span>(t, dir)          <span class="c">// json.Decoder 循环解码 traces-*.jsonl</span>
+parent := <span class="f">findSpan</span>(t, spans, <span class="s">"parent"</span>)
+child  := <span class="f">findSpan</span>(t, spans, <span class="s">"child"</span>)
+<span class="c">// 同一棵 trace + 正确父子 + 错误状态</span>
+require: parent.TraceID == child.TraceID
+         child.Parent.SpanID == parent.SpanID
+         child.Status == <span class="s">"Error"</span></code></pre>
+    <pre><span class="code-label">验证</span><code><span class="f">go</span> mod tidy            <span class="c"># 引入 OTel SDK v1.44.0（本阶段唯一依赖变更）</span>
+gofmt -l .             go build ./...        go vet ./...
+go test -race ./...    <span class="c"># 全绿</span></code></pre>
+
+    <!-- 09 -->
+    <h2 id="takeaway"><span class="num">09</span>设计要点回顾</h2>
+    <div class="grid cols3">
+      <div class="card"><b style="color:var(--accent)">trace = Agent 的 X 光</b><p style="color:var(--text-dim);font-size:14px">把长链路黑盒变成可视化调用树，回答慢/贵/错在哪。</p></div>
+      <div class="card"><b style="color:var(--accent)">按收益取舍</b><p style="color:var(--text-dim);font-size:14px">MCP 自实现、trace 用 SDK——同一套权衡框架，不是教条。</p></div>
+      <div class="card"><b style="color:var(--accent)">ctx 双重职责</b><p style="color:var(--text-dim);font-size:14px">取消与 trace 共用一条 ctx 管线，父子 span 零成本自动串联。</p></div>
+      <div class="card"><b style="color:var(--accent)">换内胆不换接口</b><p style="color:var(--text-dim);font-size:14px">OTel 类型不外泄，内核零改动、可单测、可替换。</p></div>
+      <div class="card"><b style="color:var(--accent)">零开销降级</b><p style="color:var(--text-dim);font-size:14px">默认 no-op，调用点恒在但无 if 分支污染。</p></div>
+      <div class="card"><b style="color:var(--accent)">接入标准生态</b><p style="color:var(--text-dim);font-size:14px">一行 env 切 Jaeger 火焰图，可观测价值最大化。</p></div>
+    </div>
+
+    <div class="callout"><b>STAR（面试话术）：</b>
+      <p style="margin:8px 0 0"><b>S</b>：Agent 任务长链路、多轮、并发，跑完一个 90s 的任务只知道"慢且贵"，定位不到瓶颈与坏 case。</p>
+      <p style="margin:4px 0 0"><b>T</b>：用后端最成熟的可观测手段把决策链变成可视化调用树。</p>
+      <p style="margin:4px 0 0"><b>A</b>：把 ReAct 循环建模为 OTel span 树（cogent.session→react.step→llm.stream/tool.call/agent.spawn/ctx.compact）；复用 <code>context.Context</code> 让 span 自动父子串联、与取消传播共用一条管线；observe 包封住 OTel 类型、对内核零暴露，<code>Enabled=false</code> 时 no-op 零开销；exporter 支持 file/stdout/otlp，一行 env 切 Jaeger 看火焰图；slog 注入 trace_id 与 span 对齐；goleak+race 验证后台导出 goroutine 随 Shutdown 退出。</p>
+      <p style="margin:4px 0 0"><b>R</b>：一次任务即得完整 span 树，能精确定位"80s 耗在第 7 轮某 bash、12s 在首 token 延迟"；token/成本按轮归因；这套把后端可观测经验直接迁移到 Agent，是区别于"框架调用 Demo"的硬工程信号。</p>
+    </div>
+
+    <div class="callout warn"><b>诚实边界 / 取舍说明：</b>本阶段<b>有意打破</b>前序"零新增依赖"原则引入 OTel SDK（主 go.mod 多一批传递依赖）——理由是 trace 的价值在于接入标准可视化生态（Jaeger），自造格式得不偿失。指标侧 v1 落最小集（轮数/工具调用/token），未接 Prometheus/Grafana 看板；OTLP 默认明文本地连接，生产需配 TLS。</p></div>
+
+    <footer>
+      cogent · Phase 8 教学文档 · 可观测 Trace 体系（OpenTelemetry）· 与 DEV_SPEC §8 / §6.8 / §5.11 对应阅读。 至此 cogent v1 全部 8 个 Phase（22/22）完成。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

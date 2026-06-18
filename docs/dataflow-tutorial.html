@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cogent MCP 模块 - 数据流教学</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --accent: #38bdf8;
+            --accent2: #a78bfa;
+            --accent3: #34d399;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --danger: #f87171;
+            --warning: #fbbf24;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.4rem;
+            color: var(--accent);
+            margin: 2.5rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        h3 {
+            font-size: 1.1rem;
+            color: var(--accent2);
+            margin: 1.5rem 0 0.5rem;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(167,139,250,0.1));
+            border-left: 4px solid var(--accent);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .warn-box {
+            background: rgba(251,191,36,0.1);
+            border-left: 4px solid var(--warning);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        code {
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--accent3);
+        }
+        pre {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem;
+            overflow-x: auto;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            margin: 0.8rem 0;
+        }
+        pre .comment { color: #6b7280; }
+        pre .keyword { color: var(--accent2); }
+        pre .func { color: var(--accent); }
+        pre .string { color: var(--accent3); }
+        pre .type { color: var(--warning); }
+
+        /* 角色图 */
+        .role-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        .role-box {
+            padding: 1.2rem 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 200px;
+        }
+        .role-cogent {
+            background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(56,189,248,0.05));
+            border: 2px solid var(--accent);
+        }
+        .role-server {
+            background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(167,139,250,0.05));
+            border: 2px solid var(--accent2);
+        }
+        .role-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.3rem;
+        }
+        .role-name {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .arrow-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 1.5rem;
+        }
+        .arrow-line {
+            font-size: 1.5rem;
+            color: var(--accent3);
+            animation: pulse 2s infinite;
+        }
+        .arrow-label {
+            font-size: 0.7rem;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* 步骤 */
+        .step {
+            position: relative;
+            padding-left: 3rem;
+            margin: 1.5rem 0;
+        }
+        .step::before {
+            content: attr(data-step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 2rem;
+            height: 2rem;
+            background: var(--accent);
+            color: var(--bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+        .step-title {
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 0.3rem;
+        }
+        .step-desc {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        /* 流程图 ASCII */
+        .flow-ascii {
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            line-height: 1.4;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        .flow-ascii .left { color: var(--accent); }
+        .flow-ascii .right { color: var(--accent2); }
+        .flow-ascii .data { color: var(--accent3); }
+        .flow-ascii .err { color: var(--danger); }
+
+        /* 文件映射表 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+        th {
+            background: var(--bg);
+            color: var(--accent);
+            padding: 0.7rem 1rem;
+            text-align: left;
+            border-bottom: 2px solid var(--border);
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:hover td { background: rgba(56,189,248,0.05); }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: bold;
+        }
+        .tag-file { background: rgba(56,189,248,0.2); color: var(--accent); }
+        .tag-role { background: rgba(167,139,250,0.2); color: var(--accent2); }
+        .tag-safe { background: rgba(52,211,153,0.2); color: var(--accent3); }
+
+        .toc {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .toc-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+        .toc a {
+            color: var(--muted);
+            text-decoration: none;
+            display: block;
+            padding: 0.2rem 0;
+            font-size: 0.9rem;
+        }
+        .toc a:hover { color: var(--accent); }
+
+        .emoji { font-style: normal; }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🔌 cogent MCP 模块 — 数据流教学</h1>
+<p class="subtitle">把你当初学者，一步步带你看懂 <code>internal/mcp</code> 这个包到底在干什么</p>
+
+<!-- 目录 -->
+<div class="toc">
+    <div class="toc-title">📑 目录</div>
+    <a href="#overview" style="color:var(--accent);font-weight:bold">🗺️ 全景数据流大图（先看这张！）</a>
+    <a href="#s0">0. 先搞清楚：谁是谁？</a>
+    <a href="#s1">1. 全局鸟瞰：5 个文件各管什么</a>
+    <a href="#s2">2. 第一步：读配置（config.go）</a>
+    <a href="#s3">3. 第二步：Manager 批量连接（manager.go）</a>
+    <a href="#s4">4. 第三步：Client 启动子进程 + 握手（client.go）</a>
+    <a href="#s5">5. 第四步：Transport 双工通信（transport.go）</a>
+    <a href="#s6">6. 第五步：remoteTool 适配器（remote_tool.go）</a>
+    <a href="#s7">7. 运行时：一次工具调用的完整旅程</a>
+    <a href="#s8">8. 关闭阶段：优雅退出</a>
+    <a href="#s9">9. 设计哲学总结</a>
+</div>
+
+<!-- ==================== 全景大图 ==================== -->
+<h2 id="overview">🗺️ 全景数据流大图（先看这张图）</h2>
+
+<p style="color:var(--muted);margin-bottom:1rem">下面这张图展示了从 cogent 启动到运行时工具调用的<strong>完整数据流</strong>。先扫一眼全貌，后面每一节会逐层展开讲解。</p>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 900 680" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <!-- 背景网格 -->
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#34d399"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrowYellow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#fbbf24"/>
+    </marker>
+  </defs>
+  <rect width="900" height="680" fill="url(#grid)"/>
+
+  <!-- ===== 阶段标签 ===== -->
+  <text x="450" y="30" text-anchor="middle" fill="#64748b" font-size="11" font-family="monospace">── 启动阶段（一次性） ──────────────────────────────────────────── 运行阶段（按需重复） ──</text>
+
+  <!-- ===== 第1层：配置文件 ===== -->
+  <rect x="50" y="50" width="160" height="50" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+  <text x="130" y="72" text-anchor="middle" fill="#fbbf24" font-size="11" font-family="monospace">📋 .cogent/mcp.json</text>
+  <text x="130" y="89" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">配置文件</text>
+
+  <!-- 箭头：配置 → Manager -->
+  <line x1="130" y1="100" x2="130" y2="140" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowYellow)"/>
+  <text x="145" y="125" fill="#fbbf24" font-size="8" font-family="monospace">LoadConfig()</text>
+
+  <!-- ===== 第2层：Manager ===== -->
+  <rect x="50" y="145" width="160" height="50" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="130" y="167" text-anchor="middle" fill="#38bdf8" font-size="11" font-family="monospace">👔 Manager</text>
+  <text x="130" y="184" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">批量连接 + 聚合工具</text>
+
+  <!-- 箭头：Manager → Client 1 -->
+  <line x1="90" y1="195" x2="90" y2="250" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrowBlue)" stroke-dasharray="4,2"/>
+  <!-- 箭头：Manager → Client 2 -->
+  <line x1="170" y1="195" x2="170" y2="250" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrowBlue)" stroke-dasharray="4,2"/>
+  <text x="130" y="230" text-anchor="middle" fill="#38bdf8" font-size="8" font-family="monospace">connectOne() × N</text>
+
+  <!-- ===== 第3层：Client（两个示例） ===== -->
+  <!-- Client 1 -->
+  <rect x="30" y="255" width="130" height="45" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="95" y="275" text-anchor="middle" fill="#38bdf8" font-size="10" font-family="monospace">📞 Client #1</text>
+  <text x="95" y="291" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">"github"</text>
+
+  <!-- Client 2 -->
+  <rect x="175" y="255" width="130" height="45" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="240" y="275" text-anchor="middle" fill="#38bdf8" font-size="10" font-family="monospace">📞 Client #2</text>
+  <text x="240" y="291" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">"filesystem"</text>
+
+  <!-- ===== 展开 Client #1 的内部 ===== -->
+  <!-- 大框包裹 Client #1 的详细流程 -->
+  <rect x="30" y="315" width="380" height="310" rx="12" fill="rgba(56,189,248,0.03)" stroke="#334155" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="50" y="335" fill="#64748b" font-size="9" font-family="monospace">▼ Client #1 内部展开（每个 Client 结构相同）</text>
+
+  <!-- Transport -->
+  <rect x="55" y="350" width="150" height="55" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="130" y="372" text-anchor="middle" fill="#34d399" font-size="10" font-family="monospace">📡 Transport</text>
+  <text x="130" y="388" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">JSON-RPC 双工通信</text>
+  <text x="130" y="400" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">pending map + readLoop</text>
+
+  <!-- Server 子进程 -->
+  <rect x="260" y="350" width="130" height="55" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="325" y="372" text-anchor="middle" fill="#a78bfa" font-size="10" font-family="monospace">🔧 Server 子进程</text>
+  <text x="325" y="388" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">npx @.../github</text>
+  <text x="325" y="400" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">独立进程</text>
+
+  <!-- 双向箭头：Transport ⇄ Server -->
+  <line x1="205" y1="370" x2="258" y2="370" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+  <line x1="258" y1="385" x2="205" y2="385" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+  <text x="232" y="363" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">stdin →</text>
+  <text x="232" y="397" text-anchor="middle" fill="#a78bfa" font-size="7" font-family="monospace">← stdout</text>
+
+  <!-- 握手流程 -->
+  <rect x="55" y="420" width="330" height="65" rx="6" fill="rgba(251,191,36,0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="70" y="436" fill="#fbbf24" font-size="8" font-family="monospace">🤝 握手阶段 (bootstrap)</text>
+  <text x="70" y="452" fill="#94a3b8" font-size="8" font-family="monospace">① initialize → ② 响应 → ③ initialized通知 → ④ tools/list → ⑤ 工具清单</text>
+  <text x="70" y="468" fill="#64748b" font-size="8" font-family="monospace">握手完成后，Server 暴露的工具清单已就绪</text>
+  <text x="70" y="480" fill="#34d399" font-size="8" font-family="monospace">↓ 立刻构造 remoteTool（不是懒加载！）</text>
+
+  <!-- remoteTool -->
+  <rect x="55" y="500" width="330" height="50" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="220" y="520" text-anchor="middle" fill="#34d399" font-size="10" font-family="monospace">🔌 remoteTool[] — 适配为 tool.Tool 接口</text>
+  <text x="220" y="536" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">mcp__github__search_code, mcp__github__create_issue, ...</text>
+
+  <!-- 箭头：remoteTool → 工具池 -->
+  <line x1="220" y1="550" x2="220" y2="580" stroke="#34d399" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="235" y="570" fill="#34d399" font-size="8" font-family="monospace">注入</text>
+
+  <!-- ===== 第4层：cogent 工具池 ===== -->
+  <rect x="50" y="585" width="380" height="45" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="240" y="607" text-anchor="middle" fill="#38bdf8" font-size="11" font-family="monospace">🧰 cogent 工具池 (内建工具 + MCP 远端工具)</text>
+  <text x="240" y="622" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">内建优先去重，MCP 工具带 mcp__ 前缀</text>
+
+  <!-- ===== 右侧：运行时调用流 ===== -->
+  <rect x="500" y="50" width="360" height="580" rx="12" fill="rgba(167,139,250,0.03)" stroke="#334155" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="520" y="72" fill="#a78bfa" font-size="10" font-family="monospace">⚡ 运行时调用（每次工具调用重复此流程）</text>
+
+  <!-- AI 模型 -->
+  <rect x="570" y="90" width="220" height="40" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="680" y="115" text-anchor="middle" fill="#a78bfa" font-size="10" font-family="monospace">🧠 AI 模型决定调用工具</text>
+
+  <line x1="680" y1="130" x2="680" y2="160" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+  <text x="695" y="150" fill="#94a3b8" font-size="7" font-family="monospace">tool_use</text>
+
+  <!-- 工具池查找 -->
+  <rect x="570" y="165" width="220" height="35" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="680" y="187" text-anchor="middle" fill="#38bdf8" font-size="9" font-family="monospace">🧰 工具池 → 找到 remoteTool</text>
+
+  <line x1="680" y1="200" x2="680" y2="230" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- remoteTool.Call -->
+  <rect x="570" y="235" width="220" height="35" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="680" y="257" text-anchor="middle" fill="#34d399" font-size="9" font-family="monospace">🔌 remoteTool.Call(ctx, input)</text>
+
+  <line x1="680" y1="270" x2="680" y2="300" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- client.callTool -->
+  <rect x="570" y="305" width="220" height="35" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="680" y="327" text-anchor="middle" fill="#38bdf8" font-size="9" font-family="monospace">📞 client.callTool("search_code")</text>
+
+  <line x1="680" y1="340" x2="680" y2="370" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- transport.call -->
+  <rect x="570" y="375" width="220" height="35" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="680" y="397" text-anchor="middle" fill="#34d399" font-size="9" font-family="monospace">📡 transport.call → stdin 写入</text>
+
+  <line x1="680" y1="410" x2="680" y2="440" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowYellow)"/>
+  <text x="695" y="430" fill="#fbbf24" font-size="7" font-family="monospace">跨进程!</text>
+
+  <!-- Server 执行 -->
+  <rect x="570" y="445" width="220" height="40" rx="6" fill="rgba(167,139,250,0.1)" stroke="#a78bfa" stroke-width="2"/>
+  <text x="680" y="463" text-anchor="middle" fill="#a78bfa" font-size="9" font-family="monospace">🔧 Server 执行工具逻辑</text>
+  <text x="680" y="478" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">(调 GitHub API / 读文件 / ...)</text>
+
+  <line x1="680" y1="485" x2="680" y2="515" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowPurple)"/>
+  <text x="695" y="505" fill="#a78bfa" font-size="7" font-family="monospace">stdout 响应</text>
+
+  <!-- readLoop 投递 -->
+  <rect x="570" y="520" width="220" height="35" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="680" y="542" text-anchor="middle" fill="#34d399" font-size="9" font-family="monospace">📡 readLoop → deliver(id, frame)</text>
+
+  <line x1="680" y1="555" x2="680" y2="585" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- 结果返回 -->
+  <rect x="570" y="590" width="220" height="35" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="680" y="612" text-anchor="middle" fill="#a78bfa" font-size="9" font-family="monospace">🧠 ToolResult → AI 模型继续对话</text>
+
+  <!-- ===== 连接线：左侧工具池 → 右侧运行时 ===== -->
+  <path d="M 430 607 C 480 607, 500 187, 568 187" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrowBlue)"/>
+  <text x="470" y="400" fill="#38bdf8" font-size="8" font-family="monospace" transform="rotate(-90, 470, 400)">工具池就绪后，等待 AI 调用</text>
+
+  <!-- ===== 图例 ===== -->
+  <rect x="520" y="640" width="350" height="30" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <circle cx="545" cy="655" r="5" fill="#fbbf24"/><text x="555" y="659" fill="#94a3b8" font-size="8" font-family="monospace">配置</text>
+  <circle cx="600" cy="655" r="5" fill="#38bdf8"/><text x="610" y="659" fill="#94a3b8" font-size="8" font-family="monospace">Client层</text>
+  <circle cx="670" cy="655" r="5" fill="#34d399"/><text x="680" y="659" fill="#94a3b8" font-size="8" font-family="monospace">Transport层</text>
+  <circle cx="755" cy="655" r="5" fill="#a78bfa"/><text x="765" y="659" fill="#94a3b8" font-size="8" font-family="monospace">Server/AI</text>
+
+</svg>
+</div>
+
+<div class="highlight-box">
+    <strong>📖 怎么看这张图：</strong><br><br>
+    <strong>左半边</strong> = 启动阶段（只执行一次）：从配置文件 → Manager → Client → Transport → 握手 → 构造 remoteTool → 注入工具池<br><br>
+    <strong>右半边</strong> = 运行阶段（每次工具调用重复）：AI 决定调用 → 工具池找到 remoteTool → 经 transport 跨进程到 Server → 结果回流<br><br>
+    <strong>颜色含义</strong>：🟡黄色=配置层 🔵蓝色=Client/管理层 🟢绿色=Transport/适配层 🟣紫色=Server/AI模型
+</div>
+
+<!-- ==================== Section 0 ==================== -->
+<h2 id="s0">0. 先搞清楚：谁是谁？</h2>
+
+<p>整个 MCP 模块只有 <strong>两个角色</strong>，别想复杂了：</p>
+
+<div class="role-diagram">
+    <div class="role-box role-cogent">
+        <div class="role-label" style="color:var(--accent)">🧠 CLIENT（客户端）</div>
+        <div class="role-name">cogent 主程序</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem">
+            你正在用的 AI 编码助手<br>
+            它<strong>发起请求</strong>、<strong>消费工具</strong>
+        </div>
+    </div>
+    <div class="arrow-container">
+        <div class="arrow-label">stdin (请求) →</div>
+        <div class="arrow-line">⇄</div>
+        <div class="arrow-label">← stdout (响应)</div>
+    </div>
+    <div class="role-box role-server">
+        <div class="role-label" style="color:var(--accent2)">🔧 SERVER（服务端）</div>
+        <div class="role-name">外部子进程</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem">
+            如 <code>npx @some/mcp-server</code><br>
+            它<strong>被启动</strong>、<strong>响应请求</strong>、<strong>提供工具</strong>
+        </div>
+    </div>
+</div>
+
+<div class="highlight-box">
+    <strong>一句话记住：</strong>cogent 是老板（Client），MCP Server 是打工人（被 cogent 拉起来的子进程）。<br>
+    老板通过 stdin/stdout 管道给打工人下指令，打工人干完活把结果写回来。
+</div>
+
+<!-- ==================== Section 1 ==================== -->
+<h2 id="s1">1. 全局鸟瞰：5 个文件各管什么</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>文件</th>
+            <th>职责（一句话）</th>
+            <th>类比</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="tag tag-file">config.go</span></td>
+            <td>读 JSON 配置 → 告诉系统要连哪些 Server</td>
+            <td>📋 通讯录</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-file">manager.go</span></td>
+            <td>批量连接 Server、聚合工具、统一关闭</td>
+            <td>👔 部门经理</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-file">client.go</span></td>
+            <td>管理单个 Server 的生命周期（启动→握手→调用→关闭）</td>
+            <td>📞 专线电话</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-file">transport.go</span></td>
+            <td>底层 JSON-RPC 双工通信（发消息、收消息、配对）</td>
+            <td>📡 电话线路</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-file">remote_tool.go</span></td>
+            <td>把远端工具"伪装"成本地工具，融入 cogent 工具池</td>
+            <td>🔌 转接头</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="card">
+    <strong>它们的调用关系（从上到下）：</strong>
+<pre>
+外部调用方 (cmd 层)
+    │
+    ▼
+<span style="color:var(--warning)">config.go</span>  ──→  读文件，返回 []ServerConfig
+    │
+    ▼
+<span style="color:var(--warning)">manager.go</span> ──→  拿着配置，逐个创建 client 并连接
+    │
+    ▼
+<span style="color:var(--warning)">client.go</span>  ──→  exec.Command 启动子进程，用 transport 通信
+    │
+    ▼
+<span style="color:var(--warning)">transport.go</span> ──→  最底层：往 stdin 写 JSON，从 stdout 读 JSON
+    │
+    ▼
+<span style="color:var(--warning)">remote_tool.go</span> ──→  把拿到的工具信息包装成 tool.Tool 接口
+</pre>
+</div>
+
+<!-- ==================== Section 2 ==================== -->
+<h2 id="s2">2. 第一步：读配置（config.go）</h2>
+
+<div class="step" data-step="1">
+    <div class="step-title">输入：一个 JSON 文件</div>
+    <div class="step-desc">位置固定在项目根目录 <code>.cogent/mcp.json</code></div>
+</div>
+
+<pre>
+<span class="comment">// .cogent/mcp.json 长这样：</span>
+{
+  <span class="string">"mcpServers"</span>: {
+    <span class="string">"github"</span>: {
+      <span class="string">"command"</span>: <span class="string">"npx"</span>,
+      <span class="string">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"@modelcontextprotocol/server-github"</span>],
+      <span class="string">"env"</span>: { <span class="string">"GITHUB_TOKEN"</span>: <span class="string">"xxx"</span> }
+    },
+    <span class="string">"filesystem"</span>: {
+      <span class="string">"command"</span>: <span class="string">"python"</span>,
+      <span class="string">"args"</span>: [<span class="string">"fs_server.py"</span>]
+    }
+  }
+}
+</pre>
+
+<div class="step" data-step="2">
+    <div class="step-title">输出：一个 Go 结构体切片</div>
+    <div class="step-desc">按名字排序，保证每次启动顺序一致</div>
+</div>
+
+<pre>
+[]ServerConfig{
+    {Name: <span class="string">"filesystem"</span>, Command: <span class="string">"python"</span>, Args: [<span class="string">"fs_server.py"</span>]},
+    {Name: <span class="string">"github"</span>,     Command: <span class="string">"npx"</span>,    Args: [<span class="string">"-y"</span>, <span class="string">"@model..."</span>]},
+}
+</pre>
+
+<div class="warn-box">
+    <strong>⚡ 关键设计：</strong>文件不存在 → 返回 <code>(nil, nil)</code>，不报错！<br>
+    MCP 是"锦上添花"，没有配置文件 cogent 照样能跑。
+</div>
+
+<!-- ==================== Section 3 ==================== -->
+<h2 id="s3">3. 第二步：Manager 批量连接（manager.go）</h2>
+
+<p>Manager 是个"包工头"，拿着通讯录（配置列表），逐个去连接 Server：</p>
+
+<div class="flow-ascii">
+<span class="left">Manager.Connect(ctx, configs)</span>
+        │
+        ├── <span class="data">connectOne(github)</span>    → 成功 ✓  加入 clients 列表
+        │
+        ├── <span class="data">connectOne(filesystem)</span> → 成功 ✓  加入 clients 列表
+        │
+        └── <span class="data">connectOne(broken)</span>    → <span class="err">失败 ✗  打印警告，跳过，不崩溃！</span>
+
+<span class="left">Manager.Tools()</span>  → 把所有 client 的工具汇总成一个大列表
+<span class="left">Manager.Close()</span> → 逐个关闭，错误汇总返回
+</div>
+
+<div class="highlight-box">
+    <strong>🛡️ 容错策略：</strong>一个 Server 挂了不影响其他 Server，也不影响 cogent 启动。<br>
+    这就像你手机里装了 10 个 App，其中一个打不开，不影响你用其他的。
+</div>
+
+<h3>对应代码（精简版）：</h3>
+<pre>
+<span class="keyword">func</span> (m *Manager) <span class="func">connectOne</span>(ctx context.Context, cfg ServerConfig) {
+    cl, err := NewClient(m.transport, m.tracer)
+    <span class="keyword">if</span> err != nil {
+        slog.Warn(<span class="string">"mcp client init failed"</span>, ...)  <span class="comment">// 警告，不 panic</span>
+        <span class="keyword">return</span>
+    }
+    <span class="keyword">if</span> err := cl.Connect(ctx, cfg); err != nil {
+        slog.Warn(<span class="string">"mcp connect failed"</span>, ...)      <span class="comment">// 警告，不 panic</span>
+        _ = cl.Close()
+        <span class="keyword">return</span>
+    }
+    m.clients = <span class="func">append</span>(m.clients, cl)              <span class="comment">// 成功才加入</span>
+}
+</pre>
+
+<!-- ==================== Section 4 ==================== -->
+<h2 id="s4">4. 第三步：Client 启动子进程 + 握手（client.go）</h2>
+
+<p>每个 Client 对应一个外部 Server 子进程。连接过程分 3 个阶段：</p>
+
+<h3>阶段 A：启动子进程</h3>
+
+<div class="flow-ascii">
+cogent 主进程
+    │
+    │  exec.Command(<span class="string">"npx"</span>, <span class="string">"-y"</span>, <span class="string">"@some/mcp-server"</span>)
+    │  cmd.Start()
+    │
+    ▼
+┌─────────────────────────────┐
+│  MCP Server 子进程 (npx)     │
+│  等待 stdin 输入...          │
+└─────────────────────────────┘
+    │
+    │  获取管道：
+    │  cmd.StdinPipe()  → cogent 往这里写请求
+    │  cmd.StdoutPipe() → cogent 从这里读响应
+    │
+    ▼
+  创建 transport（传输层），开始监听
+</div>
+
+<h3>阶段 B：协议握手（bootstrap）</h3>
+
+<div class="flow-ascii">
+<span class="left">cogent (Client)</span>                              <span class="right">MCP Server (子进程)</span>
+     │                                              │
+     │── <span class="data">① initialize 请求</span> ──────────────────→│  "我是 cogent v0.1.0，
+     │   {protocolVersion: "2024-11-05",            │   支持 MCP 协议 2024-11-05"
+     │    clientInfo: {name:"cogent"}}               │
+     │                                              │
+     │←── <span class="data">② initialize 响应</span> ─────────────────│  "OK，我也支持这个版本"
+     │                                              │
+     │── <span class="data">③ initialized 通知</span> ─────────────────→│  "握手完成，准备好了"
+     │   (这是通知，不需要回复)                       │
+     │                                              │
+     │── <span class="data">④ tools/list 请求</span> ──────────────────→│  "告诉我你有哪些工具？"
+     │                                              │
+     │←── <span class="data">⑤ tools/list 响应</span> ─────────────────│  "我有 search_code、
+     │   [{name:"search_code", ...},                │   create_issue 这些工具"
+     │    {name:"create_issue", ...}]               │
+     │                                              │
+</div>
+
+<h3>阶段 C：构造工具</h3>
+
+<pre>
+<span class="comment">// 拿到工具清单后，逐个包装成 remoteTool</span>
+<span class="keyword">for</span> _, spec := <span class="keyword">range</span> res.Tools {
+    c.tools = <span class="func">append</span>(c.tools, <span class="func">newRemoteTool</span>(c, spec))
+}
+<span class="comment">// 此时 client.Tools() 就能返回可用工具了</span>
+</pre>
+
+<!-- ==================== Section 5 ==================== -->
+<h2 id="s5">5. 第四步：Transport 双工通信（transport.go）</h2>
+
+<p>Transport 是最底层的"电话线路"，负责：<strong>发 JSON、收 JSON、把请求和响应配对</strong>。</p>
+
+<div class="card">
+    <h3 style="margin-top:0">🎯 核心机制：请求-响应配对</h3>
+    <p style="color:var(--muted);margin:0.5rem 0">每个请求有唯一递增 ID，响应带着同样的 ID 回来，transport 按 ID 把响应交给正确的等待者。</p>
+</div>
+
+<div class="flow-ascii">
+┌─────────────────────────────────────────────────────────────────┐
+│                        transport 内部结构                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  <span class="left">【写出方向】</span>                                                  │
+│                                                                  │
+│   call("tools/list", params)                                     │
+│       │                                                          │
+│       ├── 分配 ID (原子递增: 1, 2, 3...)                          │
+│       ├── 注册到 pending map:  pending[id] = chan frame           │
+│       ├── JSON 序列化: {"jsonrpc":"2.0","id":1,"method":...}     │
+│       ├── 追加换行符 \n                                           │
+│       └── <span class="data">加锁写入 stdin</span> ──────────────→ Server 子进程          │
+│                                                                  │
+│  <span class="right">【读入方向】</span>（独立 goroutine: readLoop）                       │
+│                                                                  │
+│   Server 子进程 ──────────────→ <span class="data">stdout</span>                          │
+│       │                                                          │
+│       ├── bufio.Scanner 逐行扫描                                  │
+│       ├── JSON 反序列化为 frame                                    │
+│       ├── 取出 frame.ID                                           │
+│       └── <span class="func">deliver(id, frame)</span>: 从 pending 取出 chan，投递进去     │
+│                                                                  │
+│  <span class="left">【等待机制】</span>                                                  │
+│                                                                  │
+│   call() 发完请求后 select:                                       │
+│       ├── case <-ctx.Done()  → 超时/取消                          │
+│       ├── case <-t.done      → 连接已断开                         │
+│       └── case f := <-ch     → <span class="data">收到响应！返回 f.Result</span>          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>打个比方 🏪</h3>
+<div class="highlight-box">
+    想象一个取号排队的餐厅：<br><br>
+    <strong>1.</strong> 你点餐时拿到一个号码牌（ID=7）<br>
+    <strong>2.</strong> 你的订单被送进厨房（写入 stdin）<br>
+    <strong>3.</strong> 你在座位上等着（select 阻塞）<br>
+    <strong>4.</strong> 厨房做好了喊号："7号！"（readLoop 读到 ID=7 的响应）<br>
+    <strong>5.</strong> 服务员把餐送到你桌上（deliver 投递到你的 channel）<br>
+    <strong>6.</strong> 你拿到食物开吃（call 返回结果）
+</div>
+
+<h3>对应代码（精简版）：</h3>
+<pre>
+<span class="keyword">func</span> (t *transport) <span class="func">call</span>(ctx context.Context, method <span class="type">string</span>, params any) (json.RawMessage, error) {
+    id := t.nextID.Add(1)                <span class="comment">// ① 取号</span>
+    ch := make(chan frame, 1)
+    t.pending[id] = ch                   <span class="comment">// ② 注册等待</span>
+
+    t.<span class="func">write</span>(rpcRequest{ID: id, ...})     <span class="comment">// ③ 发送请求</span>
+
+    <span class="keyword">select</span> {                              <span class="comment">// ④ 等待响应</span>
+    <span class="keyword">case</span> <-ctx.Done():  <span class="keyword">return</span> nil, ctx.Err()
+    <span class="keyword">case</span> <-t.done:      <span class="keyword">return</span> nil, errors.New(<span class="string">"closed"</span>)
+    <span class="keyword">case</span> f := <-ch:     <span class="keyword">return</span> f.Result, nil  <span class="comment">// ⑤ 拿到结果</span>
+    }
+}
+</pre>
+
+<!-- ==================== Section 6 ==================== -->
+<h2 id="s6">6. 第五步：remoteTool 适配器（remote_tool.go）</h2>
+
+<p>这是整个模块的"最后一公里"——把远端工具<strong>伪装</strong>成本地工具。</p>
+
+<div class="card">
+    <h3 style="margin-top:0">🔌 问题：cogent 工具池只认 <code>tool.Tool</code> 接口</h3>
+    <p style="color:var(--muted)">远端 Server 返回的只是一堆 JSON 描述（名字、描述、schema），不是 Go 接口。<br>
+    <code>remoteTool</code> 就是那个"转接头"，让远端工具看起来和内建工具一模一样。</p>
+</div>
+
+<div class="flow-ascii">
+<span class="left">cogent 工具池</span>要求每个工具实现：
+
+    tool.Tool 接口
+    ├── Name() string              → <span class="data">"mcp__github__search_code"</span>
+    ├── Description() string       → <span class="data">"Search code in repos"</span>
+    ├── InputSchema() RawMessage   → <span class="data">{"type":"object","properties":...}</span>
+    ├── IsConcurrencySafe()        → <span class="err">false (默认保守)</span>
+    ├── IsReadOnly()               → <span class="err">false (默认保守)</span>
+    ├── CheckPermission()          → <span class="err">ask  (默认要确认)</span>
+    └── Call(ctx, input, sink)     → <span class="func">通过 client.callTool() 远程调用</span>
+</div>
+
+<h3>命名隔离策略</h3>
+<pre>
+<span class="comment">// 工具名格式：mcp__&lt;server名&gt;__&lt;原始工具名&gt;</span>
+<span class="comment">// 例如：</span>
+<span class="func">ToolName</span>(<span class="string">"github"</span>, <span class="string">"search_code"</span>)  →  <span class="string">"mcp__github__search_code"</span>
+<span class="func">ToolName</span>(<span class="string">"fs"</span>,     <span class="string">"read_file"</span>)    →  <span class="string">"mcp__fs__read_file"</span>
+</pre>
+
+<div class="warn-box">
+    <strong>为什么要加前缀？</strong><br>
+    防止外部 Server 的工具名和 cogent 内建工具冲突。<br>
+    比如 cogent 自己有个 <code>read_file</code> 工具，外部 Server 也叫 <code>read_file</code>，<br>
+    加了前缀后变成 <code>mcp__fs__read_file</code>，就不会打架了。<br>
+    而且工具池构造时"内建优先去重"，同名的内建工具永远优先。
+</div>
+
+<h3>错误处理策略（fail-closed）</h3>
+<pre>
+<span class="keyword">func</span> (t *remoteTool) <span class="func">Call</span>(ctx, input, _) (types.ToolResult, error) {
+    res, err := t.client.<span class="func">callTool</span>(ctx, t.origName, input)
+    <span class="keyword">if</span> err != nil {
+        <span class="comment">// 注意！不向上抛 error，而是包装成"错误结果"</span>
+        <span class="keyword">return</span> types.ToolResult{
+            Content: <span class="string">"mcp call failed: "</span> + err.Error(),
+            IsError: <span class="type">true</span>,
+        }, <span class="type">nil</span>  <span class="comment">// ← error 返回 nil！</span>
+    }
+    <span class="keyword">return</span> res, nil
+}
+</pre>
+
+<div class="highlight-box">
+    <strong>为什么错误不上抛？</strong><br>
+    如果返回 <code>error</code>，上层可能会中断整个对话流程。<br>
+    包装成 <code>ToolResult{IsError: true}</code> 后，AI 模型会看到"这个工具调用失败了"，<br>
+    然后它可以选择重试或换个方式——<strong>不会让整个系统崩溃</strong>。
+</div>
+
+<!-- ==================== Section 7 ==================== -->
+<h2 id="s7">7. 运行时：一次工具调用的完整旅程</h2>
+
+<p>假设 AI 模型决定调用 <code>mcp__github__search_code</code>，数据是怎么流动的？</p>
+
+<div class="flow-ascii">
+<span class="left">AI 模型</span>: "我要调用 mcp__github__search_code，参数是 {query: 'auth'}"
+    │
+    ▼
+<span class="left">cogent 工具池</span>: pool.Get("mcp__github__search_code") → 找到 remoteTool
+    │
+    ▼
+<span class="left">remoteTool.Call(ctx, input, sink)</span>
+    │
+    │  开启 trace span: "mcp.call"
+    │
+    ▼
+<span class="left">client.callTool(ctx, "search_code", input)</span>
+    │
+    │  构造参数: {name: "search_code", arguments: {query: "auth"}}
+    │
+    ▼
+<span class="left">transport.call(ctx, "tools/call", params)</span>
+    │
+    │  分配 ID=42
+    │  序列化: {"jsonrpc":"2.0","id":42,"method":"tools/call","params":{...}}
+    │  写入 stdin
+    │
+    ▼
+<span class="right">═══════════════ 跨进程边界 ═══════════════</span>
+    │
+    ▼
+<span class="right">MCP Server 子进程</span>
+    │  从 stdin 读到请求
+    │  执行 search_code 逻辑（比如调 GitHub API）
+    │  构造响应: {"jsonrpc":"2.0","id":42,"result":{...}}
+    │  写入 stdout
+    │
+    ▼
+<span class="right">═══════════════ 跨进程边界 ═══════════════</span>
+    │
+    ▼
+<span class="left">transport.readLoop</span>
+    │  扫描到一行 JSON
+    │  解析出 ID=42
+    │  deliver(42, frame) → 投递到 pending[42] 的 channel
+    │
+    ▼
+<span class="left">transport.call 的 select</span> 收到 channel 数据
+    │
+    │  返回 frame.Result (json.RawMessage)
+    │
+    ▼
+<span class="left">client.callTool</span>
+    │  json.Unmarshal → callToolResult{Content: [...], IsError: false}
+    │  拼接文本内容
+    │
+    ▼
+<span class="left">remoteTool.Call</span>
+    │  结束 trace span
+    │  返回 types.ToolResult{Content: "搜索结果...", IsError: false}
+    │
+    ▼
+<span class="left">cogent 工具池</span> → 把结果交给 AI 模型继续对话
+</div>
+
+<!-- ==================== Section 8 ==================== -->
+<h2 id="s8">8. 关闭阶段：优雅退出</h2>
+
+<div class="flow-ascii">
+<span class="left">cogent 退出</span>
+    │
+    ▼
+<span class="left">Manager.Close()</span>
+    │
+    ├── client1.Close()
+    │       │
+    │       ├── <span class="data">transport.closeStdin()</span>     关闭写端
+    │       │       │
+    │       │       ▼
+    │       │   Server 收到 EOF → 自行退出
+    │       │
+    │       ├── <span class="data">waitProcess()</span>              等待子进程退出
+    │       │       │
+    │       │       ├── 2秒内退出 → OK
+    │       │       └── <span class="err">超时 → Kill 强杀</span>
+    │       │
+    │       └── <span class="data">transport.waitDone()</span>       等待 readLoop 退出
+    │
+    ├── client2.Close()
+    │       └── (同上)
+    │
+    └── 汇总所有错误返回
+</div>
+
+<!-- ==================== Section 9 ==================== -->
+<h2 id="s9">9. 设计哲学总结</h2>
+
+<div class="card">
+<table>
+    <thead>
+        <tr><th>设计原则</th><th>体现在哪里</th><th>效果</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="tag tag-safe">Fail-Closed</span></td>
+            <td>remoteTool 默认非并发安全、非只读、权限 ask</td>
+            <td>忘记配置 = 最安全行为，不会意外放开权限</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-safe">容错降级</span></td>
+            <td>Manager 单 Server 失败仅 Warn 跳过</td>
+            <td>一个 Server 挂了不影响整体</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-safe">错误不上抛</span></td>
+            <td>remoteTool.Call 把 error 包装为 ToolResult</td>
+            <td>单次调用失败不中断对话流</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-safe">可插拔</span></td>
+            <td>配置文件不存在返回 nil，MCP 非硬依赖</td>
+            <td>没有 MCP 配置 cogent 照常运行</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-safe">命名隔离</span></td>
+            <td>工具名 mcp__&lt;server&gt;__&lt;tool&gt; 前缀</td>
+            <td>外部工具无法冒用内建工具名</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-safe">零依赖</span></td>
+            <td>自实现 JSON-RPC，不引入官方 SDK</td>
+            <td>生产二进制精简，无第三方依赖</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+
+<div class="highlight-box">
+    <strong>🎓 最终总结（背下来）：</strong><br><br>
+    <code>配置文件</code> → <code>Manager 批量连接</code> → <code>Client 拉起子进程 + stdio 握手</code><br>
+    → <code>Transport 双工 JSON-RPC 通信</code> → <code>remoteTool 适配为 tool.Tool</code><br>
+    → <code>融入工具池，运行时按需调用</code><br><br>
+    整个模块就是一个 <strong>"把外部进程的能力，通过管道通信，伪装成本地工具"</strong> 的适配层。
+</div>
+
+<footer>
+    📁 源码位置：<code>internal/mcp/</code> | 共 5 个文件 ~672 行 | cogent MCP Client 实现
+</footer>
+
+</body>
+</html>

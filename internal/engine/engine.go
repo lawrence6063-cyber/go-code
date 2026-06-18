@@ -86,6 +86,7 @@ func New(deps Deps) (Engine, error) {
 		session:   deps.Session,
 		sessionID: deps.SessionID,
 		tracer:    deps.Observe.Tracer(),
+		meter:     deps.Observe.Meter(),
 		mode:      deps.Mode,
 		model:     deps.Model,
 		workRoot:  deps.WorkRoot,
@@ -125,6 +126,7 @@ type engine struct {
 	ctxmgr    *contextmgr.Manager
 	session   session.Store
 	tracer    observe.Tracer
+	meter     observe.Meter
 	mode      Mode
 	model     string
 	workRoot  string
@@ -185,10 +187,13 @@ func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.Str
 // 流式调 LLM → 文本上抛 → 无工具调用则结束；有则串行/并发执行工具、回流 tool_result 后进入下一轮，
 // 直至触达 maxSteps。每一步产生的消息同步 record 为 append-only 事件。
 func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
+	stepsTaken := 0
+	defer func() { e.meter.Record("cogent.react.steps", float64(stepsTaken)) }()
 	for step := 0; step < e.maxSteps; step++ {
 		if ctx.Err() != nil {
 			return
 		}
+		stepsTaken = step + 1
 		sctx, end := e.tracer.Start(ctx, "react.step", observe.Attr{Key: "step.index", Value: step})
 		reply, toolUses, err := e.streamAssistant(sctx, out)
 		e.appendAssistant(ctx, reply, toolUses)
@@ -289,6 +294,7 @@ func (e *engine) streamAssistant(
 			}
 			if d.Usage != nil {
 				e.used = d.Usage.PromptTokens + d.Usage.CompletionTokens
+				e.meter.Count("cogent.tokens", int64(e.used))
 				slog.Debug("llm usage", "prompt", d.Usage.PromptTokens, "completion", d.Usage.CompletionTokens)
 			}
 		}

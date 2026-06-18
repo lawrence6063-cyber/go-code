@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/alaindong/cogent/internal/observe"
 )
 
 func main() {
@@ -39,5 +41,6 @@ func newLogger(level string) *slog.Logger {
 		lvl = slog.LevelInfo
 	}
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})
-	return slog.New(handler)
+	// 包一层 trace 注入：日志自动带上当前 span 的 trace_id/span_id，与 trace 对齐（Phase 8）。
+	return slog.New(observe.NewTraceLogHandler(handler))
 }

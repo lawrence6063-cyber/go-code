@@ -133,6 +133,52 @@ go run ./cmd/cogent run "用 fetch 工具抓取 https://example.com 并总结"
 - **trace 串联**：子 Agent 的执行作为父任务 trace 的 `agent.spawn` 子 span 挂接（复用 ctx 传播），可视化"主 Agent 把什么子任务派给了谁、花了多少"。
 - **依赖破环**：`Spawner` 接口定义在 `tool` 包、`task` 工具仅依赖该抽象；`internal/agent` 仅 import `engine` 并返回隐式满足该接口的 `*SubAgent`，保证 `cmd → agent → engine → tool → types` 无循环依赖。
 
+## 可观测 Trace（Phase 8）
+
+cogent 用 **OpenTelemetry SDK** 把一次任务的 ReAct 决策链建成一棵 span 树，回答"慢/贵/错在哪"。
+默认关闭（零开销 no-op），显式开启后可落本地文件或推到 Jaeger 看火焰图。
+
+```text
+cogent.session
+└── react.step
+    ├── llm.stream                # model / tokens / 首字延迟 / finish_reason
+    └── tool.batch
+        └── tool.call             # tool.name / is_error / duration
+            ├── permission.check  # allow/ask/deny
+            └── agent.spawn       # SubAgent 子树（经 ctx 自动挂接）
+```
+
+| 环境变量 | 含义 | 默认 |
+| --- | --- | --- |
+| `COGENT_OBSERVE_ENABLED` | 总开关 | `false`（零开销 no-op） |
+| `COGENT_TRACE_EXPORTER` | `file` \| `stdout` \| `otlp` \| `none` | `file` |
+| `COGENT_TRACE_DIR` | file exporter 输出目录 | `./data/traces` |
+| `COGENT_OTLP_ENDPOINT` | otlp 的 gRPC 地址 | `localhost:4317` |
+| `COGENT_TRACE_SAMPLE_RATIO` | 采样率 0.0~1.0 | `1.0` |
+
+**本地文件（零依赖，jq 可查）：**
+
+```bash
+COGENT_OBSERVE_ENABLED=true COGENT_TRACE_EXPORTER=file go run ./cmd/cogent run "给 X 加一行日志"
+jq -r '.Name' data/traces/traces-*.jsonl   # 查看产生的 span 名
+```
+
+**接 Jaeger 看火焰图（OTLP）：**
+
+```bash
+# 1) 起一个本地 Jaeger（同时开放 UI 16686 与 OTLP gRPC 4317）
+docker run -d --name jaeger -p 16686:16686 -p 4317:4317 jaegertracing/all-in-one:latest
+
+# 2) 让 cogent 把 trace 推到 Jaeger
+COGENT_OBSERVE_ENABLED=true COGENT_TRACE_EXPORTER=otlp COGENT_OTLP_ENDPOINT=localhost:4317 \
+  go run ./cmd/cogent run "修复这个 bug 并跑测试"
+
+# 3) 打开 http://localhost:16686 ，选择 service=cogent 查看 span 树/火焰图
+```
+
+- 结构化日志（slog）自动注入当前 `trace_id`/`span_id`，日志可与 span 互相对照。
+- 关闭时（默认）返回 no-op 实现，调用点零开销、无 `if` 分支污染内核。
+
 ## 开发
 
 ```bash

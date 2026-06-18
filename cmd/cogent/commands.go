@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -30,6 +31,49 @@ const dataDirName = "data"
 
 // defaultLLMBaseURL 是未配置 COGENT_LLM_BASE_URL 时的回退地址（对齐 .env.example）。
 const defaultLLMBaseURL = "https://api.deepseek.com/v1"
+
+// observeConfig 按 COGENT_OBSERVE_* 环境变量构造可观测配置；
+// 默认 Enabled=false（零开销 no-op），显式开启后按 exporter（file/stdout/otlp）落地真实 trace。
+func observeConfig() observe.Config {
+	cfg := observe.Config{
+		Enabled:      envBool("COGENT_OBSERVE_ENABLED", false),
+		Exporter:     envStr("COGENT_TRACE_EXPORTER", "file"),
+		TraceDir:     envStr("COGENT_TRACE_DIR", filepath.Join(dataDirName, "traces")),
+		OTLPEndpoint: envStr("COGENT_OTLP_ENDPOINT", "localhost:4317"),
+		SampleRatio:  envFloat("COGENT_TRACE_SAMPLE_RATIO", 1.0),
+	}
+	return cfg
+}
+
+// envStr 读取字符串环境变量，缺省时回退 def。
+func envStr(key, def string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return def
+}
+
+// envBool 读取布尔环境变量（1/true/yes/on 视为真），缺省时回退 def。
+func envBool(key string, def bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
+}
+
+// envFloat 读取浮点环境变量，缺省或非法时回退 def。
+func envFloat(key string, def float64) float64 {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
 
 // newRootCmd 构造根命令并挂载 run/resume/mcp 子命令。
 func newRootCmd() *cobra.Command {
@@ -123,7 +167,7 @@ func runMCPCheck(ctx context.Context) error {
 		fmt.Printf("no MCP servers configured (expected at %s)\n", filepath.Join(wd, ".cogent", "mcp.json"))
 		return nil
 	}
-	prov, err := observe.New(observe.Config{Enabled: false})
+	prov, err := observe.New(observeConfig())
 	if err != nil {
 		return fmt.Errorf("init observe: %w", err)
 	}
@@ -150,7 +194,7 @@ type replOptions struct {
 
 // runREPL 装配依赖并进入交互式对话循环；按 opts 决定新建会话或从 resumeID 恢复。
 func runREPL(ctx context.Context, opts replOptions) error {
-	prov, err := observe.New(observe.Config{Enabled: false})
+	prov, err := observe.New(observeConfig())
 	if err != nil {
 		return fmt.Errorf("init observe: %w", err)
 	}

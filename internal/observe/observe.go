@@ -1,8 +1,11 @@
 // Package observe 对可观测能力（trace/指标）做薄封装，向内核屏蔽 OpenTelemetry 细节。
-// Phase 0 仅提供零开销的 no-op 实现，真实 exporter 留待 Phase 8。
+// Enabled=false 或 Exporter=none 时返回零开销 no-op 实现；否则返回 OTel SDK 支撑的实现（见 otel.go）。
 package observe
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Attr 是一个 span/metric 属性键值对（对 OTel attribute.KeyValue 的轻封装）。
 type Attr struct {
@@ -42,9 +45,16 @@ type Config struct {
 	SampleRatio  float64 // 采样率 0.0~1.0
 }
 
-// New 依据配置构造 Provider；Phase 0 始终返回零开销的 no-op 实现。
+// New 依据配置构造 Provider：Enabled=false 或 Exporter 为空/none 时返回零开销 no-op；
+// 否则按 Exporter（file/stdout/otlp）装配 OTel SDK 支撑的实现。
 func New(cfg Config) (Provider, error) {
-	return noopProvider{}, nil
+	if !cfg.Enabled {
+		return noopProvider{}, nil
+	}
+	if e := strings.ToLower(strings.TrimSpace(cfg.Exporter)); e == "none" {
+		return noopProvider{}, nil
+	}
+	return newOTelProvider(cfg)
 }
 
 // noopProvider 是 Provider 的零开销空实现。

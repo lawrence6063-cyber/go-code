@@ -28,11 +28,14 @@ func (e *engine) executeTools(
 	return orchestrate.Run(ctx, batches, run, e.tracer)
 }
 
-// runOne 执行单个工具调用：埋 tool.call span，并把结果规范化为 RoleTool 消息。
+// runOne 执行单个工具调用：埋 tool.call span，发指标，并把结果规范化为 RoleTool 消息。
 func (e *engine) runOne(ctx context.Context, block types.ToolUseBlock, out chan<- types.StreamEvent) types.Message {
 	ctx, end := e.tracer.Start(ctx, "tool.call", observe.Attr{Key: "tool.name", Value: block.Name})
 	res, err := e.callTool(ctx, block, out)
 	end(err)
+	e.meter.Count("cogent.tool.calls", 1,
+		observe.Attr{Key: "tool.name", Value: block.Name},
+		observe.Attr{Key: "is_error", Value: res.IsError || err != nil})
 	return toolResultMessage(block, res)
 }
 

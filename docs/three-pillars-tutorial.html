@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>现代系统工程三大支柱 — 深度教学</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --accent: #38bdf8;
+            --accent2: #a78bfa;
+            --accent3: #34d399;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --danger: #f87171;
+            --warning: #fbbf24;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        h2 {
+            font-size: 1.4rem;
+            color: var(--accent);
+            margin: 2.5rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        h3 {
+            font-size: 1.1rem;
+            color: var(--accent2);
+            margin: 1.5rem 0 0.5rem;
+        }
+        h4 {
+            font-size: 0.95rem;
+            color: var(--accent3);
+            margin: 1.2rem 0 0.4rem;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(56,189,248,0.1), rgba(167,139,250,0.1));
+            border-left: 4px solid var(--accent);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .warn-box {
+            background: rgba(251,191,36,0.1);
+            border-left: 4px solid var(--warning);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .danger-box {
+            background: rgba(248,113,113,0.1);
+            border-left: 4px solid var(--danger);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        .success-box {
+            background: rgba(52,211,153,0.1);
+            border-left: 4px solid var(--accent3);
+            padding: 1rem 1.5rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1rem 0;
+        }
+        code {
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--accent3);
+        }
+        pre {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem;
+            overflow-x: auto;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            margin: 0.8rem 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+        th {
+            background: var(--bg);
+            color: var(--accent);
+            padding: 0.7rem 1rem;
+            text-align: left;
+            border-bottom: 2px solid var(--border);
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:hover td { background: rgba(56,189,248,0.05); }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: bold;
+        }
+        .tag-blue { background: rgba(56,189,248,0.2); color: var(--accent); }
+        .tag-purple { background: rgba(167,139,250,0.2); color: var(--accent2); }
+        .tag-green { background: rgba(52,211,153,0.2); color: var(--accent3); }
+        .tag-red { background: rgba(248,113,113,0.2); color: var(--danger); }
+        .tag-yellow { background: rgba(251,191,36,0.2); color: var(--warning); }
+        .toc {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .toc-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+        .toc a {
+            color: var(--muted);
+            text-decoration: none;
+            display: block;
+            padding: 0.2rem 0;
+            font-size: 0.9rem;
+        }
+        .toc a:hover { color: var(--accent); }
+        .pillar-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 2rem 0 1rem;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+        }
+        .pillar-header-reliability {
+            background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(56,189,248,0.03));
+            border: 2px solid var(--accent);
+        }
+        .pillar-header-security {
+            background: linear-gradient(135deg, rgba(248,113,113,0.15), rgba(248,113,113,0.03));
+            border: 2px solid var(--danger);
+        }
+        .pillar-header-observability {
+            background: linear-gradient(135deg, rgba(167,139,250,0.15), rgba(167,139,250,0.03));
+            border: 2px solid var(--accent2);
+        }
+        .pillar-icon {
+            font-size: 2.5rem;
+        }
+        .pillar-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+        .pillar-subtitle {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        .scenario {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem;
+            margin: 0.8rem 0;
+        }
+        .scenario-title {
+            font-weight: bold;
+            color: var(--warning);
+            margin-bottom: 0.5rem;
+        }
+        .vs-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .vs-bad {
+            background: rgba(248,113,113,0.05);
+            border: 1px solid rgba(248,113,113,0.3);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .vs-good {
+            background: rgba(52,211,153,0.05);
+            border: 1px solid rgba(52,211,153,0.3);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .vs-label {
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🏛️ 现代系统工程三大支柱 — 深度教学</h1>
+<p class="subtitle">可靠性 · 安全性 · 可观测性 — 结合 cogent 项目实战，彻底搞懂为什么这三者缺一不可</p>
+
+<!-- 目录 -->
+<div class="toc">
+    <div class="toc-title">📑 目录</div>
+    <a href="#overview">🗺️ 全景关系图（先看这张！）</a>
+    <a href="#why">为什么是"三大支柱"而不是更多？</a>
+    <a href="#p1">🛡️ 支柱一：可靠性（Reliability）</a>
+    <a href="#p1-what">&nbsp;&nbsp;&nbsp;&nbsp;什么是可靠性？</a>
+    <a href="#p1-dimensions">&nbsp;&nbsp;&nbsp;&nbsp;可靠性的四个维度</a>
+    <a href="#p1-patterns">&nbsp;&nbsp;&nbsp;&nbsp;常见可靠性模式</a>
+    <a href="#p1-cogent">&nbsp;&nbsp;&nbsp;&nbsp;cogent 中的可靠性实践</a>
+    <a href="#p1-anti">&nbsp;&nbsp;&nbsp;&nbsp;反面案例：没有可靠性会怎样？</a>
+    <a href="#p2">🔒 支柱二：安全性（Security）</a>
+    <a href="#p2-what">&nbsp;&nbsp;&nbsp;&nbsp;什么是安全性？</a>
+    <a href="#p2-principles">&nbsp;&nbsp;&nbsp;&nbsp;安全性五大原则</a>
+    <a href="#p2-layers">&nbsp;&nbsp;&nbsp;&nbsp;纵深防御模型</a>
+    <a href="#p2-cogent">&nbsp;&nbsp;&nbsp;&nbsp;cogent 中的安全性实践</a>
+    <a href="#p2-ai">&nbsp;&nbsp;&nbsp;&nbsp;AI 应用的特殊安全挑战</a>
+    <a href="#p3">👁️ 支柱三：可观测性（Observability）</a>
+    <a href="#p3-what">&nbsp;&nbsp;&nbsp;&nbsp;什么是可观测性？</a>
+    <a href="#p3-three">&nbsp;&nbsp;&nbsp;&nbsp;可观测性三大信号</a>
+    <a href="#p3-diff">&nbsp;&nbsp;&nbsp;&nbsp;可观测性 ≠ 监控</a>
+    <a href="#p3-cogent">&nbsp;&nbsp;&nbsp;&nbsp;cogent 中的可观测性实践</a>
+    <a href="#p3-value">&nbsp;&nbsp;&nbsp;&nbsp;可观测性的商业价值</a>
+    <a href="#relation">🔗 三者的互相依赖关系</a>
+    <a href="#practice">🎯 实战：如何在项目中落地三大支柱</a>
+    <a href="#summary">📝 总结</a>
+</div>
+
+<!-- ==================== 全景关系图 ==================== -->
+<h2 id="overview">🗺️ 全景关系图（先看这张图）</h2>
+
+<p style="color:var(--muted);margin-bottom:1rem">三大支柱不是独立存在的，它们互相支撑、互相依赖，共同构成生产系统的基石。</p>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <linearGradient id="gradBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38bdf8;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#38bdf8;stop-opacity:0.05"/>
+    </linearGradient>
+    <linearGradient id="gradRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f87171;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#f87171;stop-opacity:0.05"/>
+    </linearGradient>
+    <linearGradient id="gradPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:0.05"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#grid)"/>
+
+  <!-- 标题 -->
+  <text x="400" y="35" text-anchor="middle" fill="#e2e8f0" font-size="14" font-family="monospace" font-weight="bold">现代系统工程三大支柱 — 互相支撑关系</text>
+
+  <!-- 中心三角形 -->
+  <!-- 可靠性 - 顶部 -->
+  <circle cx="400" cy="130" r="70" fill="url(#gradBlue)" stroke="#38bdf8" stroke-width="2"/>
+  <text x="400" y="120" text-anchor="middle" fill="#38bdf8" font-size="24">🛡️</text>
+  <text x="400" y="145" text-anchor="middle" fill="#38bdf8" font-size="12" font-family="monospace" font-weight="bold">可靠性</text>
+  <text x="400" y="162" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">Reliability</text>
+  <text x="400" y="178" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">系统"不挂"</text>
+
+  <!-- 安全性 - 左下 -->
+  <circle cx="250" cy="340" r="70" fill="url(#gradRed)" stroke="#f87171" stroke-width="2"/>
+  <text x="250" y="330" text-anchor="middle" fill="#f87171" font-size="24">🔒</text>
+  <text x="250" y="355" text-anchor="middle" fill="#f87171" font-size="12" font-family="monospace" font-weight="bold">安全性</text>
+  <text x="250" y="372" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">Security</text>
+  <text x="250" y="388" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">系统"不被搞"</text>
+
+  <!-- 可观测性 - 右下 -->
+  <circle cx="550" cy="340" r="70" fill="url(#gradPurple)" stroke="#a78bfa" stroke-width="2"/>
+  <text x="550" y="330" text-anchor="middle" fill="#a78bfa" font-size="24">👁️</text>
+  <text x="550" y="355" text-anchor="middle" fill="#a78bfa" font-size="12" font-family="monospace" font-weight="bold">可观测性</text>
+  <text x="550" y="372" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">Observability</text>
+  <text x="550" y="388" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">系统"看得见"</text>
+
+  <!-- 连接线 + 标注 -->
+  <!-- 可靠性 ↔ 安全性 -->
+  <line x1="345" y1="180" x2="285" y2="280" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="290" y="225" fill="#fbbf24" font-size="8" font-family="monospace" transform="rotate(-30, 290, 225)">被攻破=不可靠</text>
+
+  <!-- 可靠性 ↔ 可观测性 -->
+  <line x1="455" y1="180" x2="515" y2="280" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="505" y="225" fill="#fbbf24" font-size="8" font-family="monospace" transform="rotate(30, 505, 225)">看不到=修不了</text>
+
+  <!-- 安全性 ↔ 可观测性 -->
+  <line x1="320" y1="345" x2="480" y2="345" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="400" y="338" text-anchor="middle" fill="#fbbf24" font-size="8" font-family="monospace">审计日志=安全基础</text>
+
+  <!-- 中心 -->
+  <circle cx="400" cy="270" r="30" fill="rgba(251,191,36,0.1)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="400" y="265" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="monospace" font-weight="bold">生产</text>
+  <text x="400" y="280" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="monospace" font-weight="bold">系统</text>
+
+  <!-- 底部说明 -->
+  <rect x="150" y="440" width="500" height="40" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="400" y="458" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">三者缺一不可：可靠性保证"不挂" · 安全性保证"不被搞" · 可观测性保证"看得见"</text>
+  <text x="400" y="472" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">任何一个缺失，其他两个都会受到严重影响</text>
+</svg>
+</div>
+
+<!-- ==================== 为什么是三大支柱 ==================== -->
+<h2 id="why">为什么是"三大支柱"而不是更多？</h2>
+
+<div class="card">
+    <p>你可能会问：性能呢？可维护性呢？可扩展性呢？为什么偏偏是这三个？</p>
+    <br>
+    <p>答案是：<strong>这三个是"元能力"</strong>——其他所有质量属性都依赖于它们：</p>
+    <br>
+    <table>
+        <thead>
+            <tr><th>你想要的</th><th>依赖哪个支柱</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>高性能</td><td>可观测性</td><td>不能度量就不能优化</td></tr>
+            <tr><td>可维护性</td><td>可观测性 + 可靠性</td><td>看不到问题就无法维护；不可靠的系统维护成本极高</td></tr>
+            <tr><td>可扩展性</td><td>可靠性 + 可观测性</td><td>扩展时需要保证不崩，需要看到瓶颈在哪</td></tr>
+            <tr><td>合规性</td><td>安全性 + 可观测性</td><td>合规需要安全措施 + 审计日志</td></tr>
+            <tr><td>用户信任</td><td>三者全部</td><td>不挂 + 不泄露 + 出问题能快速修复</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="highlight-box">
+    <strong>类比：</strong>把生产系统想象成一栋大楼——<br><br>
+    🛡️ <strong>可靠性</strong> = 地基和承重结构（不塌）<br>
+    🔒 <strong>安全性</strong> = 门锁和防火系统（不被闯入、不着火）<br>
+    👁️ <strong>可观测性</strong> = 监控摄像头和传感器（知道发生了什么）<br><br>
+    没有地基，楼会塌；没有门锁，会被偷；没有摄像头，出了事都不知道。
+</div>
+
+<!-- ==================== 支柱一：可靠性 ==================== -->
+<h2 id="p1">🛡️ 支柱一：可靠性（Reliability）</h2>
+
+<div class="pillar-header pillar-header-reliability">
+    <div class="pillar-icon">🛡️</div>
+    <div>
+        <div class="pillar-title">可靠性 Reliability</div>
+        <div class="pillar-subtitle">系统在预期和非预期条件下，持续正确运行的能力</div>
+    </div>
+</div>
+
+<h3 id="p1-what">什么是可靠性？</h3>
+
+<div class="card">
+    <p><strong>一句话定义：</strong>用户在任何时候使用你的系统，都能得到正确的结果。</p>
+    <br>
+    <p>注意关键词：</p>
+    <ul style="margin-left:1.5rem;color:var(--muted)">
+        <li><strong>"任何时候"</strong> — 不是只在理想条件下，而是在网络抖动、磁盘满、依赖挂掉时也要尽量正常</li>
+        <li><strong>"正确的结果"</strong> — 不是"有响应就行"，而是结果必须是对的</li>
+        <li><strong>"持续"</strong> — 不是偶尔能用，而是长期稳定</li>
+    </ul>
+</div>
+
+<h3 id="p1-dimensions">可靠性的四个维度</h3>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <defs>
+    <pattern id="grid2" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="300" fill="url(#grid2)"/>
+
+  <!-- 四个维度 -->
+  <!-- 容错 -->
+  <rect x="30" y="40" width="170" height="110" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="115" y="65" text-anchor="middle" fill="#38bdf8" font-size="11" font-family="monospace" font-weight="bold">① 容错 Fault Tolerance</text>
+  <text x="115" y="85" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">单点故障不导致系统崩溃</text>
+  <text x="45" y="105" fill="#64748b" font-size="8" font-family="monospace">• 冗余副本</text>
+  <text x="45" y="120" fill="#64748b" font-size="8" font-family="monospace">• 降级策略</text>
+  <text x="45" y="135" fill="#64748b" font-size="8" font-family="monospace">• 重试机制</text>
+
+  <!-- 一致性 -->
+  <rect x="220" y="40" width="170" height="110" rx="10" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="305" y="65" text-anchor="middle" fill="#34d399" font-size="11" font-family="monospace" font-weight="bold">② 一致性 Consistency</text>
+  <text x="305" y="85" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">数据不丢、不错、不重复</text>
+  <text x="235" y="105" fill="#64748b" font-size="8" font-family="monospace">• 事务保证</text>
+  <text x="235" y="120" fill="#64748b" font-size="8" font-family="monospace">• 幂等设计</text>
+  <text x="235" y="135" fill="#64748b" font-size="8" font-family="monospace">• 数据校验</text>
+
+  <!-- 可恢复 -->
+  <rect x="410" y="40" width="170" height="110" rx="10" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+  <text x="495" y="65" text-anchor="middle" fill="#fbbf24" font-size="11" font-family="monospace" font-weight="bold">③ 可恢复 Recoverability</text>
+  <text x="495" y="85" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">出了问题能快速恢复</text>
+  <text x="425" y="105" fill="#64748b" font-size="8" font-family="monospace">• 备份恢复</text>
+  <text x="425" y="120" fill="#64748b" font-size="8" font-family="monospace">• 回滚机制</text>
+  <text x="425" y="135" fill="#64748b" font-size="8" font-family="monospace">• 自愈能力</text>
+
+  <!-- 可预测 -->
+  <rect x="600" y="40" width="170" height="110" rx="10" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="685" y="65" text-anchor="middle" fill="#a78bfa" font-size="11" font-family="monospace" font-weight="bold">④ 可预测 Predictability</text>
+  <text x="685" y="85" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">负载变化时行为可预期</text>
+  <text x="615" y="105" fill="#64748b" font-size="8" font-family="monospace">• 限流</text>
+  <text x="615" y="120" fill="#64748b" font-size="8" font-family="monospace">• 熔断</text>
+  <text x="615" y="135" fill="#64748b" font-size="8" font-family="monospace">• 背压</text>
+
+  <!-- 底部总结 -->
+  <rect x="100" y="180" width="600" height="100" rx="10" fill="rgba(56,189,248,0.05)" stroke="#334155" stroke-width="1"/>
+  <text x="400" y="205" text-anchor="middle" fill="#38bdf8" font-size="10" font-family="monospace" font-weight="bold">量化指标：SLO / SLA</text>
+  <text x="400" y="225" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">SLO (Service Level Objective) = 内部目标，如"99.9% 请求在 200ms 内响应"</text>
+  <text x="400" y="245" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">SLA (Service Level Agreement) = 对外承诺，违反要赔钱</text>
+  <text x="400" y="265" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">99.9% 可用 = 每年最多 8.76 小时宕机 | 99.99% = 每年最多 52.6 分钟宕机</text>
+</svg>
+</div>
+
+<h3 id="p1-patterns">常见可靠性模式</h3>
+
+<h4>模式 1：重试 + 退避（Retry with Backoff）</h4>
+<div class="scenario">
+    <div class="scenario-title">🎬 场景：调用外部 API 偶尔超时</div>
+    <pre>
+<span style="color:#a78bfa">func</span> <span style="color:#38bdf8">callWithRetry</span>(ctx context.Context, fn func() error) error {
+    backoff := []time.Duration{100*time.Millisecond, 500*time.Millisecond, 2*time.Second}
+    <span style="color:#a78bfa">for</span> i, delay := <span style="color:#a78bfa">range</span> backoff {
+        err := fn()
+        <span style="color:#a78bfa">if</span> err == nil {
+            <span style="color:#a78bfa">return</span> nil
+        }
+        slog.Warn("call failed, retrying", "attempt", i+1, "err", err)
+        <span style="color:#a78bfa">select</span> {
+        <span style="color:#a78bfa">case</span> &lt;-time.After(delay):
+        <span style="color:#a78bfa">case</span> &lt;-ctx.Done():
+            <span style="color:#a78bfa">return</span> ctx.Err()
+        }
+    }
+    <span style="color:#a78bfa">return</span> fn() <span style="color:#6b7280">// 最后一次尝试</span>
+}
+    </pre>
+</div>
+
+<h4>模式 2：熔断器（Circuit Breaker）</h4>
+<div class="scenario">
+    <div class="scenario-title">🎬 场景：下游服务持续故障，不要一直重试拖垮自己</div>
+    <div class="card" style="padding:0;overflow:hidden;border-radius:12px">
+    <svg viewBox="0 0 700 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+      <rect width="700" height="150" fill="#0f172a"/>
+      <!-- 三个状态 -->
+      <rect x="30" y="40" width="150" height="70" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+      <text x="105" y="70" text-anchor="middle" fill="#34d399" font-size="10" font-family="monospace" font-weight="bold">🟢 CLOSED</text>
+      <text x="105" y="90" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">正常放行请求</text>
+      <text x="105" y="103" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">失败计数中...</text>
+
+      <rect x="270" y="40" width="150" height="70" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="2"/>
+      <text x="345" y="70" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">🔴 OPEN</text>
+      <text x="345" y="90" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">直接拒绝请求</text>
+      <text x="345" y="103" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">等待冷却期...</text>
+
+      <rect x="510" y="40" width="160" height="70" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+      <text x="590" y="70" text-anchor="middle" fill="#fbbf24" font-size="10" font-family="monospace" font-weight="bold">🟡 HALF-OPEN</text>
+      <text x="590" y="90" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">试探性放行少量</text>
+      <text x="590" y="103" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">成功→CLOSED 失败→OPEN</text>
+
+      <!-- 箭头 -->
+      <line x1="180" y1="75" x2="268" y2="75" stroke="#f87171" stroke-width="1.5"/>
+      <text x="224" y="68" text-anchor="middle" fill="#f87171" font-size="7" font-family="monospace">失败超阈值</text>
+      <polygon points="265,72 265,78 272,75" fill="#f87171"/>
+
+      <line x1="420" y1="75" x2="508" y2="75" stroke="#fbbf24" stroke-width="1.5"/>
+      <text x="464" y="68" text-anchor="middle" fill="#fbbf24" font-size="7" font-family="monospace">冷却期到</text>
+      <polygon points="505,72 505,78 512,75" fill="#fbbf24"/>
+
+      <path d="M 590 110 C 590 135, 105 135, 105 110" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4,2"/>
+      <text x="350" y="132" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">试探成功 → 恢复</text>
+    </svg>
+    </div>
+</div>
+
+<h4>模式 3：降级（Graceful Degradation）</h4>
+<div class="vs-container">
+    <div class="vs-bad">
+        <div class="vs-label" style="color:var(--danger)">❌ 没有降级</div>
+        <p style="font-size:0.85rem;color:var(--muted)">推荐系统挂了 → 整个首页白屏 → 用户流失</p>
+    </div>
+    <div class="vs-good">
+        <div class="vs-label" style="color:var(--accent3)">✅ 有降级</div>
+        <p style="font-size:0.85rem;color:var(--muted)">推荐系统挂了 → 展示热门内容兜底 → 用户体验略降但可用</p>
+    </div>
+</div>
+
+<h3 id="p1-cogent">cogent 中的可靠性实践</h3>
+
+<table>
+    <thead>
+        <tr><th>实践</th><th>代码位置</th><th>效果</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="tag tag-blue">容错降级</span></td>
+            <td><code>manager.go</code> — connectOne</td>
+            <td>单个 MCP Server 连接失败只 Warn，不影响其他 Server 和 cogent 启动</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-blue">超时控制</span></td>
+            <td><code>transport.go</code> — select + ctx.Done()</td>
+            <td>每次 RPC 调用都有 context 超时，不会无限等待</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-blue">优雅关闭</span></td>
+            <td><code>client.go</code> — Close()</td>
+            <td>先关 stdin → 等 2 秒 → 超时强杀，保证不留僵尸进程</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-blue">错误不上抛</span></td>
+            <td><code>remote_tool.go</code> — Call()</td>
+            <td>工具调用失败包装为 ToolResult{IsError:true}，不中断对话流</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-blue">可选依赖</span></td>
+            <td><code>config.go</code> — LoadConfig</td>
+            <td>配置文件不存在返回 nil，MCP 非硬依赖</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre>
+<span style="color:#6b7280">// manager.go — 容错降级的典型实现</span>
+<span style="color:#a78bfa">func</span> (m *Manager) <span style="color:#38bdf8">connectOne</span>(ctx context.Context, cfg ServerConfig) {
+    cl, err := NewClient(m.transport, m.tracer)
+    <span style="color:#a78bfa">if</span> err != nil {
+        slog.Warn(<span style="color:#34d399">"mcp client init failed"</span>, <span style="color:#34d399">"server"</span>, cfg.Name, <span style="color:#34d399">"err"</span>, err)
+        <span style="color:#a78bfa">return</span>  <span style="color:#6b7280">// ← 不 panic，不 Fatal，只是跳过这个 Server</span>
+    }
+    <span style="color:#a78bfa">if</span> err := cl.Connect(ctx, cfg); err != nil {
+        slog.Warn(<span style="color:#34d399">"mcp connect failed"</span>, <span style="color:#34d399">"server"</span>, cfg.Name, <span style="color:#34d399">"err"</span>, err)
+        _ = cl.Close()
+        <span style="color:#a78bfa">return</span>  <span style="color:#6b7280">// ← 同上，优雅跳过</span>
+    }
+    m.clients = append(m.clients, cl)
+}
+</pre>
+
+<h3 id="p1-anti">反面案例：没有可靠性会怎样？</h3>
+
+<div class="danger-box">
+    <strong>💀 真实事故案例：</strong><br><br>
+    <strong>2017 年 Amazon S3 宕机事件：</strong>一个运维人员输错了一个命令参数，导致大量 S3 服务器被下线。由于缺乏足够的容错机制，连锁反应导致半个互联网瘫痪 4 小时，影响了 Netflix、Slack、Trello 等数百个服务。<br><br>
+    <strong>教训：</strong>可靠性不是"加几个 try-catch"就行的，需要系统性地设计容错、降级、恢复机制。
+</div>
+
+<!-- ==================== 支柱二：安全性 ==================== -->
+<h2 id="p2">🔒 支柱二：安全性（Security）</h2>
+
+<div class="pillar-header pillar-header-security">
+    <div class="pillar-icon">🔒</div>
+    <div>
+        <div class="pillar-title">安全性 Security</div>
+        <div class="pillar-subtitle">系统抵御恶意攻击和意外滥用，保护数据和资源的能力</div>
+    </div>
+</div>
+
+<h3 id="p2-what">什么是安全性？</h3>
+
+<div class="card">
+    <p><strong>一句话定义：</strong>确保只有正确的人，在正确的时间，以正确的方式，访问正确的资源。</p>
+    <br>
+    <p>安全性的核心思想是 <strong>"不信任"</strong>：</p>
+    <ul style="margin-left:1.5rem;color:var(--muted)">
+        <li>不信任用户输入（可能是注入攻击）</li>
+        <li>不信任外部服务（可能被劫持）</li>
+        <li>不信任内部网络（可能被渗透）</li>
+        <li>不信任 AI 模型的输出（可能被 prompt injection）</li>
+    </ul>
+</div>
+
+<h3 id="p2-principles">安全性五大原则</h3>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="320" fill="#0f172a"/>
+
+  <!-- 五个原则 -->
+  <rect x="30" y="30" width="220" height="80" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="140" y="55" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">① 认证 (AuthN)</text>
+  <text x="140" y="73" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">确认"你是谁"</text>
+  <text x="140" y="90" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">密码、Token、证书、生物识别</text>
+  <text x="140" y="103" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">Who are you?</text>
+
+  <rect x="280" y="30" width="220" height="80" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="390" y="55" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">② 授权 (AuthZ)</text>
+  <text x="390" y="73" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">确认"你能干什么"</text>
+  <text x="390" y="90" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">RBAC、ABAC、ACL</text>
+  <text x="390" y="103" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">What can you do?</text>
+
+  <rect x="530" y="30" width="240" height="80" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="650" y="55" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">③ 隔离 (Isolation)</text>
+  <text x="650" y="73" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">不同组件/用户互不干扰</text>
+  <text x="650" y="90" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">沙箱、容器、网络隔离</text>
+  <text x="650" y="103" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">Stay in your lane!</text>
+
+  <rect x="100" y="140" width="260" height="80" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="230" y="165" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">④ 最小权限 (Least Privilege)</text>
+  <text x="230" y="183" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">只给必要的权限，多一点都不给</text>
+  <text x="230" y="200" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">默认拒绝、按需授权</text>
+  <text x="230" y="213" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">Need-to-know basis</text>
+
+  <rect x="420" y="140" width="260" height="80" rx="8" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="550" y="165" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">⑤ 纵深防御 (Defense in Depth)</text>
+  <text x="550" y="183" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">不依赖单一防线，层层设防</text>
+  <text x="550" y="200" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">即使一层被突破，还有下一层</text>
+  <text x="550" y="213" text-anchor="middle" fill="#34d399" font-size="7" font-family="monospace">Multiple barriers</text>
+
+  <!-- 底部核心思想 -->
+  <rect x="150" y="250" width="500" height="50" rx="8" fill="rgba(248,113,113,0.08)" stroke="#f87171" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="400" y="272" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">核心思想：Fail-Closed（默认拒绝）</text>
+  <text x="400" y="290" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">忘记配置 = 最安全行为 | 出错 = 拒绝访问 | 不确定 = 不放行</text>
+</svg>
+</div>
+
+<h3 id="p2-layers">纵深防御模型</h3>
+
+<p>以 cogent 的 Sandbox 为例，展示什么是"纵深防御"：</p>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 350" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="350" fill="#0f172a"/>
+
+  <!-- 四层同心圆 -->
+  <!-- 第4层（最外） -->
+  <rect x="50" y="30" width="700" height="290" rx="16" fill="rgba(248,113,113,0.03)" stroke="#f87171" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="400" y="55" text-anchor="middle" fill="#f87171" font-size="10" font-family="monospace" font-weight="bold">第 4 层：执行后清理 (scrubBareGitRepoFiles)</text>
+
+  <!-- 第3层 -->
+  <rect x="90" y="70" width="620" height="230" rx="12" fill="rgba(251,191,36,0.03)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="400" y="90" text-anchor="middle" fill="#fbbf24" font-size="10" font-family="monospace" font-weight="bold">第 3 层：受限执行 (runCommand)</text>
+
+  <!-- 第2层 -->
+  <rect x="130" y="105" width="540" height="175" rx="10" fill="rgba(167,139,250,0.03)" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="400" y="125" text-anchor="middle" fill="#a78bfa" font-size="10" font-family="monospace" font-weight="bold">第 2 层：危险命令拦截 (isDangerous)</text>
+
+  <!-- 第1层（最内） -->
+  <rect x="170" y="140" width="460" height="120" rx="8" fill="rgba(56,189,248,0.05)" stroke="#38bdf8" stroke-width="2"/>
+  <text x="400" y="165" text-anchor="middle" fill="#38bdf8" font-size="10" font-family="monospace" font-weight="bold">第 1 层：路由决策 (ShouldSandbox)</text>
+
+  <!-- 内部说明 -->
+  <text x="400" y="190" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">命令进入 → 判断是否需要沙箱</text>
+  <text x="400" y="210" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">Enabled=false → 继承宿主环境</text>
+  <text x="400" y="225" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">命中 ExcludedCommands → 跳过沙箱</text>
+  <text x="400" y="240" text-anchor="middle" fill="#34d399" font-size="8" font-family="monospace">否则 → 进入受限环境（最小 PATH/HOME/无密钥）</text>
+
+  <!-- 右侧说明 -->
+  <text x="680" y="155" fill="#a78bfa" font-size="8" font-family="monospace">rm -rf / → 拦截!</text>
+  <text x="680" y="170" fill="#a78bfa" font-size="8" font-family="monospace">mkfs → 拦截!</text>
+  <text x="680" y="185" fill="#a78bfa" font-size="8" font-family="monospace">curl|sh → 拦截!</text>
+
+  <text x="680" y="250" fill="#fbbf24" font-size="8" font-family="monospace">ctx+timeout</text>
+  <text x="680" y="265" fill="#fbbf24" font-size="8" font-family="monospace">最小环境变量</text>
+  <text x="680" y="280" fill="#fbbf24" font-size="8" font-family="monospace">stdout/stderr分离</text>
+
+  <!-- 底部 -->
+  <text x="400" y="335" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">每一层都是独立防线 — 即使 AI 模型被 prompt injection 攻击，也无法突破所有层</text>
+</svg>
+</div>
+
+<h3 id="p2-cogent">cogent 中的安全性实践</h3>
+
+<table>
+    <thead>
+        <tr><th>实践</th><th>原则</th><th>效果</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="tag tag-red">Sandbox 四层防御</span></td>
+            <td>纵深防御</td>
+            <td>AI 生成的命令经过层层过滤，危险命令无法执行</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">remoteTool 默认 Fail-Closed</span></td>
+            <td>最小权限</td>
+            <td>默认非并发安全、非只读、权限 ask — 忘记配置 = 最安全</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">命名隔离 mcp__前缀</span></td>
+            <td>隔离</td>
+            <td>外部 MCP 工具无法冒用内建工具名</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">环境变量最小化</span></td>
+            <td>最小权限</td>
+            <td>沙箱环境只传递必要的 PATH，不传递密钥等敏感信息</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">isDangerous 黑名单</span></td>
+            <td>纵深防御</td>
+            <td>无论是否在沙箱中，危险命令一律拦截</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">内建工具优先去重</span></td>
+            <td>隔离</td>
+            <td>外部工具永远无法覆盖内建工具的行为</td>
+        </tr>
+    </tbody>
+</table>
+
+<pre>
+<span style="color:#6b7280">// remote_tool.go — Fail-Closed 默认值</span>
+<span style="color:#a78bfa">func</span> (t *remoteTool) <span style="color:#38bdf8">IsConcurrencySafe</span>() bool { <span style="color:#a78bfa">return</span> false }  <span style="color:#6b7280">// 默认不安全</span>
+<span style="color:#a78bfa">func</span> (t *remoteTool) <span style="color:#38bdf8">IsReadOnly</span>() bool        { <span style="color:#a78bfa">return</span> false }  <span style="color:#6b7280">// 默认有副作用</span>
+<span style="color:#a78bfa">func</span> (t *remoteTool) <span style="color:#38bdf8">CheckPermission</span>()       { <span style="color:#a78bfa">return</span> "ask" }  <span style="color:#6b7280">// 默认要用户确认</span>
+
+<span style="color:#6b7280">// 为什么？因为我们不信任外部 Server 的自我声明！</span>
+<span style="color:#6b7280">// 一个恶意 Server 可能声称自己是 "readonly"，但实际上在删文件。</span>
+<span style="color:#6b7280">// Fail-Closed = 宁可多问一次用户，也不放过一个危险操作。</span>
+</pre>
+
+<h3 id="p2-ai">AI 应用的特殊安全挑战</h3>
+
+<div class="warn-box">
+    <strong>⚠️ AI 应用面临传统软件没有的安全威胁：</strong>
+</div>
+
+<table>
+    <thead>
+        <tr><th>威胁</th><th>说明</th><th>防御手段</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="tag tag-red">Prompt Injection</span></td>
+            <td>用户在输入中嵌入恶意指令，让 AI 执行非预期操作</td>
+            <td>Sandbox + isDangerous 拦截</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">工具滥用</span></td>
+            <td>AI 被诱导调用危险工具（如删除文件、发送数据）</td>
+            <td>权限确认 + 只读标记 + 用户审批</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">数据泄露</span></td>
+            <td>AI 将敏感信息（密钥、密码）发送到外部</td>
+            <td>环境变量隔离 + 输出过滤</td>
+        </tr>
+        <tr>
+            <td><span class="tag tag-red">供应链攻击</span></td>
+            <td>恶意 MCP Server 伪装成合法工具</td>
+            <td>命名隔离 + 内建优先 + 用户确认</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="highlight-box">
+    <strong>cogent 的安全哲学：</strong><br><br>
+    <strong>"不依赖模型善意"</strong> — 即使 AI 模型被完全控制（prompt injection 成功），<br>
+    确定性的代码防线（Sandbox、isDangerous、权限检查）仍然能阻止危险操作。<br><br>
+    这就是为什么安全措施是<strong>硬编码在代码中</strong>的，而不是靠"在 prompt 里告诉 AI 不要做坏事"。
+</div>
+
+<!-- ==================== 支柱三：可观测性 ==================== -->
+<h2 id="p3">👁️ 支柱三：可观测性（Observability）</h2>
+
+<div class="pillar-header pillar-header-observability">
+    <div class="pillar-icon">👁️</div>
+    <div>
+        <div class="pillar-title">可观测性 Observability</div>
+        <div class="pillar-subtitle">通过系统的外部输出，推断其内部状态的能力</div>
+    </div>
+</div>
+
+<h3 id="p3-what">什么是可观测性？</h3>
+
+<div class="card">
+    <p><strong>一句话定义：</strong>不需要修改代码、不需要复现问题，仅通过系统产生的数据就能回答"为什么出了问题"。</p>
+    <br>
+    <p>可观测性回答的核心问题：</p>
+    <ul style="margin-left:1.5rem;color:var(--muted)">
+        <li><strong>"发生了什么？"</strong> — 日志告诉你事件详情</li>
+        <li><strong>"影响有多大？"</strong> — 指标告诉你整体健康度</li>
+        <li><strong>"问题在哪个环节？"</strong> — 链路追踪告诉你调用路径</li>
+    </ul>
+</div>
+
+<h3 id="p3-three">可观测性三大信号</h3>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="400" fill="#0f172a"/>
+
+  <!-- Traces -->
+  <rect x="30" y="30" width="230" height="320" rx="12" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="145" y="60" text-anchor="middle" fill="#a78bfa" font-size="12" font-family="monospace" font-weight="bold">📍 Traces</text>
+  <text x="145" y="80" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">链路追踪</text>
+  <text x="145" y="100" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">一次请求的完整旅程</text>
+
+  <!-- Trace 示意 -->
+  <rect x="50" y="115" width="190" height="20" rx="4" fill="rgba(167,139,250,0.3)" stroke="#a78bfa" stroke-width="1"/>
+  <text x="60" y="129" fill="#e2e8f0" font-size="7" font-family="monospace">Session ──────────── 2.3s</text>
+
+  <rect x="70" y="140" width="150" height="18" rx="4" fill="rgba(56,189,248,0.3)" stroke="#38bdf8" stroke-width="1"/>
+  <text x="80" y="153" fill="#e2e8f0" font-size="7" font-family="monospace">ReactStep ────── 1.8s</text>
+
+  <rect x="90" y="163" width="100" height="16" rx="4" fill="rgba(52,211,153,0.3)" stroke="#34d399" stroke-width="1"/>
+  <text x="100" y="175" fill="#e2e8f0" font-size="7" font-family="monospace">LLM Call ── 1.2s</text>
+
+  <rect x="90" y="184" width="60" height="16" rx="4" fill="rgba(251,191,36,0.3)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="100" y="196" fill="#e2e8f0" font-size="7" font-family="monospace">Tool 0.4s</text>
+
+  <text x="50" y="220" fill="#94a3b8" font-size="8" font-family="monospace">回答的问题：</text>
+  <text x="50" y="235" fill="#34d399" font-size="8" font-family="monospace">• 慢在哪个环节？</text>
+  <text x="50" y="250" fill="#34d399" font-size="8" font-family="monospace">• 调用了哪些服务？</text>
+  <text x="50" y="265" fill="#34d399" font-size="8" font-family="monospace">• 错误发生在哪一步？</text>
+  <text x="50" y="285" fill="#64748b" font-size="8" font-family="monospace">工具：Jaeger, Zipkin,</text>
+  <text x="50" y="300" fill="#64748b" font-size="8" font-family="monospace">OpenTelemetry</text>
+
+  <!-- Metrics -->
+  <rect x="285" y="30" width="230" height="320" rx="12" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="400" y="60" text-anchor="middle" fill="#38bdf8" font-size="12" font-family="monospace" font-weight="bold">📊 Metrics</text>
+  <text x="400" y="80" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">指标</text>
+  <text x="400" y="100" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">系统整体健康度</text>
+
+  <!-- Metrics 示意图 -->
+  <polyline points="305,180 330,170 355,175 380,150 405,155 430,130 455,140 480,120 495,125"
+            fill="none" stroke="#38bdf8" stroke-width="2"/>
+  <line x1="305" y1="190" x2="495" y2="190" stroke="#334155" stroke-width="1"/>
+  <text x="400" y="205" text-anchor="middle" fill="#64748b" font-size="7" font-family="monospace">▲ QPS 趋势图</text>
+
+  <text x="305" y="230" fill="#94a3b8" font-size="8" font-family="monospace">回答的问题：</text>
+  <text x="305" y="245" fill="#34d399" font-size="8" font-family="monospace">• 系统现在健康吗？</text>
+  <text x="305" y="260" fill="#34d399" font-size="8" font-family="monospace">• 错误率是多少？</text>
+  <text x="305" y="275" fill="#34d399" font-size="8" font-family="monospace">• P99 延迟是多少？</text>
+  <text x="305" y="295" fill="#64748b" font-size="8" font-family="monospace">工具：Prometheus,</text>
+  <text x="305" y="310" fill="#64748b" font-size="8" font-family="monospace">Grafana, DataDog</text>
+
+  <!-- Logs -->
+  <rect x="540" y="30" width="230" height="320" rx="12" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="655" y="60" text-anchor="middle" fill="#34d399" font-size="12" font-family="monospace" font-weight="bold">📝 Logs</text>
+  <text x="655" y="80" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">日志</text>
+  <text x="655" y="100" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">单个事件的详细上下文</text>
+
+  <!-- Logs 示意 -->
+  <rect x="555" y="115" width="200" height="14" rx="2" fill="rgba(52,211,153,0.1)"/>
+  <text x="560" y="125" fill="#34d399" font-size="7" font-family="monospace">INFO  user login success</text>
+  <rect x="555" y="132" width="200" height="14" rx="2" fill="rgba(52,211,153,0.1)"/>
+  <text x="560" y="142" fill="#34d399" font-size="7" font-family="monospace">INFO  tool call started</text>
+  <rect x="555" y="149" width="200" height="14" rx="2" fill="rgba(251,191,36,0.1)"/>
+  <text x="560" y="159" fill="#fbbf24" font-size="7" font-family="monospace">WARN  retry attempt 2</text>
+  <rect x="555" y="166" width="200" height="14" rx="2" fill="rgba(248,113,113,0.1)"/>
+  <text x="560" y="176" fill="#f87171" font-size="7" font-family="monospace">ERROR connection refused</text>
+  <rect x="555" y="183" width="200" height="14" rx="2" fill="rgba(52,211,153,0.1)"/>
+  <text x="560" y="193" fill="#34d399" font-size="7" font-family="monospace">INFO  request completed</text>
+
+  <text x="560" y="220" fill="#94a3b8" font-size="8" font-family="monospace">回答的问题：</text>
+  <text x="560" y="235" fill="#34d399" font-size="8" font-family="monospace">• 具体发生了什么？</text>
+  <text x="560" y="250" fill="#34d399" font-size="8" font-family="monospace">• 错误的详细信息？</text>
+  <text x="560" y="265" fill="#34d399" font-size="8" font-family="monospace">• 当时的上下文？</text>
+  <text x="560" y="285" fill="#64748b" font-size="8" font-family="monospace">工具：ELK, Loki,</text>
+  <text x="560" y="300" fill="#64748b" font-size="8" font-family="monospace">CloudWatch</text>
+
+  <!-- 底部关系 -->
+  <text x="400" y="375" text-anchor="middle" fill="#fbbf24" font-size="9" font-family="monospace" font-weight="bold">三者互补：Metrics 发现问题 → Traces 定位环节 → Logs 查看细节</text>
+  <text x="400" y="393" text-anchor="middle" fill="#64748b" font-size="8" font-family="monospace">OpenTelemetry 统一了三者的采集标准</text>
+</svg>
+</div>
+
+<h3 id="p3-diff">可观测性 ≠ 监控</h3>
+
+<div class="vs-container">
+    <div class="vs-bad">
+        <div class="vs-label" style="color:var(--danger)">📺 传统监控 (Monitoring)</div>
+        <p style="font-size:0.85rem;color:var(--muted)">
+            • 预先定义"要看什么"<br>
+            • 只能回答已知问题<br>
+            • "CPU > 90% 就告警"<br>
+            • 被动：等问题发生再看<br>
+            • 适合已知的故障模式
+        </p>
+    </div>
+    <div class="vs-good">
+        <div class="vs-label" style="color:var(--accent3)">👁️ 可观测性 (Observability)</div>
+        <p style="font-size:0.85rem;color:var(--muted)">
+            • 采集足够多的数据<br>
+            • 能回答未知问题<br>
+            • "为什么这个用户的请求慢了？"<br>
+            • 主动：随时可以探索<br>
+            • 适合未知的、复杂的故障
+        </p>
+    </div>
+</div>
+
+<div class="highlight-box">
+    <strong>类比：</strong><br><br>
+    <strong>监控</strong> = 体检报告（每年查一次，只查固定项目）<br>
+    <strong>可观测性</strong> = 全身 MRI + 实时心电图（随时可以看任何部位的状态）<br><br>
+    监控告诉你"有问题了"，可观测性告诉你"为什么有问题、问题在哪里、怎么修"。
+</div>
+
+<h3 id="p3-cogent">cogent 中的可观测性实践</h3>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="280" fill="#0f172a"/>
+
+  <text x="400" y="25" text-anchor="middle" fill="#a78bfa" font-size="11" font-family="monospace" font-weight="bold">cogent Trace 层级结构</text>
+
+  <!-- Session Span -->
+  <rect x="30" y="45" width="740" height="40" rx="6" fill="rgba(167,139,250,0.15)" stroke="#a78bfa" stroke-width="2"/>
+  <text x="50" y="70" fill="#a78bfa" font-size="10" font-family="monospace" font-weight="bold">📍 Session Span</text>
+  <text x="600" y="70" fill="#94a3b8" font-size="8" font-family="monospace">session_id, model, total_tokens</text>
+
+  <!-- ReactStep Span -->
+  <rect x="60" y="95" width="680" height="35" rx="5" fill="rgba(56,189,248,0.12)" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="80" y="117" fill="#38bdf8" font-size="9" font-family="monospace" font-weight="bold">📍 ReactStep Span #1</text>
+  <text x="550" y="117" fill="#94a3b8" font-size="8" font-family="monospace">step_number, tool_count</text>
+
+  <!-- LLM Call Span -->
+  <rect x="90" y="140" width="350" height="30" rx="4" fill="rgba(52,211,153,0.1)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="110" y="160" fill="#34d399" font-size="9" font-family="monospace">📍 LLM Call</text>
+  <text x="300" y="160" fill="#94a3b8" font-size="8" font-family="monospace">model, tokens_in, tokens_out, latency</text>
+
+  <!-- Tool Call Spans -->
+  <rect x="90" y="180" width="200" height="28" rx="4" fill="rgba(251,191,36,0.1)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="110" y="199" fill="#fbbf24" font-size="9" font-family="monospace">📍 Tool: read_file</text>
+  <text x="250" y="199" fill="#94a3b8" font-size="7" font-family="monospace">0.05s</text>
+
+  <rect x="300" y="180" width="200" height="28" rx="4" fill="rgba(251,191,36,0.1)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="320" y="199" fill="#fbbf24" font-size="9" font-family="monospace">📍 Tool: mcp__github__search</text>
+  <text x="470" y="199" fill="#94a3b8" font-size="7" font-family="monospace">1.2s ← 瓶颈!</text>
+
+  <!-- ReactStep #2 -->
+  <rect x="60" y="220" width="680" height="35" rx="5" fill="rgba(56,189,248,0.08)" stroke="#38bdf8" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="80" y="242" fill="#38bdf8" font-size="9" font-family="monospace">📍 ReactStep Span #2 ...</text>
+  <text x="550" y="242" fill="#64748b" font-size="8" font-family="monospace">(后续步骤)</text>
+
+  <!-- 标注 -->
+  <text x="600" y="195" fill="#f87171" font-size="8" font-family="monospace">← 一眼看出瓶颈在哪!</text>
+</svg>
+</div>
+
+<table>
+    <thead>
+        <tr><th>埋点位置</th><th>记录的信息</th><th>用途</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Session 开始/结束</td>
+            <td>session_id, model, 总 token 数</td>
+            <td>追踪整次对话的成本和耗时</td>
+        </tr>
+        <tr>
+            <td>每个 ReactStep</td>
+            <td>step 编号, 工具调用数</td>
+            <td>了解 AI 的"思考步数"</td>
+        </tr>
+        <tr>
+            <td>LLM 调用</td>
+            <td>模型名, 输入/输出 token, 延迟</td>
+            <td>监控 API 成本和响应速度</td>
+        </tr>
+        <tr>
+            <td>工具调用</td>
+            <td>工具名, 参数, 耗时, 是否出错</td>
+            <td>定位慢工具、失败工具</td>
+        </tr>
+        <tr>
+            <td>MCP Transport</td>
+            <td>JSON-RPC 方法, 请求/响应耗时</td>
+            <td>监控跨进程通信健康度</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3 id="p3-value">可观测性的商业价值</h3>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr><th>场景</th><th>没有可观测性</th><th>有可观测性</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>用户反馈"好慢"</td>
+                <td>猜测、加日志、重新部署、等复现... 可能花几天</td>
+                <td>查 trace → 发现某个 MCP 工具调用花了 8 秒 → 5 分钟定位</td>
+            </tr>
+            <tr>
+                <td>Token 费用突增</td>
+                <td>不知道哪个用户/哪个 prompt 导致的</td>
+                <td>看 metrics → 某个 session 的 prompt 膨胀到 100K tokens</td>
+            </tr>
+            <tr>
+                <td>工具调用偶尔失败</td>
+                <td>用户说"有时候不行"，无法复现</td>
+                <td>看 trace + log → 发现是某个 MCP Server 在高负载时超时</td>
+            </tr>
+            <tr>
+                <td>新版本上线后</td>
+                <td>不知道有没有引入性能退化</td>
+                <td>对比前后 P99 延迟曲线，立即发现退化</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="success-box">
+    <strong>💰 ROI（投资回报）：</strong><br><br>
+    Google 的研究表明，具有良好可观测性的团队：<br>
+    • MTTR（平均恢复时间）降低 <strong>70%</strong><br>
+    • 部署频率提高 <strong>200%</strong>（因为有信心快速回滚）<br>
+    • 变更失败率降低 <strong>50%</strong>（因为能快速发现问题）
+</div>
+
+<!-- ==================== 三者关系 ==================== -->
+<h2 id="relation">🔗 三者的互相依赖关系</h2>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="380" fill="#0f172a"/>
+
+  <text x="400" y="30" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="monospace" font-weight="bold">三大支柱的依赖关系详解</text>
+
+  <!-- 六条关系 -->
+  <!-- 关系1 -->
+  <rect x="30" y="50" width="360" height="45" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="50" y="70" fill="#38bdf8" font-size="9" font-family="monospace" font-weight="bold">👁️ 可观测性 → 🛡️ 可靠性</text>
+  <text x="50" y="86" fill="#94a3b8" font-size="8" font-family="monospace">看不到问题就无法修复 — 观测是可靠的前提</text>
+
+  <!-- 关系2 -->
+  <rect x="410" y="50" width="360" height="45" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="430" y="70" fill="#38bdf8" font-size="9" font-family="monospace" font-weight="bold">🛡️ 可靠性 → 👁️ 可观测性</text>
+  <text x="430" y="86" fill="#94a3b8" font-size="8" font-family="monospace">观测系统本身也要可靠（监控挂了=瞎了）</text>
+
+  <!-- 关系3 -->
+  <rect x="30" y="110" width="360" height="45" rx="6" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="50" y="130" fill="#f87171" font-size="9" font-family="monospace" font-weight="bold">👁️ 可观测性 → 🔒 安全性</text>
+  <text x="50" y="146" fill="#94a3b8" font-size="8" font-family="monospace">看不到攻击就无法防御 — 审计日志是安全基础</text>
+
+  <!-- 关系4 -->
+  <rect x="410" y="110" width="360" height="45" rx="6" fill="#1e293b" stroke="#f87171" stroke-width="1.5"/>
+  <text x="430" y="130" fill="#f87171" font-size="9" font-family="monospace" font-weight="bold">🔒 安全性 → 🛡️ 可靠性</text>
+  <text x="430" y="146" fill="#94a3b8" font-size="8" font-family="monospace">被攻破的系统谈不上可靠 — 安全是可靠的前提</text>
+
+  <!-- 关系5 -->
+  <rect x="30" y="170" width="360" height="45" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="50" y="190" fill="#a78bfa" font-size="9" font-family="monospace" font-weight="bold">🛡️ 可靠性 → 🔒 安全性</text>
+  <text x="50" y="206" fill="#94a3b8" font-size="8" font-family="monospace">不可靠的系统更容易被攻击（崩溃时防线失效）</text>
+
+  <!-- 关系6 -->
+  <rect x="410" y="170" width="360" height="45" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="430" y="190" fill="#a78bfa" font-size="9" font-family="monospace" font-weight="bold">🔒 安全性 → 👁️ 可观测性</text>
+  <text x="430" y="206" fill="#94a3b8" font-size="8" font-family="monospace">观测数据本身也需要保护（防篡改、防泄露）</text>
+
+  <!-- 实际案例 -->
+  <rect x="50" y="240" width="700" height="120" rx="10" fill="rgba(251,191,36,0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="400" y="265" text-anchor="middle" fill="#fbbf24" font-size="10" font-family="monospace" font-weight="bold">🎬 真实场景：三者如何协同工作</text>
+
+  <text x="70" y="290" fill="#94a3b8" font-size="9" font-family="monospace">1. 可观测性发现异常：Metrics 显示某个 MCP Server 的错误率从 0.1% 飙升到 30%</text>
+  <text x="70" y="310" fill="#94a3b8" font-size="9" font-family="monospace">2. 安全性介入分析：审计日志显示该 Server 在执行异常命令（可能被 prompt injection）</text>
+  <text x="70" y="330" fill="#94a3b8" font-size="9" font-family="monospace">3. 可靠性保障兜底：Sandbox 已经拦截了危险命令，系统降级跳过该 Server 继续运行</text>
+  <text x="70" y="350" fill="#34d399" font-size="9" font-family="monospace">→ 三者协同：发现问题 → 分析原因 → 自动兜底，全程无需人工介入</text>
+</svg>
+</div>
+
+<div class="highlight-box">
+    <strong>记忆口诀：</strong><br><br>
+    🛡️ 可靠性保证系统<strong>"不挂"</strong><br>
+    🔒 安全性保证系统<strong>"不被搞"</strong><br>
+    👁️ 可观测性保证你<strong>"看得见"</strong><br><br>
+    <strong>缺了可靠性</strong> → 系统动不动崩溃，安全措施和监控都白搭<br>
+    <strong>缺了安全性</strong> → 系统被攻破，数据泄露，可靠性归零<br>
+    <strong>缺了可观测性</strong> → 出了问题不知道，安全漏洞发现不了，可靠性无法度量
+</div>
+
+<!-- ==================== 实战落地 ==================== -->
+<h2 id="practice">🎯 实战：如何在项目中落地三大支柱</h2>
+
+<h3>阶段式落地路径</h3>
+
+<div class="card" style="padding:0;overflow:hidden;border-radius:16px">
+<svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#0f172a">
+  <rect width="800" height="200" fill="#0f172a"/>
+
+  <!-- 阶段1 -->
+  <rect x="30" y="40" width="170" height="130" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+  <text x="115" y="65" text-anchor="middle" fill="#34d399" font-size="10" font-family="monospace" font-weight="bold">Phase 1: 基础</text>
+  <text x="115" y="82" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">（第 1 周）</text>
+  <text x="45" y="100" fill="#64748b" font-size="8" font-family="monospace">✓ 结构化日志</text>
+  <text x="45" y="115" fill="#64748b" font-size="8" font-family="monospace">✓ 错误处理规范</text>
+  <text x="45" y="130" fill="#64748b" font-size="8" font-family="monospace">✓ 超时控制</text>
+  <text x="45" y="145" fill="#64748b" font-size="8" font-family="monospace">✓ 输入校验</text>
+  <text x="45" y="160" fill="#64748b" font-size="8" font-family="monospace">✓ 基本权限检查</text>
+
+  <!-- 箭头 -->
+  <text x="215" y="105" fill="#fbbf24" font-size="16">→</text>
+
+  <!-- 阶段2 -->
+  <rect x="240" y="40" width="170" height="130" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <text x="325" y="65" text-anchor="middle" fill="#38bdf8" font-size="10" font-family="monospace" font-weight="bold">Phase 2: 进阶</text>
+  <text x="325" y="82" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">（第 2-4 周）</text>
+  <text x="255" y="100" fill="#64748b" font-size="8" font-family="monospace">✓ 分布式追踪</text>
+  <text x="255" y="115" fill="#64748b" font-size="8" font-family="monospace">✓ 重试+熔断</text>
+  <text x="255" y="130" fill="#64748b" font-size="8" font-family="monospace">✓ 降级策略</text>
+  <text x="255" y="145" fill="#64748b" font-size="8" font-family="monospace">✓ 沙箱隔离</text>
+  <text x="255" y="160" fill="#64748b" font-size="8" font-family="monospace">✓ Metrics 埋点</text>
+
+  <!-- 箭头 -->
+  <text x="425" y="105" fill="#fbbf24" font-size="16">→</text>
+
+  <!-- 阶段3 -->
+  <rect x="450" y="40" width="170" height="130" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+  <text x="535" y="65" text-anchor="middle" fill="#a78bfa" font-size="10" font-family="monospace" font-weight="bold">Phase 3: 成熟</text>
+  <text x="535" y="82" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">（第 1-3 月）</text>
+  <text x="465" y="100" fill="#64748b" font-size="8" font-family="monospace">✓ SLO 定义+告警</text>
+  <text x="465" y="115" fill="#64748b" font-size="8" font-family="monospace">✓ 混沌工程</text>
+  <text x="465" y="130" fill="#64748b" font-size="8" font-family="monospace">✓ 安全审计</text>
+  <text x="465" y="145" fill="#64748b" font-size="8" font-family="monospace">✓ 自动化响应</text>
+  <text x="465" y="160" fill="#64748b" font-size="8" font-family="monospace">✓ 容量规划</text>
+
+  <!-- 箭头 -->
+  <text x="635" y="105" fill="#fbbf24" font-size="16">→</text>
+
+  <!-- 阶段4 -->
+  <rect x="660" y="40" width="110" height="130" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+  <text x="715" y="65" text-anchor="middle" fill="#fbbf24" font-size="10" font-family="monospace" font-weight="bold">Phase 4</text>
+  <text x="715" y="82" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">（持续）</text>
+  <text x="675" y="100" fill="#64748b" font-size="8" font-family="monospace">✓ 持续优化</text>
+  <text x="675" y="115" fill="#64748b" font-size="8" font-family="monospace">✓ 事后复盘</text>
+  <text x="675" y="130" fill="#64748b" font-size="8" font-family="monospace">✓ 文化建设</text>
+  <text x="675" y="145" fill="#64748b" font-size="8" font-family="monospace">✓ 知识沉淀</text>
+</svg>
+</div>
+
+<h3>cogent 的落地清单</h3>
+
+<div class="card">
+<pre>
+<span style="color:#a78bfa">// cogent 三大支柱落地总览</span>
+
+<span style="color:#38bdf8">可靠性:</span>
+  ├── config.go:     配置文件不存在 → 返回 nil（可选依赖）
+  ├── manager.go:    单 Server 失败 → Warn + 跳过（容错降级）
+  ├── client.go:     关闭超时 → Kill 强杀（优雅退出 + 兜底）
+  ├── transport.go:  select + ctx.Done()（超时控制）
+  └── remote_tool.go: error → ToolResult{IsError:true}（错误不上抛）
+
+<span style="color:#f87171">安全性:</span>
+  ├── sandbox:       四层纵深防御（路由→拦截→受限→清理）
+  ├── remote_tool:   默认 Fail-Closed（非并发/非只读/ask）
+  ├── naming:        mcp__前缀隔离（防冒用）
+  ├── env:           最小环境变量（不传密钥）
+  └── dedup:         内建工具优先（防覆盖）
+
+<span style="color:#a78bfa">可观测性:</span>
+  ├── trace:         Session → ReactStep → LLM → Tool 四层 span
+  ├── attributes:    token 数、延迟、错误信息
+  ├── log:           slog 结构化日志
+  └── transport:     可追踪每次 JSON-RPC 调用
+</pre>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<h2 id="summary">📝 总结</h2>
+
+<div class="card">
+    <h3 style="margin-top:0;color:var(--accent)">一张表记住三大支柱</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>支柱</th>
+                <th>核心问题</th>
+                <th>关键词</th>
+                <th>缺失后果</th>
+                <th>cogent 实践</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>🛡️ 可靠性</td>
+                <td>系统会不会挂？</td>
+                <td>容错、降级、恢复、SLO</td>
+                <td>用户流失、数据丢失</td>
+                <td>容错降级、超时控制、优雅关闭</td>
+            </tr>
+            <tr>
+                <td>🔒 安全性</td>
+                <td>系统会不会被搞？</td>
+                <td>认证、授权、隔离、最小权限</td>
+                <td>数据泄露、系统被控制</td>
+                <td>Sandbox、Fail-Closed、命名隔离</td>
+            </tr>
+            <tr>
+                <td>👁️ 可观测性</td>
+                <td>能不能看见内部状态？</td>
+                <td>Trace、Metrics、Logs</td>
+                <td>盲人摸象、无法优化</td>
+                <td>四层 Trace、结构化日志</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="highlight-box">
+    <strong>🎓 最终总结（背下来）：</strong><br><br>
+    <strong>可靠性</strong>是地基 — 系统首先要"能用"<br>
+    <strong>安全性</strong>是围墙 — 系统要"安全地用"<br>
+    <strong>可观测性</strong>是眼睛 — 你要"看得见系统在干什么"<br><br>
+    三者互相依赖：<br>
+    • 没有可观测性 → 可靠性无法度量，安全漏洞发现不了<br>
+    • 没有安全性 → 被攻破后可靠性归零<br>
+    • 没有可靠性 → 观测系统和安全系统本身也会挂<br><br>
+    <strong>在 AI 应用中尤其重要</strong>：AI 的行为不确定、调用链长、成本敏感、面临 prompt injection 等新型攻击——三大支柱是你在"不确定性"中建立"确定性"的唯一手段。
+</div>
+
+<footer>
+    📁 基于 cogent 项目实践 | 现代系统工程三大支柱深度教学 | 2024
+</footer>
+
+</body>
+</html>
