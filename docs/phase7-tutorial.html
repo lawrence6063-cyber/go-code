@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 7 教学 · SubAgent 派发与上下文隔离</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --bg-card: #1c2128; --border: #30363d;
+    --text: #e6edf3; --text-dim: #9da7b3;
+    --accent: #58a6ff; --accent2: #7ee787; --warn: #f0883e; --danger: #ff7b72; --purple: #d2a8ff;
+    --code-bg: #0b0f14; --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 16px; }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+  aside { position: sticky; top: 0; align-self: flex-start; width: 268px; height: 100vh; overflow-y: auto; padding: 28px 18px; border-right: 1px solid var(--border); flex-shrink: 0; }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a { display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s; }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+  .hero { background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent), radial-gradient(800px 400px at 100% 0%, rgba(210,168,255,.08), transparent); border: 1px solid var(--border); border-radius: 16px; padding: 40px 38px; margin-bottom: 40px; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px; padding: 3px 12px; margin-bottom: 16px; }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+  h2 { font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+  code:not(pre code) { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; font-family: var(--mono); position: relative; margin: 16px 0; }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label { position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim); background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono); }
+  .k { color: #ff7b72; } .s { color: #a5d6ff; } .c { color: #8b949e; font-style: italic; } .f { color: #d2a8ff; } .n { color: #79c0ff; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .callout { border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-safe { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-warn { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step { display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px; }
+  .flow .step:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border); }
+  .flow .dot { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1; background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent); }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+  @media (max-width: 980px) { aside { display: none; } main { padding: 28px 20px 80px; } .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; } .hero h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 7</div>
+    <div class="sub">SubAgent 派发与上下文隔离</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#why">① 为什么要 SubAgent</a>
+      <a href="#arch">② 模块全景与依赖破环 ★</a>
+      <a href="#cycle" class="lvl2">接口下沉破环</a>
+      <a href="#isolate">③ 上下文隔离的四道保证</a>
+      <a href="#task">④ task 工具实现</a>
+      <a href="#spawner">⑤ Spawner 与摘要回流</a>
+      <a href="#trace">⑥ trace 跨边界串联</a>
+      <a href="#wiring">⑦ cmd 装配与防递归</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">⑨ 设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 7 · SubAgent Dispatch &amp; Context Isolation</span>
+      <h1>cogent Phase 7：把"探索子任务"派给隔离的子 Agent</h1>
+      <p>有些子任务（"在大仓里定位某功能实现"）会产生大量中间消息——读十几个文件、grep 一堆匹配。如果都堆进主上下文，很快撑爆窗口、还淹没主线。Phase 7 给 cogent 装上 <b>SubAgent 派发</b>：主 Agent 通过内建 <code>task</code> 工具把子任务交给一个<b>独立上下文的子 Agent</b>，子 Agent 跑完只回流一段<b>结果摘要</b>，主链路保持干净。本阶段最值钱的看点是 <b>依赖破环</b>——如何让 <code>agent→engine→tool</code> 不形成环。</p>
+      <div class="stats">
+        <div class="stat"><b>0</b><span>新增第三方依赖</span></div>
+        <div class="stat"><b>1</b><span>新包 internal/agent</span></div>
+        <div class="stat"><b>0</b><span>engine/exec 改动行数</span></div>
+        <div class="stat"><b>0</b><span>go test -race 告警</span></div>
+      </div>
+    </div>
+
+    <p>核心心智：<b>SubAgent 与主 Agent 共用同一套内核代码</b>（同一个 <code>engine.Engine</code>），区别只在"喂给它的依赖"——独立的消息历史、受限的只读工具池、不落盘的会话。这是"复用而非另起炉灶"的内核抽象红利。</p>
+
+    <!-- ========== 01 为什么 ========== -->
+    <h2 id="why"><span class="num">01</span>为什么要 SubAgent？</h2>
+    <p>设想任务："给 <code>X</code> 模块补限流中间件"。模型为了搞清现状，可能要先读 8 个文件、grep 3 次、列 2 个目录——这些探索产生十几条 <code>tool_result</code>，每条几百到几千 token。它们对<b>最终决策</b>有用，但对<b>主对话</b>是噪声：撑大上下文、提前触发压缩、还让后续推理被无关细节干扰。</p>
+    <div class="grid cols2">
+      <div class="card">
+        <b style="color:var(--danger)">没有 SubAgent</b>
+        <p style="color:var(--text-dim);font-size:14px">主上下文 = 系统提示 + 任务 + <span style="color:var(--danger)">15 条探索 tool_result</span> + 推理 + 改动。探索噪声永久驻留，长任务很快超窗。</p>
+      </div>
+      <div class="card">
+        <b style="color:var(--accent2)">有 SubAgent</b>
+        <p style="color:var(--text-dim);font-size:14px">主上下文 = 系统提示 + 任务 + <span style="color:var(--accent2)">1 条子 Agent 摘要</span> + 推理 + 改动。15 条探索消息留在子 Agent 的独立上下文里，跑完即弃。</p>
+      </div>
+    </div>
+    <div class="callout"><b>蓝本对应：</b>Claude Code 的 <code>AgentTool</code> / sidechain——派发独立上下文的子 Agent，子会话写独立 transcript，只把<b>结果摘要</b>回流父 Agent。cogent 用 Go 复刻这一思路，并复用既有内核。</div>
+
+    <!-- ========== 02 架构 ========== -->
+    <h2 id="arch"><span class="num">02</span>模块全景与依赖破环 ★</h2>
+    <p>Phase 7 只新增一个包 <code>internal/agent</code> 与一个工具文件 <code>tool/task.go</code>，<b>engine / exec / orchestrate 一行未改</b>。但这里藏着本阶段最关键的工程问题——<b>循环依赖</b>。</p>
+
+    <h3 id="cycle">问题：一个天然的依赖环</h3>
+    <p>要派发子 Agent，<code>agent</code> 包必须调用 <code>engine.New(...)</code> 起一个子 Engine——所以 <b><code>agent → engine</code></b>。而 <code>engine</code> 经 <code>exec.go</code> 依赖 <code>tool</code>（执行工具）——<b><code>engine → tool</code></b>。现在 <code>task</code> 工具又要"触发派发"，最直觉的写法是让它 import <code>agent</code>——<b><code>tool → agent</code></b>。三条边一拼：</p>
+    <pre><span class="code-label">如果天真实现</span><code><span class="n">agent</span> ──▶ <span class="n">engine</span> ──▶ <span class="n">tool</span> ──▶ <span class="n">agent</span>   <span class="c">// ✗ 循环！Go 直接编译报错</span></code></pre>
+    <p>这不仅是编译错误，更违反 DEV_SPEC §4.4 的硬约束「<b>依赖只能向内</b>」。</p>
+
+    <h3>解法：把 <code>Spawner</code> 接口下沉到 <code>tool</code> 包</h3>
+    <p>关键洞察——<code>task</code> 工具需要的不是 <code>agent</code> 的<b>实现</b>，而是"能派发"这个<b>能力契约</b>。于是我们把接口定义在 <code>tool</code> 包，让 <code>task</code> 只依赖抽象；<code>agent</code> 返回的具体类型<b>隐式满足</b>该接口（Go 的结构化接口，无需显式 implements，<code>agent</code> 甚至不用 import <code>tool</code>）。</p>
+    <pre><span class="code-label">internal/tool/task.go — 接口定义在被依赖的内层</span><code><span class="c">// Spawner 派发一个隔离上下文的子 Agent 执行子任务，返回结果摘要。</span>
+<span class="k">type</span> <span class="n">Spawner</span> <span class="k">interface</span> {
+    <span class="f">Spawn</span>(ctx context.Context, prompt <span class="k">string</span>) (<span class="k">string</span>, <span class="k">error</span>)
+}</code></pre>
+    <pre><span class="code-label">internal/agent/spawner.go — agent 仅 import engine，隐式满足 tool.Spawner</span><code><span class="k">func</span> <span class="f">New</span>(deps engine.Deps) <span class="k">*</span><span class="n">SubAgent</span>          <span class="c">// 返回具体类型</span>
+<span class="k">func</span> (s <span class="k">*</span><span class="n">SubAgent</span>) <span class="f">Spawn</span>(ctx, prompt) (<span class="k">string</span>, <span class="k">error</span>)  <span class="c">// 方法集匹配接口</span></code></pre>
+    <p>依赖方向被彻底捋直，无环、守不变量：</p>
+    <pre><span class="code-label">最终依赖方向</span><code><span class="n">cmd</span> ──▶ <span class="n">agent</span> ──▶ <span class="n">engine</span> ──▶ <span class="n">tool</span> ──▶ <span class="n">types</span>
+ │                                  ▲
+ └──── agent.New(...) → tool.NewTask(spawner) ───┘   <span class="c">// cmd 在最外层做 wiring</span></code></pre>
+    <div class="callout ok"><b>设计模式归位：</b>这正是<b>依赖倒置原则（DIP）</b>——高层(<code>task</code>)与低层(<code>agent</code>)都依赖抽象(<code>Spawner</code>)，且抽象由<b>被依赖方</b>（内层 <code>tool</code>）定义。同样的手法在标准库随处可见（<code>io.Reader</code> 由消费方定义）。面试时这是一个能讲清"为什么这么放"的好例子。</div>
+
+    <!-- ========== 03 隔离 ========== -->
+    <h2 id="isolate"><span class="num">03</span>上下文隔离的四道保证</h2>
+    <p>"隔离"不是一句口号，而是四个具体、可验证的措施。任何一条漏掉，子 Agent 的探索噪声都可能漏回主链路或造成失控。</p>
+    <table>
+      <tr><th>#</th><th>保证</th><th>怎么做</th><th>防住什么</th></tr>
+      <tr><td>1</td><td>独立消息历史</td><td>每次 <code>Spawn</code> 都 <code>engine.New(...)</code> 一个<b>全新</b>子 Engine（各自持有 <code>msgs</code>）</td><td>子任务间互不串扰、不携带父历史</td></tr>
+      <tr><td>2</td><td>不落盘</td><td>派发器强制 <code>Session=nil</code>、<code>SessionID=""</code></td><td>不污染主任务的会话 transcript（§8.5）</td></tr>
+      <tr><td>3</td><td>受限工具面</td><td>子池只给只读工具，<b>且不含 <code>task</code> 自身</b></td><td>无限递归派发 / 子 Agent 越权改文件</td></tr>
+      <tr><td>4</td><td>更紧的护栏</td><td>子任务 <code>MaxSteps</code> 默认 8（&lt; 主循环 16）；摘要截断到 8KB</td><td>子任务失控空转烧 token / 回流过大反噬主上下文</td></tr>
+    </table>
+    <div class="callout warn"><b>第 3 条尤其关键：</b>如果子 Agent 的工具池里也有 <code>task</code>，模型可能不断"派发里再派发"形成爆栈。从<b>工具面</b>物理上抹掉 <code>task</code>，比"叮嘱模型别递归"可靠得多——这是 fail-closed 思维的又一次体现。</div>
+
+    <!-- ========== 04 task 工具 ========== -->
+    <h2 id="task"><span class="num">04</span>task 工具实现</h2>
+    <p>照 <code>readfile.go</code> 的成熟范式：匿名嵌入 <code>tool.Defaults</code> 拿到 fail-closed 默认，只覆写需要放开的方法。</p>
+    <pre><span class="code-label">internal/tool/task.go（节选）</span><code><span class="k">type</span> <span class="n">taskTool</span> <span class="k">struct</span> {
+    <span class="n">Defaults</span>
+    spawner <span class="n">Spawner</span>
+}
+
+<span class="c">// 只读：子 Agent 仅装配只读工具池，故派发本身视为只读 → plan/ask 档位也能用</span>
+<span class="k">func</span> (t <span class="k">*</span>taskTool) <span class="f">IsReadOnly</span>(json.RawMessage) <span class="k">bool</span> { <span class="k">return</span> <span class="n">true</span> }
+
+<span class="c">// 放行：派发只读子任务无需 HITL（子 Agent 内的高危操作另有自身闸门兜底）</span>
+<span class="k">func</span> (t <span class="k">*</span>taskTool) <span class="f">CheckPermission</span>(context.Context, json.RawMessage) (permission.Decision, <span class="k">error</span>) {
+    <span class="k">return</span> permission.Decision{Behavior: permission.BehaviorAllow}, <span class="n">nil</span>
+}
+
+<span class="k">func</span> (t <span class="k">*</span>taskTool) <span class="f">Call</span>(ctx context.Context, input json.RawMessage, _ ProgressSink) (types.ToolResult, <span class="k">error</span>) {
+    <span class="c">// ... 解析 prompt，空/非法直接规范化为 IsError ...</span>
+    summary, err := t.spawner.<span class="f">Spawn</span>(ctx, in.Prompt)
+    <span class="k">if</span> err != <span class="n">nil</span> {
+        <span class="k">return</span> types.ToolResult{Content: <span class="f">fmt.Sprintf</span>(<span class="s">"sub-agent failed: %v"</span>, err), IsError: <span class="n">true</span>}, <span class="n">nil</span>
+    }
+    <span class="k">return</span> types.ToolResult{Content: summary}, <span class="n">nil</span>
+}</code></pre>
+    <div class="callout"><b>错误规范化惯例：</b>注意 <code>Call</code> 的第二个返回值<b>恒为 nil</b>——派发失败被规范化为 <code>ToolResult{IsError:true}</code> 回流给模型，让它"看到失败、自我修正"，而不是中断整个主循环。这与 Phase 2 起所有工具的错误处理惯例一致。</div>
+    <p>关于<b>并发安全</b>：<code>task</code> 沿用 <code>Defaults</code> 的 <code>IsConcurrencySafe=false</code>（fail-closed，多个 <code>task</code> 调用串行）。理论上每次 <code>Spawn</code> 都是独立 Engine、共享的 <code>llm.Client</code> 与 tracer 也都并发安全，放开它即可实现"并行探索多个子任务"——这是一个可讲的权衡点，v1 选择保守默认。</p>
+
+    <!-- ========== 05 Spawner ========== -->
+    <h2 id="spawner"><span class="num">05</span>Spawner 与摘要回流</h2>
+    <pre><span class="code-label">internal/agent/spawner.go（核心）</span><code><span class="k">func</span> (s <span class="k">*</span>SubAgent) <span class="f">Spawn</span>(ctx context.Context, prompt <span class="k">string</span>) (summary <span class="k">string</span>, err <span class="k">error</span>) {
+    sub := s.deps
+    sub.Session = <span class="n">nil</span>   <span class="c">// 隔离保证②：子 Agent 不落盘</span>
+    sub.SessionID = <span class="s">""</span>
+    eng, err := engine.<span class="f">New</span>(sub)   <span class="c">// 隔离保证①：全新 Engine = 全新 msgs</span>
+    <span class="k">if</span> err != <span class="n">nil</span> { <span class="k">return</span> <span class="s">""</span>, <span class="f">fmt.Errorf</span>(<span class="s">"build sub-agent: %w"</span>, err) }
+
+    ctx, end := s.tracer.<span class="f">Start</span>(ctx, <span class="s">"agent.spawn"</span>)  <span class="c">// 隔离保证④ + trace 串联</span>
+    <span class="k">defer</span> <span class="k">func</span>() { <span class="f">end</span>(err) }()
+
+    events, err := eng.<span class="f">Run</span>(ctx, prompt)
+    <span class="k">if</span> err != <span class="n">nil</span> { <span class="k">return</span> <span class="s">""</span>, <span class="f">fmt.Errorf</span>(<span class="s">"run sub-agent: %w"</span>, err) }
+    <span class="k">return</span> s.<span class="f">collectSummary</span>(events), <span class="n">nil</span>
+}</code></pre>
+    <p>摘要怎么来？子 Engine 的系统提示本就要求"任务完成时给出简洁总结"，所以子 Agent 的<b>最终助手文本</b>天然就是摘要。<code>collectSummary</code> 把事件流里的 <code>EventText</code> 累积起来，按 UTF-8 边界截断到 8KB：</p>
+    <pre><span class="code-label">collectSummary — 完整 range 至 channel 关闭（防泄漏）</span><code><span class="k">func</span> (s <span class="k">*</span>SubAgent) <span class="f">collectSummary</span>(events <span class="k">&lt;-chan</span> types.StreamEvent) <span class="k">string</span> {
+    <span class="k">var</span> sb strings.Builder
+    <span class="k">for</span> ev := <span class="k">range</span> events {          <span class="c">// 必须排空：ctx 取消时 engine 也会 close(out)</span>
+        <span class="k">switch</span> ev.Type {
+        <span class="k">case</span> types.EventText:  sb.<span class="f">WriteString</span>(ev.Text)
+        <span class="k">case</span> types.EventError: <span class="c">/* 附错误说明，仍回流给主 Agent 参考 */</span>
+        }
+    }
+    <span class="k">return</span> <span class="f">truncateSummary</span>(sb.<span class="f">String</span>(), s.maxSummaryBytes)
+}</code></pre>
+    <div class="callout warn"><b>易踩的坑——goroutine 泄漏：</b><code>for range events</code> 会一直读到 channel 关闭。这正是关键：<code>engine.Run</code> 的内部 goroutine 在 <code>ctx</code> 取消时也会走 <code>defer close(out)</code>，所以排空循环一定会结束。如果偷懒"读到一半 ctx 取消就 return"，子 Engine 的 goroutine 可能阻塞在向已无人消费的 <code>out</code> 发送上——<code>goleak</code> 会立刻抓出来。</div>
+
+    <!-- ========== 06 trace ========== -->
+    <h2 id="trace"><span class="num">06</span>trace 跨边界串联：context 的双重职责</h2>
+    <p>子 Agent 是"任务里的任务"，可观测上理应表现为"trace 里的子树"。cogent 不需要任何额外管线就做到了——因为 <code>context.Context</code> <b>同时承载取消传播与 trace 传播</b>。</p>
+    <pre><span class="code-label">span 树（一次带派发的任务）</span><code><span class="n">cogent.session</span>                       <span class="c"># 主任务根 span</span>
+└── <span class="n">react.step</span> (step=2)
+    ├── <span class="n">llm.stream</span>
+    └── <span class="n">tool.batch</span>
+        └── <span class="n">tool.call</span> (name=task)      <span class="c"># 主 Agent 调用 task 工具</span>
+            └── <span class="n">agent.spawn</span>             <span class="c"># ← Spawn 起的 span，挂在 tool.call 下</span>
+                └── <span class="n">react.step</span> (step=0)   <span class="c"># 子 Agent 自己的 ReAct 循环</span>
+                    ├── <span class="n">llm.stream</span>         <span class="c">#   全部经 ctx 自动成为子节点</span>
+                    └── <span class="n">tool.call</span> (read_file)</code></pre>
+    <p><code>Spawn</code> 收到的 <code>ctx</code> 已携带父 <code>tool.call</code> 的 span；它 <code>Start("agent.spawn")</code> 派生新 ctx 传给子 <code>engine.Run</code>，子 Engine 内部的 <code>react.step</code>/<code>llm.stream</code> 再从这个 ctx 派生——<b>无需手动传 trace_id</b>，父子关系自动成立（§8.2 跨边界传播）。同一个 ctx 还意味着：主任务 <code>Ctrl-C</code> 时，子 Agent 的 LLM 调用与 goroutine 一并收手。</p>
+
+    <!-- ========== 07 wiring ========== -->
+    <h2 id="wiring"><span class="num">07</span>cmd 装配与防递归</h2>
+    <p>所有"组装"都收敛在最外层 <code>cmd</code>，内层包互不感知彼此的实现。</p>
+    <pre><span class="code-label">cmd/cogent/commands.go（节选）</span><code><span class="c">// 子池：只读工具，刻意不含 task 自身 → 杜绝递归派发</span>
+<span class="k">func</span> <span class="f">buildSpawner</span>(llmc llm.Client, prov observe.Provider, workRoot <span class="k">string</span>) tool.Spawner {
+    subTools := tool.<span class="f">NewPool</span>(
+        tool.<span class="f">NewReadFile</span>(workRoot),
+        tool.<span class="f">NewListDir</span>(workRoot),
+        tool.<span class="f">NewGrep</span>(workRoot),
+    )
+    <span class="k">return</span> agent.<span class="f">New</span>(engine.Deps{LLM: llmc, Tools: subTools, Observe: prov, WorkRoot: workRoot})
+}
+
+<span class="c">// 主池：task 作只读工具直接入池；复用同一个 llm.Client 让 trace 串起来</span>
+spawner := <span class="f">buildSpawner</span>(llmc, prov, workRoot)
+tools := []tool.Tool{ ..., tool.<span class="f">NewTask</span>(spawner), ... }</code></pre>
+    <div class="callout ok"><b>复用而非另起炉灶：</b><code>buildSpawner</code> 用的还是同一套内建只读工具构造函数、同一个 <code>llm.Client</code>、同一个 <code>observe.Provider</code>。子 Agent 不是"另一个程序"，只是"喂了不同依赖的同一个内核"。</div>
+
+    <!-- ========== 08 测试 ========== -->
+    <h2 id="test"><span class="num">08</span>测试策略</h2>
+    <p>沿用 cogent 的测试金字塔：把不确定的 LLM 抽象成接口、注入脚本化 <b>Fake LLM</b>，让子 Agent 退化为可确定性断言的状态机；<code>goleak</code> + <code>-race</code> 常态化。</p>
+    <div class="grid cols2">
+      <div class="card">
+        <b>internal/tool/task_test.go</b>
+        <p style="color:var(--text-dim);font-size:14px">fake <code>Spawner</code> 驱动：① 摘要正常回流；② spawn 错误 → <code>IsError</code>（且<b>不向上抛 error</b>）；③ 空 / 非法 prompt 被拒；④ 元数据断言：只读 / allow / schema 含 <code>prompt</code>。</p>
+      </div>
+      <div class="card">
+        <b>internal/agent/spawner_test.go</b>
+        <p style="color:var(--text-dim);font-size:14px">Fake LLM 脚本化：① 摘要回流；② <b>上下文隔离</b>——两次派发各自只带 system+user 干净历史；③ 8KB 截断；④ ctx 取消安全收尾不挂起；⑤ <code>truncateSummary</code> 边界。</p>
+      </div>
+    </div>
+    <pre><span class="code-label">隔离断言（最能体现设计意图）</span><code><span class="c">// 两次 Spawn 后，断言子 Agent 每次都从干净历史开始</span>
+<span class="k">for</span> i, msgs := <span class="k">range</span> f.gotMessages {
+    <span class="k">if</span> <span class="f">len</span>(msgs) != <span class="n">2</span> {   <span class="c">// 永远只有 system + user，不累积、不串扰</span>
+        t.<span class="f">Fatalf</span>(<span class="s">"spawn %d messages = %d, want 2"</span>, i, <span class="f">len</span>(msgs))
+    }
+}</code></pre>
+    <pre><span class="code-label">验证</span><code><span class="f">gofmt</span> -l .          <span class="c"># 无输出</span>
+go build ./...        go vet ./...
+go test -race ./...   <span class="c"># 全绿；主 go.mod/go.sum 零改动</span></code></pre>
+
+    <!-- ========== 09 回顾 ========== -->
+    <h2 id="takeaway"><span class="num">09</span>设计要点回顾</h2>
+    <div class="grid cols3">
+      <div class="card"><b style="color:var(--accent)">接口下沉破环</b><p style="color:var(--text-dim);font-size:14px">Spawner 接口放在 tool 包，agent 隐式满足、无需反向 import —— DIP 的教科书落地。</p></div>
+      <div class="card"><b style="color:var(--accent)">内核复用</b><p style="color:var(--text-dim);font-size:14px">子 Agent = 喂不同依赖的同一个 engine，engine/exec 零改动。</p></div>
+      <div class="card"><b style="color:var(--accent)">四道隔离</b><p style="color:var(--text-dim);font-size:14px">独立 msgs / 不落盘 / 只读子池 / 更紧护栏，条条可验证。</p></div>
+      <div class="card"><b style="color:var(--accent)">fail-closed 防递归</b><p style="color:var(--text-dim);font-size:14px">从工具面抹掉 task 自身，物理杜绝无限派发。</p></div>
+      <div class="card"><b style="color:var(--accent)">trace 自动串联</b><p style="color:var(--text-dim);font-size:14px">ctx 双职责，agent.spawn 子树自动挂接，零额外管线。</p></div>
+      <div class="card"><b style="color:var(--accent)">摘要回流防膨胀</b><p style="color:var(--text-dim);font-size:14px">只回流 ≤8KB 摘要，探索噪声留在子上下文跑完即弃。</p></div>
+    </div>
+
+    <div class="callout"><b>STAR（面试话术）：</b>
+      <p style="margin:8px 0 0"><b>S</b>：探索类子任务会产生大量中间消息，堆进主上下文会撑爆窗口、淹没主线。</p>
+      <p style="margin:4px 0 0"><b>T</b>：隔离探索、只回流结论，且不为此另写一套循环。</p>
+      <p style="margin:4px 0 0"><b>A</b>：复用同一 <code>engine</code> 内核派发子 Agent（独立 msgs / 受限只读池 / 不落盘 / 更紧 maxSteps）；为破 <code>agent→engine→tool→agent</code> 的环，把 <code>Spawner</code> 接口下沉到 <code>tool</code> 包，<code>agent</code> 隐式满足；子 Agent 的 span 经 ctx 自动挂为 <code>agent.spawn</code> 子树；排空事件流累积摘要并 8KB 截断，goleak 验无泄漏。</p>
+      <p style="margin:4px 0 0"><b>R</b>：复杂任务可拆给子 Agent，主上下文保持干净；新增能力零改内核；依赖方向无环、守 §4.4 不变量。</p>
+    </div>
+
+    <div class="callout warn"><b>诚实边界 / Future Work：</b>v1 的 <code>task</code> 串行执行（fail-closed），尚未实现"并行派发多个子任务"；子 Agent 的工具池固定为只读三件套，未做按子任务动态裁剪；摘要直接取最终文本，未来可让子 Agent 产出结构化结论（决策 + 理由 + 待办）以更好地喂回主循环。</p></div>
+
+    <footer>
+      cogent · Phase 7 教学文档 ·  SubAgent 派发与上下文隔离 ·  与 DEV_SPEC §3.9 / §5.10 / §6.7 / §8.2 对应阅读。
+    </footer>
+  </main>
+</div>
+</body>
+</html>

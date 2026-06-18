@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/alaindong/cogent/internal/agent"
 	"github.com/alaindong/cogent/internal/contextmgr"
 	"github.com/alaindong/cogent/internal/engine"
 	"github.com/alaindong/cogent/internal/llm"
@@ -234,9 +235,10 @@ func buildEngine(
 	if err != nil {
 		return nil, fmt.Errorf("init llm: %w", err)
 	}
+	spawner := buildSpawner(llmc, prov, workRoot)
 	eng, err := engine.New(engine.Deps{
 		LLM:          llmc,
-		Tools:        buildToolPool(workRoot, prompter, prov.Tracer(), mcpTools),
+		Tools:        buildToolPool(workRoot, prompter, prov.Tracer(), mcpTools, spawner),
 		Context:      contextmgr.New(),
 		Memory:       memory.New(),
 		MemoryWriter: memory.NewWriter(),
@@ -253,14 +255,33 @@ func buildEngine(
 	return eng, nil
 }
 
-// buildToolPool 装配工具池：只读内建工具直接入池；写/执行类与全部 MCP 外部工具经 Guard 包裹
-// 注入权限闸门与 HITL。MCP 工具排在内建之后传入，借 NewPool 的先到先得实现“内建优先”去重，
-// 防止外部同名工具劫持内建工具。
+// buildSpawner 装配 SubAgent 派发器：用只读子工具池（read_file/list_dir/grep，
+// 刻意不含 task 自身以杜绝无限递归派发），复用主任务的 LLM 客户端与 observe provider
+// 以串联 trace。返回类型为 tool.Spawner 抽象，由 task 工具持有（破依赖环）。
+func buildSpawner(llmc llm.Client, prov observe.Provider, workRoot string) tool.Spawner {
+	subTools := tool.NewPool(
+		tool.NewReadFile(workRoot),
+		tool.NewListDir(workRoot),
+		tool.NewGrep(workRoot),
+	)
+	return agent.New(engine.Deps{
+		LLM:      llmc,
+		Tools:    subTools,
+		Observe:  prov,
+		Model:    os.Getenv("COGENT_MODEL"),
+		WorkRoot: workRoot,
+	})
+}
+
+// buildToolPool 装配工具池：只读内建工具（含 task 派发工具）直接入池；写/执行类与全部
+// MCP 外部工具经 Guard 包裹注入权限闸门与 HITL。MCP 工具排在内建之后传入，借 NewPool
+// 的先到先得实现“内建优先”去重，防止外部同名工具劫持内建工具。
 func buildToolPool(
 	workRoot string,
 	prompter permission.Prompter,
 	tracer observe.Tracer,
 	mcpTools []tool.Tool,
+	spawner tool.Spawner,
 ) tool.Pool {
 	policy := permission.StaticPolicy{}
 	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
@@ -269,6 +290,7 @@ func buildToolPool(
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
+		tool.NewTask(spawner), // 只读派发工具：把探索子任务交给隔离子 Agent
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
 		guard(tool.NewBash(sb, tracer)),

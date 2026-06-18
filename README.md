@@ -116,6 +116,23 @@ go run ./cmd/cogent run "用 fetch 工具抓取 https://example.com 并总结"
 - 安全默认：MCP 工具默认非并发安全、权限 `ask`，统一经 `Guard` 装饰器走 HITL 询问。
 - 子进程回收：`defer mgr.Close()` 关闭 stdin → 等待 → 超时强杀，绝不悬挂。
 
+## SubAgent 派发（Phase 7）
+
+对"在大仓里定位某功能实现"这类**探索类子任务**，cogent 提供内建的 `task` 工具：主 Agent 把
+子任务交给一个**独立上下文的子 Agent** 执行，子 Agent 跑完只把**结果摘要**回流主循环，从而
+隔离大量中间消息、保持主上下文干净（DEV_SPEC §3.9、§6.7）。
+
+```text
+主 Agent ──task(prompt)──▶ 子 Agent（独立 msgs / 受限只读工具池 / 不落盘）
+       ◀── 结果摘要(≤8KB) ── 探索 read_file/list_dir/grep 后产出摘要
+```
+
+- **上下文隔离**：每次派发新建独立子 Engine（独立消息历史），强制 `Session=nil` 不写主会话 transcript。
+- **受限工具面**：子 Agent 只装配只读工具（`read_file`/`list_dir`/`grep`），**且不含 `task` 自身**，从工具面杜绝无限递归派发。
+- **失控护栏**：子任务 `MaxSteps` 比主循环更紧（默认 8 轮）；摘要回流截断到 8KB。
+- **trace 串联**：子 Agent 的执行作为父任务 trace 的 `agent.spawn` 子 span 挂接（复用 ctx 传播），可视化"主 Agent 把什么子任务派给了谁、花了多少"。
+- **依赖破环**：`Spawner` 接口定义在 `tool` 包、`task` 工具仅依赖该抽象；`internal/agent` 仅 import `engine` 并返回隐式满足该接口的 `*SubAgent`，保证 `cmd → agent → engine → tool → types` 无循环依赖。
+
 ## 开发
 
 ```bash
