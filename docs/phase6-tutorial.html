@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Phase 6 教学 · MCP 客户端与外部工具融合</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-soft: #161b22; --bg-card: #1c2128; --border: #30363d;
+    --text: #e6edf3; --text-dim: #9da7b3;
+    --accent: #58a6ff; --accent2: #7ee787; --warn: #f0883e; --danger: #ff7b72; --purple: #d2a8ff;
+    --code-bg: #0b0f14; --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 16px; }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+  aside { position: sticky; top: 0; align-self: flex-start; width: 268px; height: 100vh; overflow-y: auto; padding: 28px 18px; border-right: 1px solid var(--border); flex-shrink: 0; }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; color: var(--text); }
+  aside .brand span { color: var(--accent); }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a { display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s; }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); }
+  aside nav a.lvl2 { padding-left: 26px; font-size: 13px; }
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+  .hero { background: radial-gradient(1200px 400px at 0% 0%, rgba(88,166,255,.12), transparent), radial-gradient(800px 400px at 100% 0%, rgba(210,168,255,.08), transparent); border: 1px solid var(--border); border-radius: 16px; padding: 40px 38px; margin-bottom: 40px; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent2); border: 1px solid rgba(126,231,135,.4); border-radius: 999px; padding: 3px 12px; margin-bottom: 16px; }
+  .hero h1 { font-size: 34px; margin: 0 0 12px; line-height: 1.25; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 760px; }
+  .hero .stats { display: flex; gap: 28px; margin-top: 28px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 26px; color: var(--accent); }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+  h2 { font-size: 25px; margin: 56px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { color: var(--accent); font-family: var(--mono); margin-right: 10px; }
+  h3 { font-size: 19px; margin: 32px 0 12px; color: var(--text); scroll-margin-top: 20px; }
+  p { color: #c9d1d9; }
+  a { color: var(--accent); }
+  code:not(pre code) { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6; font-family: var(--mono); position: relative; margin: 16px 0; }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label { position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim); background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono); }
+  .k { color: #ff7b72; } .s { color: #a5d6ff; } .c { color: #8b949e; font-style: italic; } .f { color: #d2a8ff; } .n { color: #79c0ff; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .callout { border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(240,136,62,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,123,114,.08); }
+  .callout.ok { border-color: var(--accent2); background: rgba(126,231,135,.07); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c9d1d9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; display: inline-block; }
+  .b-safe { background: rgba(126,231,135,.15); color: var(--accent2); border: 1px solid rgba(126,231,135,.3); }
+  .b-warn { background: rgba(240,136,62,.15); color: var(--warn); border: 1px solid rgba(240,136,62,.3); }
+  .b-deny { background: rgba(255,123,114,.15); color: var(--danger); border: 1px solid rgba(255,123,114,.3); }
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 20px 0; }
+  .flow .step { display: flex; align-items: flex-start; gap: 16px; position: relative; padding-bottom: 22px; }
+  .flow .step:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--border); }
+  .flow .dot { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 14px; z-index: 1; background: var(--bg-card); border: 2px solid var(--accent); color: var(--accent); }
+  .flow .body { padding-top: 4px; }
+  .flow .body b { color: var(--text); }
+  .flow .body p { margin: 2px 0 0; color: var(--text-dim); font-size: 14px; }
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+  @media (max-width: 980px) { aside { display: none; } main { padding: 28px 20px 80px; } .grid.cols2, .grid.cols3 { grid-template-columns: 1fr; } .hero h1 { font-size: 26px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand"><span>cogent</span> Phase 6</div>
+    <div class="sub">MCP 客户端与外部工具融合</div>
+    <nav>
+      <a href="#intro">概览：本阶段目标</a>
+      <a href="#why">① 为什么要接 MCP</a>
+      <a href="#choice" class="lvl2">手写 vs 官方 SDK</a>
+      <a href="#oracle" class="lvl2">SDK 当对照基准</a>
+      <a href="#arch">② 模块全景与依赖方向</a>
+      <a href="#protocol">③ MCP stdio 协议</a>
+      <a href="#transport" class="lvl2">换行分隔 JSON-RPC</a>
+      <a href="#handshake" class="lvl2">initialize 握手</a>
+      <a href="#client">④ 客户端实现</a>
+      <a href="#tool" class="lvl2">远端工具适配</a>
+      <a href="#fuse">⑤ 工具池融合策略 ★</a>
+      <a href="#cli">⑥ CLI 与配置文件</a>
+      <a href="#conform">⑦ 一致性套件 + Oracle</a>
+      <a href="#test">⑧ 测试策略</a>
+      <a href="#takeaway">⑨ 设计要点回顾</a>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="hero" id="intro">
+      <span class="tag">Phase 6 · MCP Client &amp; Tool Fusion</span>
+      <h1>cogent Phase 6：让 Agent 拥有「外接工具」的扩展面</h1>
+      <p>前五阶段，cogent 的工具池是封闭的——只认进程内编译进来的内建工具。Phase 6 给它装上 <b>MCP（Model Context Protocol）</b>客户端：通过 <code>os/exec</code> 拉起任意 MCP server 子进程，以换行分隔 JSON-RPC 完成握手与 <code>tools/call</code>，把远端工具以 <code>mcp__&lt;server&gt;__&lt;tool&gt;</code> 命名，<b>fail-closed</b> 融入同一个工具池——内核零改动、安全姿态不降级。</p>
+      <div class="stats">
+        <div class="stat"><b>0</b><span>新增第三方依赖（主模块）</span></div>
+        <div class="stat"><b>1</b><span>新包 internal/mcp</span></div>
+        <div class="stat"><b>1</b><span>独立子模块 oracle</span></div>
+        <div class="stat"><b>0</b><span>go test -race 告警</span></div>
+      </div>
+    </div>
+
+    <p>这份教学的特别看点是<b>架构上的"用 SDK 当裁判而非兜底"</b>——把官方 <code>modelcontextprotocol/go-sdk</code> 隔离在独立 go.mod 子模块里，跑同一套协议契约测试，反向印证我们手写实现的正确性。主二进制零额外依赖，叙事更硬。</p>
+
+    <!-- ========== 01 为什么 ========== -->
+    <h2 id="why"><span class="num">01</span>为什么要接 MCP？</h2>
+    <p>一个真正能"自主编码"的 Agent，工具能力必须能<b>横向扩展</b>。把工具硬编译进进程意味着：每新增能力都要改源码、重新发版、重新审计。MCP 把"工具供给"标准化成了一个跨语言协议——server 可以用 Python/Node/Go 任意语言写，cogent 只要会说 MCP，就能把整个开源生态（filesystem/git/fetch/各类数据库……）瞬间纳入工具池。</p>
+    <p>核心约束是：<b>外部工具默认不可信</b>。cogent 已在 Phase 2 把权限三态裁决 + HITL 装在 <code>Guard</code> 装饰器里——Phase 6 不发明新机制，只是让外部工具同样穿过这道闸门即可。</p>
+
+    <h3 id="choice">关键技术决策：自实现 MCP 协议，不进官方 go-sdk</h3>
+    <table>
+      <tr><th>选项</th><th>代价</th><th>收益</th></tr>
+      <tr><td>引入 <code>modelcontextprotocol/go-sdk</code></td><td>主 go.mod 新增 ~8 个传递依赖（jsonschema-go、oauth2、segmentio/encoding、x/tools、jwt 等）</td><td>少写约 400 行代码</td></tr>
+      <tr><td><b>自实现最小 stdio 客户端</b> ✅</td><td>~400 行 Go（含测试）</td><td>主模块零新依赖；亲手实现协议可讲清原理；可裁剪到只用的 4 个 RPC</td></tr>
+    </table>
+    <div class="callout warn"><b>但很多人会问：</b>"既然实现了 SDK，能不能手写出错时自动切到 SDK？"——<b>不能</b>。MCP 故障 95% 是协议/环境级（子进程拉不起、握手版本不匹配、命令不存在），手写挂了 SDK 也几乎必挂；唯一"救得了"的情况恰是手写实现自己有 bug，而 fallback 的作用是<b>悄悄掩盖这个 bug</b>——对一个以"讲清原理"为卖点的项目，这是反向的。何况 MCP 连接是有状态的，中途切换 = 杀子进程 + 重新握手 + 在途调用丢失，根本谈不上"无缝"。</div>
+
+    <h3 id="oracle">SDK 的正确用途：离线对照基准（oracle）</h3>
+    <p>但 SDK 是有用的——它是一份独立的、由官方维护的<b>第二实现</b>。让 SDK 客户端连到<b>我们手写的 fake server</b>、跑<b>同一套协议契约测试</b>，如果 SDK 都过了，说明我们的协议实现与官方理解一致。这就是 oracle 模式。</p>
+    <pre><span class="code-label">隔离方案</span><code>        ┌─────────────────────────┐
+        │   tool.Pool / engine     │  ← 只认 MCPClient 接口
+        └────────────┬─────────────┘
+                     │
+                     ▼
+   ┌──────────────────────────────────────────┐
+   │  internal/mcp/  (主模块, 零新依赖)        │
+   │   • transport.go  • client.go             │
+   │   • config.go     • manager.go            │
+   │   • remote_tool.go                         │
+   │   • mcpconform/   ← 共享协议契约套件      │
+   └──────────────────────────────────────────┘
+            ▲                          ▲
+   builtin _test                oracle/  (子模块, 独立 go.mod)
+   跑 mcpconform.RunSuite       • own go.mod + replace
+                                • require go-sdk v1.6.1
+                                • 适配 SDK 实现 Client
+                                • 跑同一份 mcpconform.RunSuite
+                                ↓
+                  主模块 go test ./... 不下钻此处
+                  主 go.mod / go.sum 一字未改</code></pre>
+    <div class="callout danger"><b>容易踩的坑：</b><code>//go:build mcp_sdk</code> 这种 build tag <b>不能</b>让主 go.mod 干净——<code>go mod tidy</code> 会扫描所有 build tag，照样把 SDK 写进主依赖。<b>唯有独立 go.mod 子模块</b>才能真正隔离。</div>
+
+    <!-- ========== 02 架构 ========== -->
+    <h2 id="arch"><span class="num">02</span>模块全景与依赖方向</h2>
+    <pre><span class="code-label">依赖方向（Phase 6 新增以 ★ 标记）</span><code>          ┌─────────────┐  buildMCPManager: LoadConfig + Manager.Connect
+          │     CLI     │  buildToolPool: 内建 → MCP（Guard 包裹）
+          │ run/resume  │  defer mgr.Close()
+          │  mcp <自检> │
+          └──────┬──────┘
+                 │
+                 ▼
+          ┌──────────────┐   ★ ┌─────────────────────────┐
+          │   tool.Pool  │────▶│   internal/mcp           │  MCPClient / Manager
+          │  Guard 装饰器 │     │   transport (JSON-RPC)   │  os/exec stdio
+          │  内建优先去重 │     │   remoteTool: Defaults   │  fail-closed
+          └──────────────┘     │   mcp__&lt;server&gt;__&lt;tool&gt;   │  命名隔离
+                               └─────────────┬───────────┘
+                                             │
+                                ┌────────────┴───────────┐
+                                ▼                        ▼
+                       ┌───────────────┐        ┌──────────────────┐
+                       │  mcpconform   │ ◀──────│  oracle (子模块)  │
+                       │ fake server   │ 共用   │  SDK 适配 + tests │
+                       │ RunSuite      │        │  独立 go.mod      │
+                       └───────────────┘        └──────────────────┘</code></pre>
+    <p>守 §4.4 依赖方向：<code>cmd → mcp → tool/types/observe</code>，<code>mcp</code> 绝不反向依赖 <code>engine</code>。MCP 工具实现 <code>tool.Tool</code>，从内核看与内建工具完全同构，<b>engine 一行不改</b>。</p>
+
+    <!-- ========== 03 协议 ========== -->
+    <h2 id="protocol"><span class="num">03</span>MCP stdio 协议（最小子集）</h2>
+    <h3 id="transport">换行分隔 JSON-RPC 2.0</h3>
+    <p>MCP stdio transport 的传输格式极其朴素：<b>每条 JSON-RPC 2.0 消息独占一行（UTF-8）</b>，消息内不得含内嵌换行。client 写 server 的 stdin、读 server 的 stdout。这种格式有三个好处：</p>
+    <ul>
+      <li>不需要长度前缀或 Content-Length 头——只要 <code>bufio.Scanner</code> 按行扫即可；</li>
+      <li>天然无背压死锁——读写各一根 goroutine，互不阻塞；</li>
+      <li>本地通信、无网络面、无 SSRF 攻击面（§7 安全约束的天然满足）。</li>
+    </ul>
+
+    <h3 id="handshake">RPC 序列与握手</h3>
+    <div class="flow">
+      <div class="step"><div class="dot">1</div><div class="body"><b>client → server: <code>initialize</code></b><p>params 包含 <code>protocolVersion</code>（"2024-11-05"）、<code>capabilities</code>、<code>clientInfo{Name,Version}</code>。server 回 serverInfo / capabilities。</p></div></div>
+      <div class="step"><div class="dot">2</div><div class="body"><b>client → server: <code>notifications/initialized</code></b><p>通知（无 id），告知 server 客户端就绪。</p></div></div>
+      <div class="step"><div class="dot">3</div><div class="body"><b>client → server: <code>tools/list</code></b><p>server 回 <code>{tools:[{name, description, inputSchema}]}</code>。cogent 把每个工具包装为 <code>remoteTool</code>。</p></div></div>
+      <div class="step"><div class="dot">4</div><div class="body"><b>client → server: <code>tools/call</code></b><p>params <code>{name, arguments}</code>，回 <code>{content:[{type:"text",text}], isError}</code>。cogent 把 text 串拼接为 <code>ToolResult.Content</code>、<code>isError</code> 直传。</p></div></div>
+    </div>
+
+    <pre><span class="code-label">internal/mcp/transport.go (核心片段)</span><code><span class="c">// 单 readLoop 按 id 把响应分发给等待中的 call；写入加锁串行化。</span>
+<span class="k">func</span> (t *transport) <span class="f">readLoop</span>(stdout io.Reader) {
+    <span class="k">defer</span> <span class="f">close</span>(t.done)
+    sc := bufio.<span class="f">NewScanner</span>(stdout)
+    sc.<span class="f">Buffer</span>(<span class="f">make</span>([]<span class="k">byte</span>, <span class="n">0</span>, <span class="n">64</span>*<span class="n">1024</span>), maxFrameBytes) <span class="c">// 防御异常超长行</span>
+    <span class="k">for</span> sc.<span class="f">Scan</span>() {
+        line := bytes.<span class="f">TrimSpace</span>(sc.<span class="f">Bytes</span>())
+        <span class="k">if</span> <span class="f">len</span>(line) == <span class="n">0</span> { <span class="k">continue</span> }
+        <span class="k">var</span> f frame
+        <span class="k">if</span> err := json.<span class="f">Unmarshal</span>(line, &amp;f); err != <span class="k">nil</span> {
+            <span class="k">continue</span> <span class="c">// 跳过非法行，不毒化整条连接</span>
+        }
+        <span class="k">if</span> f.ID == <span class="k">nil</span> { <span class="k">continue</span> } <span class="c">// 服务端通知/请求：最小客户端不处理</span>
+        t.<span class="f">deliver</span>(*f.ID, f) <span class="c">// 按 id 投递到 pending[id] channel</span>
+    }
+    ...
+}</code></pre>
+
+    <!-- ========== 04 客户端 ========== -->
+    <h2 id="client"><span class="num">04</span>客户端实现：Connect → Tools → Close</h2>
+    <pre><span class="code-label">internal/mcp/client.go</span><code><span class="k">type</span> MCPClient <span class="k">interface</span> {
+    <span class="f">Connect</span>(ctx context.Context, cfg ServerConfig) <span class="k">error</span>
+    <span class="f">Tools</span>() []tool.Tool
+    <span class="f">Close</span>() <span class="k">error</span>
+}
+
+<span class="k">func</span> (c *client) <span class="f">Connect</span>(ctx context.Context, cfg ServerConfig) <span class="k">error</span> {
+    <span class="k">if</span> err := cfg.<span class="f">validate</span>(); err != <span class="k">nil</span> { <span class="k">return</span> err } <span class="c">// 名字白名单防注入</span>
+    cmd := exec.<span class="f">Command</span>(cfg.Command, cfg.Args...)
+    cmd.Env = <span class="f">mergeEnv</span>(cfg.Env)
+    stdin, _ := cmd.<span class="f">StdinPipe</span>()
+    stdout, _ := cmd.<span class="f">StdoutPipe</span>()
+    <span class="k">if</span> err := cmd.<span class="f">Start</span>(); err != <span class="k">nil</span> { ... }
+    c.tr = <span class="f">newTransport</span>(stdout, stdin)
+    <span class="k">return</span> c.<span class="f">bootstrap</span>(ctx) <span class="c">// initialize + initialized + tools/list</span>
+}</code></pre>
+
+    <h3 id="tool">远端工具：fail-closed 默认 + 命名隔离</h3>
+    <pre><span class="code-label">internal/mcp/remote_tool.go</span><code><span class="k">type</span> remoteTool <span class="k">struct</span> {
+    tool.Defaults <span class="c">// ★ 匿名嵌入：默认非并发安全、非只读、权限 ask</span>
+    client   *client
+    origName <span class="k">string</span>
+    fullName <span class="k">string</span>  <span class="c">// "mcp__&lt;server&gt;__&lt;tool&gt;"</span>
+    desc     <span class="k">string</span>
+    schema   json.RawMessage
+}
+
+<span class="k">func</span> (t *remoteTool) <span class="f">Call</span>(ctx context.Context, input json.RawMessage, _ tool.ProgressSink) (types.ToolResult, <span class="k">error</span>) {
+    ctx, end := t.client.tracer.<span class="f">Start</span>(ctx, <span class="s">"mcp.call"</span>,
+        observe.Attr{Key: <span class="s">"mcp.server"</span>, Value: t.client.name},
+        observe.Attr{Key: <span class="s">"mcp.tool"</span>, Value: t.origName})
+    res, err := t.client.<span class="f">callTool</span>(ctx, t.origName, input)
+    <span class="f">end</span>(err)
+    <span class="k">if</span> err != <span class="k">nil</span> { <span class="k">return</span> types.ToolResult{Content: <span class="s">"mcp call failed: "</span>+err.<span class="f">Error</span>(), IsError: <span class="k">true</span>}, <span class="k">nil</span> }
+    <span class="k">return</span> res, <span class="k">nil</span>
+}</code></pre>
+    <div class="callout"><b>为什么 Call 不向上 return error？</b>同 Phase 2 工具规范——传输/解码错误规范化为 <code>IsError=true</code> 的 <code>ToolResult</code> 回流，让模型自己理解工具失败并决定下一步（而不是把内核打挂）。这与内建工具的错误处理完全一致。</div>
+
+    <!-- ========== 05 融合 ========== -->
+    <h2 id="fuse"><span class="num">05</span>工具池融合策略 ★（本阶段的安全核心）</h2>
+    <p>核心问题：<b>内建工具是可信的，外部 MCP 工具不可信</b>。融合时必须同时解决三件事：</p>
+    <table>
+      <tr><th>风险</th><th>cogent 的对策</th></tr>
+      <tr><td>外部工具用同名（如 <code>bash</code>）<b>劫持内建</b></td><td>① 命名前缀 <code>mcp__&lt;server&gt;__&lt;tool&gt;</code> 命名隔离；② <code>NewPool</code> 已实现"先到先得"，把内建排在前面、MCP 排在后面注入即天然<b>内建优先</b>。</td></tr>
+      <tr><td>外部工具<b>无人审计</b>就放行</td><td>所有 MCP 工具一律经 <code>Guard</code> 包裹——<code>Defaults</code> 已强制权限 ask，叠加静态 Policy 后默认走 HITL。</td></tr>
+      <tr><td>外部工具<b>并发不安全</b>导致竞态</td><td><code>Defaults.IsConcurrencySafe</code> 默认 false，Phase 3 的批分调度器会自动把它单独执行，不与其它工具混批。</td></tr>
+    </table>
+    <pre><span class="code-label">cmd/cogent/commands.go</span><code><span class="k">func</span> <span class="f">buildToolPool</span>(workRoot <span class="k">string</span>, prompter permission.Prompter, tracer observe.Tracer, mcpTools []tool.Tool) tool.Pool {
+    policy := permission.StaticPolicy{}
+    guard := <span class="k">func</span>(t tool.Tool) tool.Tool { <span class="k">return</span> tool.<span class="f">NewGuard</span>(t, policy, prompter, tracer) }
+    sb := sandbox.<span class="f">New</span>(sandbox.Config{WorkRoot: workRoot, Enabled: <span class="k">true</span>})
+    tools := []tool.Tool{
+        tool.<span class="f">NewReadFile</span>(workRoot), tool.<span class="f">NewListDir</span>(workRoot), tool.<span class="f">NewGrep</span>(workRoot),
+        <span class="f">guard</span>(tool.<span class="f">NewWriteFile</span>(workRoot)),
+        <span class="f">guard</span>(tool.<span class="f">NewEditFile</span>(workRoot)),
+        <span class="f">guard</span>(tool.<span class="f">NewBash</span>(sb, tracer)),
+    }
+    <span class="k">for</span> _, mt := <span class="k">range</span> mcpTools {
+        tools = <span class="f">append</span>(tools, <span class="f">guard</span>(mt)) <span class="c">// ★ 外部不可信：统一过 permission/HITL</span>
+    }
+    <span class="k">return</span> tool.<span class="f">NewPool</span>(tools...) <span class="c">// ★ 先到先得 ⇒ 内建优先</span>
+}</code></pre>
+
+    <div class="callout ok"><b>面试杠杆点：</b>"你怎么防止恶意 MCP server？"——三层闭环：命名前缀使其无法冒用内建名；池装配先到先得使同名时内建必胜；Guard + Defaults 让所有 MCP 工具默认走 HITL 询问。三者任一失守都不致命，构成<b>纵深防御</b>。</div>
+
+    <!-- ========== 06 CLI ========== -->
+    <h2 id="cli"><span class="num">06</span>CLI 与配置文件</h2>
+    <p>沿用社区惯例：<code>.cogent/mcp.json</code> 用 <code>mcpServers</code> 顶层键。文件不存在时 <code>LoadConfig</code> 返回 <code>(nil, nil)</code>——MCP 是可插拔增强，缺省不影响 cogent 独立运行。</p>
+    <pre><span class="code-label">.cogent/mcp.json (示例)</span><code>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"filesystem"</span>: {
+      <span class="s">"command"</span>: <span class="s">"npx"</span>,
+      <span class="s">"args"</span>: [<span class="s">"-y"</span>, <span class="s">"@modelcontextprotocol/server-filesystem"</span>, <span class="s">"/tmp/cogent-sandbox"</span>]
+    },
+    <span class="s">"fetch"</span>: {
+      <span class="s">"command"</span>: <span class="s">"uvx"</span>,
+      <span class="s">"args"</span>: [<span class="s">"mcp-server-fetch"</span>]
+    }
+  }
+}</code></pre>
+    <pre><span class="code-label">cogent mcp 自检</span><code>$ cogent mcp
+connected; 11 MCP tool(s) available:
+  - mcp__filesystem__read_file: Read the complete contents of a file...
+  - mcp__filesystem__write_file: ...
+  - mcp__fetch__fetch: Fetches a URL and returns its contents.
+  ...</code></pre>
+    <p>启动 REPL 时同样走 <code>buildMCPManager</code>，<b><code>defer mgr.Close()</code></b> 确保 cogent 退出时所有 server 子进程被收回（关闭 stdin → 等待 → 超时强杀，从不悬挂）。</p>
+
+    <!-- ========== 07 oracle ========== -->
+    <h2 id="conform"><span class="num">07</span>一致性套件 + Oracle 对照基准</h2>
+    <p>测试架构是这个阶段最值得讲的工程亮点。我们把"MCP 协议契约"沉淀成可复用的<b>测试套件</b>，让两个独立的客户端实现（手写 + 官方 SDK）跑同一套断言：</p>
+    <pre><span class="code-label">internal/mcp/mcpconform/conform.go (节选)</span><code><span class="k">type</span> Client <span class="k">interface</span> {
+    <span class="f">ToolNames</span>() []<span class="k">string</span>
+    <span class="f">Call</span>(ctx context.Context, tool <span class="k">string</span>, args <span class="k">map</span>[<span class="k">string</span>]<span class="k">any</span>) (text <span class="k">string</span>, isErr <span class="k">bool</span>, err <span class="k">error</span>)
+    <span class="f">Close</span>() <span class="k">error</span>
+}
+
+<span class="k">type</span> Connector <span class="k">func</span>(ctx context.Context, spec ConnSpec) (Client, <span class="k">error</span>)
+
+<span class="k">func</span> <span class="f">RunSuite</span>(t *testing.T, connect Connector) {
+    cl, _ := <span class="f">connect</span>(ctx, <span class="f">FakeServerSpec</span>(<span class="s">"test"</span>))
+    t.<span class="f">Run</span>(<span class="s">"ListsTools"</span>, ...) <span class="c">// echo + boom</span>
+    t.<span class="f">Run</span>(<span class="s">"CallEcho"</span>, ...)   <span class="c">// 验证内容回显</span>
+    t.<span class="f">Run</span>(<span class="s">"CallBoomIsError"</span>, ...) <span class="c">// 验证 isError 通路</span>
+}
+
+<span class="c">// 自执行 fake server：测试二进制按 env 切换身份</span>
+<span class="k">func</span> <span class="f">MaybeRunFakeServer</span>() <span class="k">bool</span> {
+    <span class="k">if</span> os.<span class="f">Getenv</span>(EnvFakeServer) != <span class="s">"1"</span> { <span class="k">return</span> <span class="k">false</span> }
+    _ = <span class="f">RunFakeServer</span>(os.Stdin, os.Stdout)
+    <span class="k">return</span> <span class="k">true</span>
+}</code></pre>
+
+    <h3>oracle 子模块：物理隔离 SDK 依赖</h3>
+    <pre><span class="code-label">internal/mcp/oracle/go.mod</span><code><span class="k">module</span> github.com/alaindong/cogent/internal/mcp/oracle
+
+<span class="k">go</span> <span class="n">1.26</span>
+
+<span class="k">require</span> (
+    github.com/alaindong/cogent v0.0.0
+    github.com/modelcontextprotocol/go-sdk v1.6.1
+)
+
+<span class="k">replace</span> github.com/alaindong/cogent =&gt; ../../..</code></pre>
+    <pre><span class="code-label">internal/mcp/oracle/oracle_test.go (节选)</span><code><span class="k">func</span> <span class="f">TestSDKClient_Conformance</span>(t *testing.T) {
+    connect := <span class="k">func</span>(ctx context.Context, spec mcpconform.ConnSpec) (mcpconform.Client, <span class="k">error</span>) {
+        client := mcpsdk.<span class="f">NewClient</span>(&amp;mcpsdk.Implementation{Name: <span class="s">"cogent-oracle"</span>, Version: <span class="s">"0.1.0"</span>}, <span class="k">nil</span>)
+        cmd := exec.<span class="f">Command</span>(spec.Command, spec.Args...)
+        cmd.Env = <span class="f">append</span>(os.<span class="f">Environ</span>(), <span class="f">envSlice</span>(spec.Env)...)
+        session, _ := client.<span class="f">Connect</span>(ctx, &amp;mcpsdk.CommandTransport{Command: cmd}, <span class="k">nil</span>)
+        ... <span class="c">// 适配为 mcpconform.Client</span>
+    }
+    mcpconform.<span class="f">RunSuite</span>(t, connect) <span class="c">// ★ 同一份套件、不同实现</span>
+}</code></pre>
+    <div class="callout ok"><b>结果：</b>主模块 <code>go test ./...</code> 不下钻此子模块——主 go.mod / go.sum 一字未改；想验证对照基准时 <code>cd internal/mcp/oracle &amp;&amp; go test</code> 即可。<b>SDK 当裁判，不当兜底。</b></div>
+
+    <!-- ========== 08 测试 ========== -->
+    <h2 id="test"><span class="num">08</span>测试策略全景</h2>
+    <table>
+      <tr><th>测试文件</th><th>验证内容</th><th>关键技巧</th></tr>
+      <tr><td><code>mcp_test.go::TestBuiltinClient_Conformance</code></td><td>手写客户端 ↔ 手写 fake server 跑通整套协议</td><td><b>测试二进制自执行</b>充当 server（无需外部进程）</td></tr>
+      <tr><td><code>mcp_test.go::TestServerConfig_Validate</code></td><td>表驱动：合法名/非法名/空命令/路径穿越</td><td><code>serverNameRe</code> 字符白名单</td></tr>
+      <tr><td><code>mcp_test.go::TestLoadConfig</code></td><td>缺文件→nil、有效→排序、非法名→拒绝</td><td>tempdir + 真实 JSON</td></tr>
+      <tr><td><code>mcp_test.go::TestNewClient_UnknownTransport</code></td><td><code>sdk</code> transport 在主构建中明确报错</td><td>守"零依赖"边界</td></tr>
+      <tr><td><code>oracle/oracle_test.go::TestSDKClient_Conformance</code></td><td>官方 SDK ↔ 同一 fake server 跑通整套协议</td><td>独立 go.mod，反向印证手写实现</td></tr>
+      <tr><td>全包 TestMain</td><td><code>goleak.VerifyTestMain</code> + 检测 <code>COGENT_MCP_FAKE_SERVER</code> env 切换为 server 身份</td><td>子进程 + readLoop 不泄漏</td></tr>
+    </table>
+
+    <pre><span class="code-label">TestMain：身份切换 + goleak</span><code><span class="k">func</span> <span class="f">TestMain</span>(m *testing.M) {
+    <span class="k">if</span> mcpconform.<span class="f">MaybeRunFakeServer</span>() { <span class="k">return</span> } <span class="c">// 子进程模式</span>
+    goleak.<span class="f">VerifyTestMain</span>(m)
+}</code></pre>
+
+    <!-- ========== 09 回顾 ========== -->
+    <h2 id="takeaway"><span class="num">09</span>设计要点回顾（六宫格）</h2>
+    <div class="grid cols3">
+      <div class="card"><h3>① 接口隔离</h3><p style="color:var(--text-dim)"><code>MCPClient</code> 是唯一缝隙；engine 只看见 <code>tool.Tool</code>，对 MCP 一无所知。换协议、换实现都不破坏内核。</p></div>
+      <div class="card"><h3>② fail-closed 默认</h3><p style="color:var(--text-dim)"><code>tool.Defaults</code> 匿名嵌入让外部工具<b>默认</b>非并发安全 + ask；忘记覆写 = 退化为最安全行为，把约定写进语言层。</p></div>
+      <div class="card"><h3>③ 命名前缀 = 命名空间</h3><p style="color:var(--text-dim)"><code>mcp__&lt;server&gt;__&lt;tool&gt;</code> 物理上隔绝同名劫持；server 名走字符白名单防注入。</p></div>
+      <div class="card"><h3>④ 池装配先到先得</h3><p style="color:var(--text-dim)">复用 Phase 1 的 <code>NewPool</code> 同名去重；只需把 MCP 排在内建之后传入即天然内建优先——零新增机制。</p></div>
+      <div class="card"><h3>⑤ Guard 装饰器复用</h3><p style="color:var(--text-dim)">外部工具走与写/执行类内建工具完全相同的权限闸门；不发明新机制 = 不引入新攻击面。</p></div>
+      <div class="card"><h3>⑥ SDK 当裁判不当兜底</h3><p style="color:var(--text-dim)">独立 go.mod 子模块跑同一套协议契约测试；生产二进制零额外依赖；运行期 fallback 这条路被明确否决（理由：故障相关 + 掩盖 bug + 有状态切换不可能）。</p></div>
+    </div>
+
+    <h3>STAR 话术（面试可直接用）</h3>
+    <div class="callout">
+      <p><b>S（Situation）：</b>Agent 工具池如果只能编进进程，能力扩展靠改源码重发版，与 MCP 生态绝缘。</p>
+      <p><b>T（Task）：</b>接入 MCP 客户端，让 cogent 能动态接入任意 stdio MCP server 的工具，但不能为此牺牲<b>零依赖、安全默认、内核稳定</b>三条底线。</p>
+      <p><b>A（Action）：</b>① 自实现最小 stdio JSON-RPC 客户端约 400 行，主 go.mod 零新增依赖；② 远端工具匿名嵌入 <code>tool.Defaults</code> + 命名前缀 <code>mcp__server__tool</code>，经 <code>Guard</code> 统一过权限闸门后置于内建之后入池，借 <code>NewPool</code> 先到先得实现内建优先；③ 把协议契约沉淀成 <code>mcpconform</code> 共享套件，新建独立 go.mod 子模块用官方 SDK 跑同一套断言作离线对照基准（oracle）——明确否决"运行期 SDK fallback"方案，因为它会掩盖手写实现的 bug 且有状态切换不可能无缝。</p>
+      <p><b>R（Result）：</b>主模块 <code>gofmt / go build / go vet / go test -race ./...</code> 全绿，go.mod 一字未改；oracle 子模块独立跑通官方 SDK 对照测试；CLI <code>cogent mcp</code> 自检 + <code>run/resume</code> 自动装配 MCP 工具；纵深防御（命名隔离 + 池先到先得 + Guard）三层闭环防御恶意 server。</p>
+    </div>
+
+    <footer>
+      cogent 教学文档 · Phase 6 · MCP Client &amp; Tool Fusion ·
+      实现于 2026-06-18 · 无外部依赖，可直接浏览器打开
+    </footer>
+  </main>
+</div>
+</body>
+</html>

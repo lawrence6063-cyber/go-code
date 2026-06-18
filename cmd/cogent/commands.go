@@ -14,6 +14,7 @@ import (
 	"github.com/alaindong/cogent/internal/contextmgr"
 	"github.com/alaindong/cogent/internal/engine"
 	"github.com/alaindong/cogent/internal/llm"
+	"github.com/alaindong/cogent/internal/mcp"
 	"github.com/alaindong/cogent/internal/memory"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
@@ -98,15 +99,45 @@ func newResumeCmd() *cobra.Command {
 	return cmd
 }
 
-// newMCPCmd 构造 mcp 子命令（Phase 6 实现，当前占位）。
+// newMCPCmd 构造 mcp 子命令：连接并自检已配置的 MCP server，列出可用的外部工具。
 func newMCPCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
-		Short: "管理 MCP 外部工具连接（尚未实现）",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("mcp not implemented yet (planned for Phase 6)")
+		Short: "连接并自检 .cogent/mcp.json 中配置的 MCP server，列出可用的外部工具",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runMCPCheck(cmd.Context())
 		},
 	}
+}
+
+// runMCPCheck 加载 MCP 配置、连接 server 并打印发现的外部工具，随后释放连接。
+func runMCPCheck(ctx context.Context) error {
+	wd, _ := os.Getwd()
+	cfgs, err := mcp.LoadConfig(wd)
+	if err != nil {
+		return fmt.Errorf("load mcp config: %w", err)
+	}
+	if len(cfgs) == 0 {
+		fmt.Printf("no MCP servers configured (expected at %s)\n", filepath.Join(wd, ".cogent", "mcp.json"))
+		return nil
+	}
+	prov, err := observe.New(observe.Config{Enabled: false})
+	if err != nil {
+		return fmt.Errorf("init observe: %w", err)
+	}
+	defer func() { _ = prov.Shutdown(context.Background()) }()
+
+	mgr := mcp.NewManager(mcp.Transport(os.Getenv("COGENT_MCP_TRANSPORT")), prov.Tracer())
+	mgr.Connect(ctx, cfgs)
+	defer func() { _ = mgr.Close() }()
+
+	tools := mgr.Tools()
+	fmt.Printf("connected; %d MCP tool(s) available:\n", len(tools))
+	for _, t := range tools {
+		fmt.Printf("  - %s: %s\n", t.Name(), t.Description())
+	}
+	return nil
 }
 
 // replOptions 聚合 REPL 的启动选项：首轮输入、运行档位与可选的 resume 会话 ID。
@@ -130,7 +161,14 @@ func runREPL(ctx context.Context, opts replOptions) error {
 	if sid == "" {
 		sid = session.NewSessionID()
 	}
-	eng, err := buildEngine(prov, prompter, opts.mode, sid)
+	wd, _ := os.Getwd()
+	mgr, err := buildMCPManager(ctx, wd, prov.Tracer())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = mgr.Close() }()
+
+	eng, err := buildEngine(prov, prompter, opts.mode, sid, wd, mgr.Tools())
 	if err != nil {
 		return err
 	}
@@ -168,8 +206,26 @@ func driveREPL(ctx context.Context, eng engine.Engine, in *inputReader, opts rep
 	return replLoop(ctx, eng, in, opts.first)
 }
 
-// buildEngine 按环境变量装配 LLM 客户端、工具池、会话存储与执行内核。
-func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engine.Mode, sessionID string) (engine.Engine, error) {
+// buildMCPManager 加载 .cogent/mcp.json 并连接配置的 MCP server（缺省配置时为空管理器，不影响运行）。
+func buildMCPManager(ctx context.Context, workRoot string, tracer observe.Tracer) (*mcp.Manager, error) {
+	cfgs, err := mcp.LoadConfig(workRoot)
+	if err != nil {
+		return nil, fmt.Errorf("load mcp config: %w", err)
+	}
+	mgr := mcp.NewManager(mcp.Transport(os.Getenv("COGENT_MCP_TRANSPORT")), tracer)
+	mgr.Connect(ctx, cfgs)
+	return mgr, nil
+}
+
+// buildEngine 按环境变量装配 LLM 客户端、工具池（内建 + MCP）、会话存储与执行内核。
+func buildEngine(
+	prov observe.Provider,
+	prompter permission.Prompter,
+	mode engine.Mode,
+	sessionID string,
+	workRoot string,
+	mcpTools []tool.Tool,
+) (engine.Engine, error) {
 	baseURL := os.Getenv("COGENT_LLM_BASE_URL")
 	if baseURL == "" {
 		baseURL = defaultLLMBaseURL
@@ -178,19 +234,18 @@ func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engin
 	if err != nil {
 		return nil, fmt.Errorf("init llm: %w", err)
 	}
-	wd, _ := os.Getwd()
 	eng, err := engine.New(engine.Deps{
 		LLM:          llmc,
-		Tools:        buildToolPool(wd, prompter, prov.Tracer()),
+		Tools:        buildToolPool(workRoot, prompter, prov.Tracer(), mcpTools),
 		Context:      contextmgr.New(),
 		Memory:       memory.New(),
 		MemoryWriter: memory.NewWriter(),
-		Session:      session.NewStore(filepath.Join(wd, dataDirName)),
+		Session:      session.NewStore(filepath.Join(workRoot, dataDirName)),
 		SessionID:    sessionID,
 		Observe:      prov,
 		Mode:         mode,
 		Model:        os.Getenv("COGENT_MODEL"),
-		WorkRoot:     wd,
+		WorkRoot:     workRoot,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("init engine: %w", err)
@@ -198,20 +253,30 @@ func buildEngine(prov observe.Provider, prompter permission.Prompter, mode engin
 	return eng, nil
 }
 
-// buildToolPool 装配内建工具池：只读类直接入池；写/执行类经 Guard 注入权限闸门与 HITL。
-// bash 经统一的 sandbox.Sandbox 执行（危险拦截 + 受限环境 + 工作目录约束 + 超时 + 执行后清理）。
-func buildToolPool(workRoot string, prompter permission.Prompter, tracer observe.Tracer) tool.Pool {
+// buildToolPool 装配工具池：只读内建工具直接入池；写/执行类与全部 MCP 外部工具经 Guard 包裹
+// 注入权限闸门与 HITL。MCP 工具排在内建之后传入，借 NewPool 的先到先得实现“内建优先”去重，
+// 防止外部同名工具劫持内建工具。
+func buildToolPool(
+	workRoot string,
+	prompter permission.Prompter,
+	tracer observe.Tracer,
+	mcpTools []tool.Tool,
+) tool.Pool {
 	policy := permission.StaticPolicy{}
 	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
 	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: true})
-	return tool.NewPool(
+	tools := []tool.Tool{
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
 		guard(tool.NewBash(sb, tracer)),
-	)
+	}
+	for _, mt := range mcpTools {
+		tools = append(tools, guard(mt)) // 外部不可信：统一过 permission/HITL
+	}
+	return tool.NewPool(tools...)
 }
 
 // replLoop 驱动对话循环：先处理 first（若有），再进入共享的多轮输入循环。

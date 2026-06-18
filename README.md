@@ -78,6 +78,44 @@ go run ./cmd/cogent resume 20260617-171500-xxxx
 - 写入路径极简（顺序 append、崩溃安全）；恢复路径承担去重与配对修复（剥离悬空 `tool_use`、丢弃孤立 `tool_result`）。
 - 落盘前对疑似密钥（`sk-`、`api_key`/`token`/`secret`/`password` 字段）脱敏；session-id 经字符白名单校验防路径穿越；文件 `0o600`、目录 `0o700`。
 
+## 接入 MCP 外部工具（Phase 6）
+
+cogent 内建一个**最小手写的 MCP（Model Context Protocol）stdio 客户端**，通过 `os/exec`
+拉起任意 MCP server 子进程并以换行分隔 JSON-RPC 2.0 通信，把远端工具以 `mcp__<server>__<tool>`
+命名、**fail-closed** 融入工具池（内建优先去重、外部统一过 Guard/HITL）。
+主模块**零新增第三方依赖**；官方 `modelcontextprotocol/go-sdk` 仅作离线协议对照基准，
+隔离在带独立 `go.mod` 的 `internal/mcp/oracle` 子模块，不进主二进制。
+
+在工作根目录创建 `.cogent/mcp.json`（缺省时 cogent 仍可独立运行，MCP 为可插拔增强）：
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/cogent-sandbox"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}
+```
+
+```bash
+# 自检：连接并列出所有可用的外部工具
+go run ./cmd/cogent mcp
+
+# 正常 run/resume 时会自动装配 MCP 工具并在退出时回收子进程
+go run ./cmd/cogent run "用 fetch 工具抓取 https://example.com 并总结"
+```
+
+- 命名隔离：MCP 工具一律带 `mcp__<server>__<tool>` 前缀，物理上不会冒用内建工具名（如 `bash`）。
+- 内建优先：工具池装配先到先得，内建排前、MCP 排后，同名冲突时内建必胜。
+- 安全默认：MCP 工具默认非并发安全、权限 `ask`，统一经 `Guard` 装饰器走 HITL 询问。
+- 子进程回收：`defer mgr.Close()` 关闭 stdin → 等待 → 超时强杀，绝不悬挂。
+
 ## 开发
 
 ```bash
