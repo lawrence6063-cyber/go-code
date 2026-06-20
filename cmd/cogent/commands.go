@@ -83,7 +83,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newRunCmd(), newResumeCmd(), newMCPCmd())
+	root.AddCommand(newRunCmd(), newResumeCmd(), newGoalCmd(), newMCPCmd())
 	return root
 }
 
