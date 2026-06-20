@@ -83,8 +83,8 @@ go run ./cmd/cogent resume 20260617-171500-xxxx
 cogent 内建一个**最小手写的 MCP（Model Context Protocol）stdio 客户端**，通过 `os/exec`
 拉起任意 MCP server 子进程并以换行分隔 JSON-RPC 2.0 通信，把远端工具以 `mcp__<server>__<tool>`
 命名、**fail-closed** 融入工具池（内建优先去重、外部统一过 Guard/HITL）。
-主模块**零新增第三方依赖**；官方 `modelcontextprotocol/go-sdk` 仅作离线协议对照基准，
-隔离在带独立 `go.mod` 的 `internal/mcp/oracle` 子模块，不进主二进制。
+主模块**零新增第三方依赖**，不引入官方 `modelcontextprotocol/go-sdk`：MCP 协议为亲手实现，
+并通过内联的协议一致性套件 + 协议兼容 fake server 验证其正确性。
 
 在工作根目录创建 `.cogent/mcp.json`（缺省时 cogent 仍可独立运行，MCP 为可插拔增强）：
 

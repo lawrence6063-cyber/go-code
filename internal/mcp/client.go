@@ -27,7 +27,7 @@ const closeTimeout = 2 * time.Second
 // serverNameRe 限定逻辑 server 名的字符集，既用于工具名前缀隔离，也防御注入。
 var serverNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// Transport 选择 MCP 客户端实现：生产仅 builtin；sdk 仅作离线对照基准（见 oracle 子模块）。
+// Transport 选择 MCP 客户端实现：本构建仅支持 builtin（自实现最小 stdio 客户端）。
 type Transport string
 
 // 传输实现枚举。
@@ -64,17 +64,14 @@ type MCPClient interface {
 	Close() error
 }
 
-// NewClient 按 transport 构造 MCP 客户端：builtin 为自实现实现；其余在本构建中不可用
-// （官方 SDK 适配器隔离在 internal/mcp/oracle 子模块，仅作离线一致性对照基准）。
+// NewClient 按 transport 构造 MCP 客户端：仅支持 builtin（自实现最小 stdio 客户端）；
+// 其余 transport 在本构建中不可用，返回明确错误而非静默回落。
 func NewClient(transport Transport, tracer observe.Tracer) (MCPClient, error) {
 	switch transport {
 	case "", TransportBuiltin:
 		return newBuiltinClient(tracer), nil
 	default:
-		return nil, fmt.Errorf(
-			"mcp transport %q not available in this build (builtin only; "+
-				"the official SDK adapter lives in internal/mcp/oracle as an offline conformance oracle)",
-			transport)
+		return nil, fmt.Errorf("mcp transport %q not available (builtin only)", transport)
 	}
 }
 

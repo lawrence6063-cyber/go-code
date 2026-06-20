@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>什么是 Loop（循环工程）· 图解</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg2: #11161f;
+    --card: #161c28;
+    --line: #232c3b;
+    --txt: #e6edf3;
+    --muted: #93a1b3;
+    --accent: #5eead4;
+    --accent2: #818cf8;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --code: #0d1117;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #1a2230 0%, var(--bg) 55%);
+    color: var(--txt);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  header.hero {
+    padding: 88px 24px 56px;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    border: 1px solid rgba(94,234,212,.35);
+    border-radius: 999px;
+    padding: 6px 16px;
+    margin-bottom: 22px;
+    background: rgba(94,234,212,.06);
+  }
+  h1 {
+    font-size: 44px;
+    line-height: 1.2;
+    margin: 0 0 16px;
+    background: linear-gradient(120deg, #fff, #9aa7ff 60%, #5eead4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { font-size: 19px; color: var(--muted); max-width: 680px; margin: 0 auto; }
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  h2 {
+    font-size: 28px;
+    margin: 0 0 6px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2 .n {
+    font-size: 15px; font-weight: 700; color: var(--bg);
+    background: var(--accent); width: 30px; height: 30px;
+    border-radius: 9px; display: grid; place-items: center; flex: none;
+  }
+  h3 { font-size: 19px; margin: 28px 0 8px; color: #cdd6e3; }
+  p { color: #c4cdd9; }
+  .lead { font-size: 17px; }
+  .muted { color: var(--muted); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin: 18px 0;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  @media (max-width: 720px) {
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+  }
+  .fig { text-align: center; margin: 26px 0; }
+  .fig svg { max-width: 100%; height: auto; }
+  .cap { font-size: 14px; color: var(--muted); margin-top: 10px; }
+  code, pre { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  code.inline {
+    background: #1c2433; color: #93f3df; padding: 2px 7px;
+    border-radius: 6px; font-size: .92em;
+  }
+  pre {
+    background: var(--code); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.6; color: #c9d4e3;
+  }
+  pre .c { color: #6b7689; }
+  pre .k { color: #ff7b9c; }
+  pre .s { color: #7ee787; }
+  pre .f { color: #79c0ff; }
+  .pill {
+    display: inline-block; font-size: 12px; padding: 2px 10px;
+    border-radius: 999px; margin-right: 6px; font-weight: 600;
+  }
+  .pill.bad { background: rgba(248,113,113,.15); color: #fca5a5; }
+  .pill.good { background: rgba(74,222,128,.15); color: #86efac; }
+  .vs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 20px 0;
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  }
+  .vs > div { padding: 20px 22px; }
+  .vs .left { background: rgba(248,113,113,.05); border-right: 1px solid var(--line); }
+  .vs .right { background: rgba(74,222,128,.05); }
+  .vs h4 { margin: 0 0 12px; font-size: 16px; }
+  ul.clean { list-style: none; padding: 0; margin: 8px 0; }
+  ul.clean li { padding: 5px 0 5px 26px; position: relative; color: #c4cdd9; }
+  ul.clean li::before {
+    content: "→"; position: absolute; left: 0; color: var(--accent2);
+  }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--accent); font-weight: 600; }
+  td.prim { color: #fff; font-weight: 600; }
+  .prim-svg { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+  @media (max-width: 720px){ .prim-svg { grid-template-columns: 1fr; } }
+  .prim-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px; display: flex; gap: 16px; align-items: flex-start;
+  }
+  .prim-card .ico { flex: none; }
+  .prim-card h4 { margin: 0 0 4px; font-size: 16px; color: #fff; }
+  .prim-card p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .key {
+    border-left: 3px solid var(--accent); padding: 4px 0 4px 18px;
+    margin: 18px 0; color: #d6dfe9; font-size: 16px;
+  }
+  footer { padding: 50px 24px 70px; text-align: center; color: var(--muted); font-size: 14px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 30px; }
+  .toc a {
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--line); padding: 6px 13px; border-radius: 999px;
+    transition: .2s;
+  }
+  .toc a:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="badge">LOOP ENGINEERING · 循环工程</div>
+  <h1>什么是 Loop？</h1>
+  <p class="sub">不再「你一句一句指挥 AI 干活」，而是<strong style="color:#fff">设计一个循环，让循环替你指挥 AI</strong>，直到目标真正达成。</p>
+  <div class="toc">
+    <a href="#aha">核心顿悟</a>
+    <a href="#formula">Loop 公式</a>
+    <a href="#heights">三个高度</a>
+    <a href="#vs">对比例子</a>
+    <a href="#flow">完整流程图</a>
+    <a href="#primitives">六原语</a>
+    <a href="#goal">/goal 演示</a>
+    <a href="#guard">护栏</a>
+    <a href="#howto">怎么开 loop</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ========== 1 核心顿悟 ========== -->
+<section id="aha">
+  <h2><span class="n">1</span>核心顿悟：人，从循环里走出来</h2>
+  <p class="lead">过去我们用 AI，是<strong>人坐在循环里</strong>：你提问 → AI 回答 → 你看不满意 → 你再提问……每一圈都要你亲自踩一脚油门。</p>
+  <p class="lead">Loop 的思想是：<strong style="color:var(--accent)">把「人踩油门」这件事本身自动化掉</strong>。你只定义「什么算成功」，然后让一个程序循环去反复驱动 AI，自己判断、自己重试，直到成功。人退到循环<strong>外面</strong>，只在最后看结果。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 820 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="人在循环内 vs 人在循环外">
+      <!-- 左：人在循环内 -->
+      <text x="160" y="30" fill="#fca5a5" font-size="15" font-weight="700" text-anchor="middle">❌ 过去：人在循环内</text>
+      <circle cx="160" cy="160" r="78" fill="none" stroke="#3a2730" stroke-width="2" stroke-dasharray="5 5"/>
+      <!-- person -->
+      <circle cx="160" cy="115" r="16" fill="#f87171"/>
+      <text x="160" y="120" font-size="14" text-anchor="middle">🧑</text>
+      <text x="160" y="150" fill="#fca5a5" font-size="12" text-anchor="middle">你</text>
+      <!-- agent -->
+      <rect x="120" y="180" width="80" height="34" rx="8" fill="#1c2433" stroke="#3a2730"/>
+      <text x="160" y="202" fill="#c4cdd9" font-size="12" text-anchor="middle">AI Agent</text>
+      <!-- arrows cycling -->
+      <path d="M160 135 L160 178" stroke="#f87171" stroke-width="2" marker-end="url(#arR)"/>
+      <path d="M205 197 C 250 190 250 120 205 113" stroke="#f87171" stroke-width="2" fill="none" marker-end="url(#arR)"/>
+      <text x="255" y="160" fill="#fca5a5" font-size="11" text-anchor="middle">每圈都<tspan x="255" dy="14">要你出手</tspan></text>
+
+      <!-- 右：人在循环外 -->
+      <text x="620" y="30" fill="#86efac" font-size="15" font-weight="700" text-anchor="middle">✅ Loop：人在循环外</text>
+      <circle cx="600" cy="160" r="78" fill="none" stroke="#1f3a2a" stroke-width="2"/>
+      <rect x="560" y="100" width="80" height="34" rx="8" fill="#13241a" stroke="#2f5740"/>
+      <text x="600" y="122" fill="#86efac" font-size="12" text-anchor="middle">决策器 Loop</text>
+      <rect x="560" y="186" width="80" height="34" rx="8" fill="#1c2433" stroke="#2f5740"/>
+      <text x="600" y="208" fill="#c4cdd9" font-size="12" text-anchor="middle">AI Agent</text>
+      <path d="M595 134 L595 184" stroke="#4ade80" stroke-width="2" marker-end="url(#arG)"/>
+      <path d="M640 203 C 685 195 685 120 645 110" stroke="#4ade80" stroke-width="2" fill="none" marker-end="url(#arG)"/>
+      <text x="690" y="160" fill="#86efac" font-size="11" text-anchor="middle">自动<tspan x="690" dy="14">循环</tspan></text>
+      <!-- person outside -->
+      <text x="730" y="165" font-size="22" text-anchor="middle">🧑</text>
+      <text x="730" y="190" fill="#86efac" font-size="11" text-anchor="middle">你只看<tspan x="730" dy="13">结果</tspan></text>
+
+      <defs>
+        <marker id="arR" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#f87171"/></marker>
+        <marker id="arG" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#4ade80"/></marker>
+      </defs>
+    </svg>
+    <div class="cap">同样是「转圈」，区别在于<strong>谁在踩油门</strong>：是你，还是一段代码。</div>
+  </div>
+
+  <div class="key">一句话：<strong>Loop = 把「不断 prompt AI 直到满意」这个动作，从你的手，搬到一段会自己判断的程序里。</strong></div>
+</section>
+
+<!-- ========== 2 公式 ========== -->
+<section id="formula">
+  <h2><span class="n">2</span>Loop = 闹钟 + 判官</h2>
+  <p class="lead">一个最小的 Loop，其实只需要两样东西：</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Loop = 触发器 + 判定器">
+      <!-- 触发器 -->
+      <rect x="20" y="60" width="180" height="90" rx="14" fill="#161c28" stroke="#818cf8" stroke-width="1.5"/>
+      <text x="110" y="92" font-size="26" text-anchor="middle">⏰</text>
+      <text x="110" y="120" fill="#a5b4fc" font-size="15" font-weight="700" text-anchor="middle">触发器 / 闹钟</text>
+      <text x="110" y="140" fill="#93a1b3" font-size="11.5" text-anchor="middle">什么时候该干活</text>
+
+      <text x="245" y="115" fill="#5eead4" font-size="34" text-anchor="middle">+</text>
+
+      <!-- 判定器 -->
+      <rect x="290" y="60" width="180" height="90" rx="14" fill="#161c28" stroke="#5eead4" stroke-width="1.5"/>
+      <text x="380" y="92" font-size="26" text-anchor="middle">⚖️</text>
+      <text x="380" y="120" fill="#5eead4" font-size="15" font-weight="700" text-anchor="middle">判定器 / 判官</text>
+      <text x="380" y="140" fill="#93a1b3" font-size="11.5" text-anchor="middle">干完了没有 / 合不合格</text>
+
+      <text x="515" y="115" fill="#5eead4" font-size="30" text-anchor="middle">=</text>
+
+      <!-- loop -->
+      <rect x="560" y="50" width="180" height="110" rx="14" fill="#13241a" stroke="#4ade80" stroke-width="1.5"/>
+      <text x="650" y="84" font-size="26" text-anchor="middle">🔁</text>
+      <text x="650" y="112" fill="#86efac" font-size="15" font-weight="700" text-anchor="middle">自治循环</text>
+      <text x="650" y="132" fill="#93a1b3" font-size="11.5" text-anchor="middle">醒来 → 干活 → 验收</text>
+      <text x="650" y="148" fill="#93a1b3" font-size="11.5" text-anchor="middle">不合格就再来一遍</text>
+    </svg>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin-top:0">⏰ 触发器（何时干）</h3>
+      <ul class="clean">
+        <li>定时：每 10 分钟 / 每天早上 9 点</li>
+        <li>事件：有人提了新 issue</li>
+        <li>监听：CI 变红了 / 文件被改了</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">⚖️ 判定器（干完没）</h3>
+      <ul class="clean">
+        <li>客观脚本：<code class="inline">go test ./...</code> 全绿吗？</li>
+        <li>独立模型：「这篇文档覆盖全要点了吗？」</li>
+        <li>关键：<strong style="color:var(--accent)">不能让干活的 AI 自己给自己打分</strong></li>
+      </ul>
+    </div>
+  </div>
+  <p class="muted">没有判定器，AI 会「自我宣告完成」——嘴上说改好了，代码其实编译都过不了。判定器就是那个不讲情面、只认结果的「判官」。</p>
+</section>
+
+<!-- ========== 3 三个高度 ========== -->
+<section id="heights">
+  <h2><span class="n">3</span>三个高度：你现在站在哪一层？</h2>
+  <p class="lead">用 AI 写代码，能力有三层台阶。Loop 的目标是把你从「高度 2」推到「高度 3」。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="三个高度阶梯">
+      <!-- step 1 -->
+      <rect x="40" y="230" width="220" height="70" rx="10" fill="#1c2433" stroke="#3a4459"/>
+      <text x="150" y="258" fill="#93a1b3" font-size="13" font-weight="700" text-anchor="middle">高度 1 · 手动驾驶</text>
+      <text x="150" y="280" fill="#7c899c" font-size="11.5" text-anchor="middle">你一句一句敲指令</text>
+      <text x="150" y="295" fill="#7c899c" font-size="11.5" text-anchor="middle">像在聊天框里搬砖</text>
+
+      <!-- step 2 -->
+      <rect x="270" y="150" width="220" height="150" rx="10" fill="#1d2740" stroke="#818cf8"/>
+      <text x="380" y="178" fill="#a5b4fc" font-size="13" font-weight="700" text-anchor="middle">高度 2 · 单次任务</text>
+      <text x="380" y="200" fill="#93a1b3" font-size="11.5" text-anchor="middle">给一个任务，Agent</text>
+      <text x="380" y="215" fill="#93a1b3" font-size="11.5" text-anchor="middle">自己调工具跑一轮</text>
+      <text x="380" y="237" fill="#93a1b3" font-size="11.5" text-anchor="middle">跑完即停（多数工具在此）</text>
+      <text x="380" y="262" fill="#fbbf24" font-size="11.5" text-anchor="middle">⚠ 撞到上限就停，</text>
+      <text x="380" y="277" fill="#fbbf24" font-size="11.5" text-anchor="middle">不管目标到底成没成</text>
+
+      <!-- step 3 -->
+      <rect x="500" y="50" width="220" height="250" rx="10" fill="#13241a" stroke="#4ade80" stroke-width="1.5"/>
+      <text x="610" y="80" fill="#86efac" font-size="13" font-weight="700" text-anchor="middle">高度 3 · 持续自治</text>
+      <text x="610" y="104" fill="#93a1b3" font-size="11.5" text-anchor="middle">你只给「目标 + 验收标准」</text>
+      <text x="610" y="124" fill="#93a1b3" font-size="11.5" text-anchor="middle">Loop 自己反复干 + 验收</text>
+      <text x="610" y="144" fill="#93a1b3" font-size="11.5" text-anchor="middle">不达标就带着反馈重来</text>
+      <text x="610" y="170" fill="#5eead4" font-size="11.5" font-weight="700" text-anchor="middle">✅ 达目标才停</text>
+      <text x="610" y="188" fill="#93a1b3" font-size="11.5" text-anchor="middle">能定时醒来、无人值守</text>
+      <text x="610" y="262" font-size="26" text-anchor="middle">🚀</text>
+
+      <!-- arrow -->
+      <path d="M55 215 Q 380 30 700 35" stroke="#5eead4" stroke-width="1.5" fill="none" stroke-dasharray="4 4" marker-end="url(#arUp)"/>
+      <text x="370" y="55" fill="#5eead4" font-size="12" text-anchor="middle">能力 / 自动化程度 ↗</text>
+      <defs><marker id="arUp" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#5eead4"/></marker></defs>
+    </svg>
+  </div>
+
+  <table>
+    <tr><th>高度</th><th>谁在驱动</th><th>什么时候停</th><th>例子</th></tr>
+    <tr><td class="prim">1 手动</td><td>你，每一步</td><td>你说停</td><td>在聊天框反复贴报错</td></tr>
+    <tr><td class="prim">2 单次任务</td><td>Agent 自己跑一轮</td><td>撞到步数上限 / 它觉得完了</td><td>「帮我改这个函数」跑完就退</td></tr>
+    <tr><td class="prim" style="color:#86efac">3 持续自治</td><td>Loop 程序反复驱动</td><td><strong>判官说达标了</strong>（或撞预算）</td><td>「修到测试全绿」，自己重试 5 轮</td></tr>
+  </table>
+</section>
+
+<!-- ========== 4 对比例子 ========== -->
+<section id="vs">
+  <h2><span class="n">4</span>同一个任务，两种活法</h2>
+  <p class="lead">任务：<em>「修复这个有 bug 的函数，要求所有单元测试通过。」</em></p>
+
+  <div class="vs">
+    <div class="left">
+      <h4><span class="pill bad">高度 2</span>单次任务 Agent</h4>
+      <ol style="padding-left:18px; color:#c4cdd9; font-size:14px;">
+        <li>你下指令</li>
+        <li>Agent 改了代码</li>
+        <li>Agent 说：「改好了！」✅</li>
+        <li>跑完，退出</li>
+        <li>你一跑测试 —— <strong style="color:#fca5a5">还是红的</strong> 😤</li>
+        <li>你只好再贴报错，回到第 1 步……</li>
+      </ol>
+      <p class="muted" style="font-size:13px">问题：<strong>没人验收</strong>。Agent 的「我觉得好了」≠ 真的好了。</p>
+    </div>
+    <div class="right">
+      <h4><span class="pill good">高度 3</span>Loop 目标循环</h4>
+      <ol style="padding-left:18px; color:#c4cdd9; font-size:14px;">
+        <li>你给目标 + 验收脚本 <code class="inline">go test</code></li>
+        <li>Agent 改代码</li>
+        <li><strong>判官</strong>自动跑测试 → 还红 ❌</li>
+        <li>把失败原因<strong style="color:#86efac">喂回给 Agent</strong>，再来一轮</li>
+        <li>判官再跑 → 绿了 ✅ → <strong>停！</strong></li>
+        <li>你回来，已经是通过的代码 🎉</li>
+      </ol>
+      <p class="muted" style="font-size:13px">关键：<strong>判官认结果不认嘴</strong>，不达标自动重试。</p>
+    </div>
+  </div>
+
+  <h3>用伪代码看清这个「循环」</h3>
+  <pre><span class="c">// 高度 3 的本质：一个 while 循环 + 一个判官</span>
+task := <span class="s">"修复 bug，让所有测试通过"</span>
+
+<span class="k">for</span> iter := <span class="s">0</span>; iter &lt; maxIterations; iter++ {   <span class="c">// ← 预算护栏：最多转 N 圈</span>
+    agent.<span class="f">Run</span>(task)                 <span class="c">// 让 AI 干一轮活</span>
+
+    report := judge.<span class="f">Verify</span>()          <span class="c">// 判官跑 go test，看退出码</span>
+
+    <span class="k">if</span> report.Passed {                  <span class="c">// ✅ 达标了</span>
+        <span class="k">return</span> <span class="s">"成功"</span>                    <span class="c">//    立刻停，这是唯一的成功出口</span>
+    }
+    task = <span class="s">"上一轮没过，原因是："</span> + report.Detail  <span class="c">// ← 把失败反馈拼进下一轮</span>
+}
+<span class="k">return</span> <span class="s">"撞到预算上限，停"</span>          <span class="c">// 兜底：绝不无限烧钱</span></pre>
+  <p class="muted">看，所谓 Loop，去掉花哨概念，核心就是这段 <code class="inline">for</code> 循环：<strong>干活 → 验收 → 不行就带反馈再来</strong>。</p>
+</section>
+
+<!-- ========== 5 完整流程图 ========== -->
+<section id="flow">
+  <h2><span class="n">5</span>一张图看懂完整流程</h2>
+  <p class="lead">把上面的循环画成流程图，就是一个 Loop 引擎跑起来的样子：</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Loop 完整流程图">
+      <defs>
+        <marker id="fa" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="#5eead4"/></marker>
+        <marker id="faY" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="#fbbf24"/></marker>
+      </defs>
+
+      <!-- start -->
+      <rect x="270" y="20" width="180" height="48" rx="24" fill="#1d2740" stroke="#818cf8"/>
+      <text x="360" y="42" fill="#a5b4fc" font-size="13" font-weight="700" text-anchor="middle">🎯 目标 + 验收标准</text>
+      <text x="360" y="58" fill="#93a1b3" font-size="11" text-anchor="middle">「修到 go test 全绿」</text>
+
+      <!-- agent run -->
+      <rect x="270" y="120" width="180" height="56" rx="12" fill="#161c28" stroke="#5eead4"/>
+      <text x="360" y="145" fill="#5eead4" font-size="13" font-weight="700" text-anchor="middle">🤖 Agent 干一轮</text>
+      <text x="360" y="163" fill="#93a1b3" font-size="11" text-anchor="middle">读代码 / 改文件 / 跑命令</text>
+
+      <!-- judge -->
+      <polygon points="360,220 470,275 360,330 250,275" fill="#161c28" stroke="#fbbf24" stroke-width="1.5"/>
+      <text x="360" y="270" fill="#fbbf24" font-size="13" font-weight="700" text-anchor="middle">⚖️ 判官验收</text>
+      <text x="360" y="288" fill="#93a1b3" font-size="11" text-anchor="middle">跑 go test，看退出码</text>
+
+      <!-- success -->
+      <rect x="510" y="248" width="170" height="54" rx="12" fill="#13241a" stroke="#4ade80" stroke-width="1.5"/>
+      <text x="595" y="272" fill="#86efac" font-size="13" font-weight="700" text-anchor="middle">✅ 达标，停！</text>
+      <text x="595" y="290" fill="#93a1b3" font-size="11" text-anchor="middle">交付通过的代码</text>
+
+      <!-- budget check -->
+      <rect x="270" y="380" width="180" height="56" rx="12" fill="#161c28" stroke="#f87171"/>
+      <text x="360" y="404" fill="#fca5a5" font-size="13" font-weight="700" text-anchor="middle">还有预算吗？</text>
+      <text x="360" y="422" fill="#93a1b3" font-size="11" text-anchor="middle">没超轮数 / 钱 / 时间</text>
+
+      <!-- arrows -->
+      <path d="M360 68 L360 118" stroke="#5eead4" stroke-width="2" marker-end="url(#fa)"/>
+      <path d="M360 176 L360 218" stroke="#5eead4" stroke-width="2" marker-end="url(#fa)"/>
+      <path d="M470 275 L508 275" stroke="#4ade80" stroke-width="2" marker-end="url(#fa)"/>
+      <text x="490" y="266" fill="#86efac" font-size="12" font-weight="700" text-anchor="middle">通过</text>
+
+      <!-- not pass -> budget -->
+      <path d="M360 330 L360 378" stroke="#fbbf24" stroke-width="2" marker-end="url(#faY)"/>
+      <text x="392" y="358" fill="#fbbf24" font-size="12" font-weight="700" text-anchor="middle">没过</text>
+
+      <!-- budget yes -> back to agent (left loop) -->
+      <path d="M270 405 C 90 405 90 148 268 148" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#faY)"/>
+      <text x="120" y="280" fill="#fbbf24" font-size="12" font-weight="700" text-anchor="middle">还有 → 带着</text>
+      <text x="120" y="296" fill="#fbbf24" font-size="12" font-weight="700" text-anchor="middle">失败反馈重来</text>
+
+      <!-- budget no -> stop -->
+      <rect x="510" y="382" width="170" height="50" rx="12" fill="#2a1a1f" stroke="#f87171"/>
+      <text x="595" y="406" fill="#fca5a5" font-size="13" font-weight="700" text-anchor="middle">🛑 超预算，停</text>
+      <text x="595" y="423" fill="#93a1b3" font-size="11" text-anchor="middle">记录进度，等人来</text>
+      <path d="M450 408 L508 408" stroke="#f87171" stroke-width="2" marker-end="url(#fa)"/>
+      <text x="478" y="399" fill="#fca5a5" font-size="11" text-anchor="middle">没了</text>
+    </svg>
+    <div class="cap">绿色是唯一的「成功出口」，红色是「兜底刹车」。两者都能让循环停下，<strong>永远不会无限转圈</strong>。</div>
+  </div>
+</section>
+
+<!-- ========== 6 六原语 ========== -->
+<section id="primitives">
+  <h2><span class="n">6</span>搭一个 Loop，需要的六块积木</h2>
+  <p class="lead">把一个能跑的 Loop 系统拆开，由六个「原语」（基础能力）组成。你可以对照下面理解每一块各管什么：</p>
+
+  <div class="prim-svg">
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1d2740" stroke="#818cf8"/><text x="22" y="29" font-size="20" text-anchor="middle">⏰</text></svg>
+      <div><h4>Automations 触发</h4><p>定时/事件让 Loop「自己醒来」干活——这是自治的起点。例：CI 一红就触发修复。</p></div>
+    </div>
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#13241a" stroke="#5eead4"/><text x="22" y="29" font-size="20" text-anchor="middle">⚖️</text></svg>
+      <div><h4>/goal 目标判定 ⭐</h4><p>最关键。给「可验证的成功标准」，由独立判官裁决，达标才停。例：测试全绿。</p></div>
+    </div>
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#161c28" stroke="#fbbf24"/><text x="22" y="29" font-size="20" text-anchor="middle">👷</text></svg>
+      <div><h4>Sub-agents 分工</h4><p>「实现者」写代码，「审查者」挑毛病——不让一个人既写又自己批改。</p></div>
+    </div>
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#161c28" stroke="#a78bfa"/><text x="22" y="29" font-size="20" text-anchor="middle">📋</text></svg>
+      <div><h4>State 进度看板</h4><p>把「已做/待做/卡住」写进磁盘文件，重启后仍记得跑到哪了——「仓库不忘记」。</p></div>
+    </div>
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#161c28" stroke="#34d399"/><text x="22" y="29" font-size="20" text-anchor="middle">🌿</text></svg>
+      <div><h4>Worktrees 隔离</h4><p>多个 Agent 并行时各占一个独立工作区，互不踩脚，干完再合并。</p></div>
+    </div>
+    <div class="prim-card">
+      <svg class="ico" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#161c28" stroke="#f472b6"/><text x="22" y="29" font-size="20" text-anchor="middle">🧩</text></svg>
+      <div><h4>Skills 技能包</h4><p>把「本项目怎么加限流」这类做法固化成文件，下次循环直接复用。</p></div>
+    </div>
+  </div>
+
+  <p class="muted" style="margin-top:18px">外加第六块 <strong>Connectors（连接器 / MCP）</strong>：让 Loop 能触达真实世界——读数据库、发 PR、查 issue。它是 Loop 伸向外部工具的「手」。</p>
+
+  <div class="key">这六块里，<strong style="color:var(--accent)">最不能省的是 /goal（独立判定）</strong>。没有它，循环不知道何时该停，要么提前放弃，要么无限空转。</div>
+</section>
+
+<!-- ========== 7 /goal 动画演示 ========== -->
+<section id="goal">
+  <h2><span class="n">7</span>慢动作：一次目标循环的 5 轮</h2>
+  <p class="lead">目标：把测试通过率从 0 修到 100%。看判官如何一轮轮逼近：</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="五轮迭代逐步达标">
+      <!-- baseline -->
+      <line x1="60" y1="200" x2="680" y2="200" stroke="#232c3b" stroke-width="1"/>
+      <line x1="60" y1="40" x2="60" y2="200" stroke="#232c3b" stroke-width="1"/>
+      <text x="30" y="45" fill="#93a1b3" font-size="11" text-anchor="middle">100%</text>
+      <text x="30" y="204" fill="#93a1b3" font-size="11" text-anchor="middle">0%</text>
+      <line x1="60" y1="42" x2="680" y2="42" stroke="#1f3a2a" stroke-width="1" stroke-dasharray="4 4"/>
+      <text x="650" y="36" fill="#86efac" font-size="11" text-anchor="middle">达标线</text>
+
+      <!-- bars: 30,55,55,80,100 -->
+      <g font-size="11" text-anchor="middle">
+        <!-- round1 -->
+        <rect x="100" y="153" width="48" height="47" rx="4" fill="#f87171" opacity=".7"/>
+        <text x="124" y="220" fill="#93a1b3">第1轮</text>
+        <text x="124" y="148" fill="#fca5a5">30% ❌</text>
+        <!-- round2 -->
+        <rect x="220" y="113" width="48" height="87" rx="4" fill="#fbbf24" opacity=".7"/>
+        <text x="244" y="220" fill="#93a1b3">第2轮</text>
+        <text x="244" y="108" fill="#fbbf24">55% ❌</text>
+        <!-- round3 -->
+        <rect x="340" y="113" width="48" height="87" rx="4" fill="#fbbf24" opacity=".5"/>
+        <text x="364" y="220" fill="#93a1b3">第3轮</text>
+        <text x="364" y="108" fill="#fbbf24">55% ❌</text>
+        <!-- round4 -->
+        <rect x="460" y="73" width="48" height="127" rx="4" fill="#a3e635" opacity=".7"/>
+        <text x="484" y="220" fill="#93a1b3">第4轮</text>
+        <text x="484" y="68" fill="#bef264">80% ❌</text>
+        <!-- round5 -->
+        <rect x="580" y="42" width="48" height="158" rx="4" fill="#4ade80"/>
+        <text x="604" y="220" fill="#93a1b3">第5轮</text>
+        <text x="604" y="36" fill="#86efac" font-weight="700">100% ✅停</text>
+      </g>
+    </svg>
+    <div class="cap">第 3 轮没进步？判官如实反馈「这块还没动」，Agent 换思路，第 4、5 轮追上来。<strong>判官的诚实反馈，是循环能进步的燃料。</strong></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">每一轮，判官到底说了什么</h3>
+    <table>
+      <tr><th>轮</th><th>判官反馈（喂回给 Agent）</th><th>结果</th></tr>
+      <tr><td class="prim">1</td><td>3/10 通过，<code class="inline">TestParse</code> 空指针崩溃</td><td>❌ 继续</td></tr>
+      <tr><td class="prim">2</td><td>修了崩溃，还有 4 个断言不符</td><td>❌ 继续</td></tr>
+      <tr><td class="prim">3</td><td>没新进展，改错了文件</td><td>❌ 继续</td></tr>
+      <tr><td class="prim">4</td><td>8/10，边界值 0 和负数没处理</td><td>❌ 继续</td></tr>
+      <tr><td class="prim" style="color:#86efac">5</td><td>10/10 全绿</td><td>✅ <strong>达标，停</strong></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 8 护栏 ========== -->
+<section id="guard">
+  <h2><span class="n">8</span>最重要的安全带：预算护栏</h2>
+  <p class="lead">让 AI 自己转圈很爽，但最大的风险是<strong style="color:var(--danger)">失控烧钱</strong>——目标永远达不到，循环停不下来，一晚上烧掉几百刀。所以任何 Loop 都<strong>必须</strong>带三重刹车：</p>
+
+  <div class="grid3">
+    <div class="card" style="text-align:center">
+      <div style="font-size:30px">🔢</div>
+      <h3>最多 N 轮</h3>
+      <p class="muted" style="font-size:13px">比如最多重试 8 次，到了就停</p>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:30px">💸</div>
+      <h3>最多 $X</h3>
+      <p class="muted" style="font-size:13px">累计花费到 5 美元就刹车</p>
+    </div>
+    <div class="card" style="text-align:center">
+      <div style="font-size:30px">⏱️</div>
+      <h3>最多 T 分钟</h3>
+      <p class="muted" style="font-size:13px">跑满 15 分钟强制收手</p>
+    </div>
+  </div>
+
+  <div class="fig">
+    <svg viewBox="0 0 700 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="护栏：达标停或撞预算停">
+      <rect x="20" y="50" width="120" height="40" rx="20" fill="#161c28" stroke="#5eead4"/>
+      <text x="80" y="75" fill="#5eead4" font-size="13" text-anchor="middle">🔁 循环中</text>
+      <path d="M140 70 L210 70" stroke="#93a1b3" stroke-width="2" marker-end="url(#g1)"/>
+      <!-- two exits -->
+      <rect x="220" y="20" width="200" height="38" rx="19" fill="#13241a" stroke="#4ade80"/>
+      <text x="320" y="44" fill="#86efac" font-size="13" text-anchor="middle">✅ 判官说达标 → 成功停</text>
+      <rect x="220" y="82" width="200" height="38" rx="19" fill="#2a1a1f" stroke="#f87171"/>
+      <text x="320" y="106" fill="#fca5a5" font-size="13" text-anchor="middle">🛑 撞任一护栏 → 安全停</text>
+      <path d="M210 65 L218 45" stroke="#4ade80" stroke-width="2" marker-end="url(#g2)"/>
+      <path d="M210 78 L218 98" stroke="#f87171" stroke-width="2" marker-end="url(#g3)"/>
+      <text x="470" y="44" fill="#86efac" font-size="12">交付结果 🎉</text>
+      <text x="470" y="106" fill="#fca5a5" font-size="12">记下进度，等人来 🙋</text>
+      <defs>
+        <marker id="g1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#93a1b3"/></marker>
+        <marker id="g2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#4ade80"/></marker>
+        <marker id="g3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#f87171"/></marker>
+      </defs>
+    </svg>
+    <div class="cap">两个出口，缺一不可：一个奖励成功，一个防止失控。这就是「无人值守」敢放手的底气。</div>
+  </div>
+</section>
+
+<!-- ========== 9 开发者怎么开 loop ========== -->
+<section id="howto">
+  <h2><span class="n">9</span>开发者怎么开一个 Loop？和传统 prompt 啥区别</h2>
+  <p class="lead">最直观的区别：<strong>传统 prompt 你交付的是「一句话指令」，开 loop 你交付的是「一份合同」</strong>——目标是什么、怎么算验收、最多花多少预算。</p>
+
+  <!-- 输入物对比 SVG -->
+  <div class="fig">
+    <svg viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="传统 prompt 输入 vs loop 输入对比">
+      <defs>
+        <marker id="h1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#93a1b3"/></marker>
+        <marker id="h2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#4ade80"/></marker>
+      </defs>
+      <!-- 左：传统 prompt -->
+      <text x="200" y="28" fill="#fca5a5" font-size="15" font-weight="700" text-anchor="middle">传统 Prompt：交付一句指令</text>
+      <rect x="40" y="55" width="150" height="56" rx="10" fill="#2a1a1f" stroke="#f87171"/>
+      <text x="115" y="80" fill="#fca5a5" font-size="12" text-anchor="middle">你输入</text>
+      <text x="115" y="98" fill="#c4cdd9" font-size="11.5" text-anchor="middle">"帮我改这个函数"</text>
+      <rect x="250" y="55" width="120" height="56" rx="10" fill="#1c2433" stroke="#3a4459"/>
+      <text x="310" y="87" fill="#c4cdd9" font-size="12" text-anchor="middle">🤖 回一次</text>
+      <path d="M190 83 L248 83" stroke="#93a1b3" stroke-width="2" marker-end="url(#h1)"/>
+      <text x="310" y="135" fill="#7c899c" font-size="11" text-anchor="middle">完事，结束</text>
+      <text x="115" y="160" fill="#7c899c" font-size="11" text-anchor="middle">好不好？你人肉判断</text>
+      <text x="115" y="178" fill="#7c899c" font-size="11" text-anchor="middle">不好？你再贴一句…</text>
+
+      <!-- 分隔线 -->
+      <line x1="410" y1="45" x2="410" y2="270" stroke="#232c3b" stroke-width="1"/>
+
+      <!-- 右：loop -->
+      <text x="615" y="28" fill="#86efac" font-size="15" font-weight="700" text-anchor="middle">开 Loop：交付一份"合同"</text>
+      <rect x="440" y="55" width="190" height="120" rx="10" fill="#13241a" stroke="#4ade80"/>
+      <text x="535" y="78" fill="#86efac" font-size="12" font-weight="700" text-anchor="middle">你输入 3 样东西</text>
+      <text x="535" y="100" fill="#c4cdd9" font-size="11.5" text-anchor="middle">🎯 目标：修复 + 测试全绿</text>
+      <text x="535" y="120" fill="#c4cdd9" font-size="11.5" text-anchor="middle">⚖️ 验收：go test 退出码 0</text>
+      <text x="535" y="140" fill="#c4cdd9" font-size="11.5" text-anchor="middle">🛡️ 预算：≤8 轮 / $5 / 15min</text>
+      <text x="535" y="162" fill="#5eead4" font-size="11" text-anchor="middle">然后你就可以走开了</text>
+
+      <rect x="680" y="80" width="110" height="70" rx="10" fill="#161c28" stroke="#5eead4"/>
+      <text x="735" y="108" fill="#5eead4" font-size="12" text-anchor="middle">🔁 自动</text>
+      <text x="735" y="126" fill="#5eead4" font-size="12" text-anchor="middle">干+验收+重试</text>
+      <path d="M630 115 L678 115" stroke="#4ade80" stroke-width="2" marker-end="url(#h2)"/>
+      <text x="615" y="210" fill="#86efac" font-size="11.5" text-anchor="middle">达标才停 → 你回来直接收成品 🎉</text>
+      <text x="615" y="230" fill="#7c899c" font-size="11" text-anchor="middle">全程不用你盯，判官替你验收</text>
+    </svg>
+    <div class="cap">传统 prompt 是「一次性对话」，loop 是「带验收和预算的托管任务」。</div>
+  </div>
+
+  <h3>三种开 loop 的姿势（由轻到重）</h3>
+
+  <div class="card">
+    <h4 style="margin-top:0">姿势一 · 一次性目标循环（前台，最常用）</h4>
+    <p class="muted" style="margin:4px 0 10px">「我盯着，但别让我一句句催」。给目标 + 验收脚本，它自己反复干到达标。</p>
+    <pre><span class="c"># 给目标、给验收脚本、给预算护栏，回车后就自动转圈</span>
+<span class="f">cogent</span> goal \
+  --intent=<span class="s">"修复 parser 的 bug，让所有单元测试通过"</span> \
+  --verify=<span class="s">./verify.sh</span> \         <span class="c"># ← 判官：退出码 0 = 达标</span>
+  --max-iterations=<span class="s">8</span> \           <span class="c"># ← 护栏：最多重试 8 轮</span>
+  --max-cost=<span class="s">5</span> --max-wallclock=<span class="s">15m</span></pre>
+    <p class="muted" style="font-size:13px;margin:8px 0 0">其中 <code class="inline">verify.sh</code> 可以简单到一行：<code class="inline">go test ./... </code>（测试过就退出 0，loop 据此判定达标）。</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">姿势二 · 用配置文件描述目标</h4>
+    <p class="muted" style="margin:4px 0 10px">目标复杂时，写进文件而非一长串命令行参数。</p>
+    <pre><span class="c"># .cogent/goal.md</span>
+<span class="k">目标</span>：给 user 服务加上限流中间件，QPS 上限 100
+<span class="k">验收</span>：bash ./verify_ratelimit.sh   <span class="c"># 压测脚本，超限返回 429 才算过</span>
+<span class="k">预算</span>：最多 10 轮 / $8 / 30 分钟
+
+<span class="c"># 然后：</span>
+<span class="f">cogent</span> goal --goal-file=.cogent/goal.md</pre>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">姿势三 · 守护进程（后台 / 无人值守）</h4>
+    <p class="muted" style="margin:4px 0 10px">「我走了，你自己醒来找活干」。定时或监听事件触发，这才是完整的「自治 loop」。</p>
+    <pre><span class="c"># 每 10 分钟醒一次，检查有没有失败测试，有就自动修</span>
+<span class="f">cogent</span> loop --interval=<span class="s">10m</span> --goal-file=.cogent/goal.md \
+            --max-iterations=<span class="s">8</span> --max-cost=<span class="s">5</span>
+
+<span class="c"># 或：盯着文件变化，CI 一红就触发</span>
+<span class="f">cogent</span> loop --watch=<span class="s">.</span> --verify=<span class="s">./verify.sh</span>
+
+<span class="c"># Ctrl-C 随时优雅停下，进度已写进 .cogent/progress.md</span></pre>
+  </div>
+
+  <h3>本质区别一览</h3>
+  <table>
+    <tr><th>维度</th><th class="prim" style="color:#fca5a5">传统 Prompt</th><th class="prim" style="color:#86efac">开 Loop</th></tr>
+    <tr><td>你交付什么</td><td>一句指令</td><td>目标 + 验收标准 + 预算</td></tr>
+    <tr><td>谁判断「做完了」</td><td>你，肉眼</td><td>独立判官（脚本/模型）</td></tr>
+    <tr><td>不满意怎么办</td><td>你手动再问一遍</td><td>自动带反馈重试</td></tr>
+    <tr><td>什么时候停</td><td>你说停</td><td>达标停 / 撞预算停</td></tr>
+    <tr><td>你要不要盯着</td><td>全程盯</td><td>可以走开，甚至无人值守</td></tr>
+    <tr><td>能否定时自动跑</td><td>不能</td><td>能（守护进程）</td></tr>
+    <tr><td>失控风险</td><td>低（你控制每一步）</td><td>有 → 必须靠预算护栏兜底</td></tr>
+  </table>
+
+  <h3>从 0 开一个 loop，就 4 步</h3>
+  <div class="grid2">
+    <div class="card">
+      <p style="margin:0"><span class="pill good">1</span><strong>写清目标</strong></p>
+      <p class="muted" style="font-size:13.5px;margin:6px 0 0">一句话说明「要达成什么」。越具体越好，别留模糊空间。</p>
+    </div>
+    <div class="card">
+      <p style="margin:0"><span class="pill good">2</span><strong>定义验收（最关键）</strong></p>
+      <p class="muted" style="font-size:13.5px;margin:6px 0 0">写一个能客观判定成败的脚本/标准——退出码、测试、压测。<strong style="color:var(--accent)">这是 loop 和 prompt 最大的分水岭。</strong></p>
+    </div>
+    <div class="card">
+      <p style="margin:0"><span class="pill good">3</span><strong>设好预算护栏</strong></p>
+      <p class="muted" style="font-size:13.5px;margin:6px 0 0">最多几轮、几块钱、几分钟。没护栏不许启动——防失控烧钱。</p>
+    </div>
+    <div class="card">
+      <p style="margin:0"><span class="pill good">4</span><strong>选触发方式</strong></p>
+      <p class="muted" style="font-size:13.5px;margin:6px 0 0">手动跑一次（<code class="inline">goal</code>），还是定时/监听自动跑（<code class="inline">loop</code>）。</p>
+    </div>
+  </div>
+
+  <div class="key">记住这个心法转变：<strong>传统 prompt 你是「司机」，每一步都要打方向盘；开 loop 你是「导航员」</strong>——你设好目的地和油量上限，车自己开，到了或没油了才叫你。</div>
+</section>
+
+<!-- ========== 收尾 ========== -->
+<section>
+  <h2><span class="n">✦</span>三句话记住 Loop</h2>
+  <div class="card">
+    <p class="lead" style="margin:6px 0">1️⃣ <strong style="color:var(--accent)">人走出循环</strong>：你定义「什么算成功」，不再亲手一步步指挥。</p>
+    <p class="lead" style="margin:6px 0">2️⃣ <strong style="color:var(--accent)">判官认结果</strong>：独立验收，不达标就带反馈重来——AI 不能自己给自己打分。</p>
+    <p class="lead" style="margin:6px 0">3️⃣ <strong style="color:var(--accent)">护栏兜底</strong>：达标停 + 撞预算停，永远不无限烧钱。</p>
+  </div>
+  <p class="muted">理解了这三点，你就明白了为什么 <code class="inline">cogent</code> 要新增一个 <code class="inline">internal/loop</code> 编排层，把现有的「单次任务引擎」包成「目标循环」——这正是 <code class="inline">LOOP_SPEC.md</code> 在设计的事。</p>
+</section>
+
+</div>
+
+<footer>
+  图解 · 什么是 Loop（循环工程）　|　配套设计文档：<code style="color:#93f3df">cogent/LOOP_SPEC.md</code>
+</footer>
+
+</body>
+</html>

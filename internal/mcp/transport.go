@@ -2,8 +2,7 @@
 // server 子进程，以换行分隔的 JSON-RPC 2.0 完成 initialize 握手、tools/list 与 tools/call，并把远端
 // 工具以 mcp__<server>__<tool> 命名、fail-closed 融入工具池（内建优先去重）。
 //
-// 选择自实现而非引入官方 go-sdk：零新增第三方依赖、保持生产二进制精简，契合“手写核心”的定位；
-// 官方 SDK 仅作离线协议一致性对照基准（oracle），隔离在带独立 go.mod 的 internal/mcp/oracle 子模块，
+// 选择自实现而非引入官方 go-sdk：零新增第三方依赖、保持生产二进制精简，契合“手写核心”的定位，
 // 主模块 go.mod/go.sum 保持不变。
 package mcp
 

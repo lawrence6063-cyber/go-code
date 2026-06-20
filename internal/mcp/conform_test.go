@@ -1,10 +1,4 @@
-// Package mcpconform 提供一套可跨实现复用的 MCP 协议一致性套件：一个最小的、协议兼容的
-// fake MCP server，外加一组针对“连接 → 列工具 → 调用 → 错误结果”的断言。
-//
-// 设计意图：同一套断言既验证 cogent 自实现的 builtin 客户端，也可在 internal/mcp/oracle 子模块中
-// 验证官方 go-sdk 客户端——官方实现因此成为离线“对照基准（oracle）”，而非运行期兜底。
-// 本包是普通（非 _test）包，故可被独立 go.mod 的 oracle 子模块跨模块 import。
-package mcpconform
+package mcp
 
 import (
 	"bufio"
@@ -16,63 +10,60 @@ import (
 	"testing"
 )
 
+// 本文件提供一套 MCP 协议一致性套件与一个最小的、协议兼容的 fake MCP server，仅供测试使用：
+// 既验证 builtin 客户端「连接 → 列工具 → 调用 → 错误结果」的协议契约，也借测试二进制自执行
+// （见 maybeRunFakeServer）充当被连接的 server，无需依赖任何外部进程。
+
 // 协议常量与 fake server 暴露的工具名。
 const (
-	// ProtocolVersion 是 fake server 缺省回报的协议版本。
-	ProtocolVersion = "2024-11-05"
-	// EchoTool 回显入参 text。
-	EchoTool = "echo"
-	// BoomTool 恒定返回错误结果，用于验证 isError 通路。
-	BoomTool = "boom"
-	// EnvFakeServer 置为 "1" 时进程应以 fake MCP server 身份运行（见 MaybeRunFakeServer）。
-	EnvFakeServer = "COGENT_MCP_FAKE_SERVER"
+	conformProtoVersion = "2024-11-05"             // fake server 缺省回报的协议版本
+	echoToolName        = "echo"                   // 回显入参 text 的工具
+	boomToolName        = "boom"                   // 恒定返回错误结果、用于验证 isError 通路的工具
+	envFakeServer       = "COGENT_MCP_FAKE_SERVER" // 置为 "1" 时进程以 fake server 身份运行
 )
 
-// ConnSpec 描述如何启动并连接被测 server（由测试二进制自执行充当 server）。
-type ConnSpec struct {
+// connSpec 描述如何启动并连接被测 server（由测试二进制自执行充当 server）。
+type connSpec struct {
 	Name    string            // 逻辑 server 名
 	Command string            // 可执行文件路径
 	Args    []string          // 启动参数
 	Env     map[string]string // 附加环境变量
 }
 
-// Client 是套件所需的最小能力面，屏蔽各实现的具体 API 差异。
-type Client interface {
-	// ToolNames 返回已发现的工具名（可带实现各自的命名前缀）。
+// conformClient 是套件所需的最小能力面，屏蔽实现的具体 API 差异。
+type conformClient interface {
 	ToolNames() []string
-	// Call 调用指定工具，返回拼接文本、是否错误结果与传输层错误。
 	Call(ctx context.Context, tool string, args map[string]any) (text string, isErr bool, err error)
-	// Close 释放连接。
 	Close() error
 }
 
-// Connector 按 spec 建立并连接一个 Client。
-type Connector func(ctx context.Context, spec ConnSpec) (Client, error)
+// connector 按 spec 建立并连接一个 conformClient。
+type connector func(ctx context.Context, spec connSpec) (conformClient, error)
 
-// FakeServerSpec 返回让当前测试二进制自执行充当 fake server 的连接规格。
-func FakeServerSpec(name string) ConnSpec {
-	return ConnSpec{
+// fakeServerSpec 返回让当前测试二进制自执行充当 fake server 的连接规格。
+func fakeServerSpec(name string) connSpec {
+	return connSpec{
 		Name:    name,
 		Command: os.Args[0],
-		Env:     map[string]string{EnvFakeServer: "1"},
+		Env:     map[string]string{envFakeServer: "1"},
 	}
 }
 
-// MaybeRunFakeServer 若检测到 EnvFakeServer，则以 fake server 身份运行并返回 true。
-// 各模块的 TestMain 应在最前调用：if mcpconform.MaybeRunFakeServer() { return }。
-func MaybeRunFakeServer() bool {
-	if os.Getenv(EnvFakeServer) != "1" {
+// maybeRunFakeServer 若检测到 envFakeServer，则以 fake server 身份运行并返回 true。
+// TestMain 应在最前调用：if maybeRunFakeServer() { return }。
+func maybeRunFakeServer() bool {
+	if os.Getenv(envFakeServer) != "1" {
 		return false
 	}
-	_ = RunFakeServer(os.Stdin, os.Stdout)
+	_ = runFakeServer(os.Stdin, os.Stdout)
 	return true
 }
 
-// RunSuite 用给定 connector 驱动一致性断言，作为各实现共享的对照基准。
-func RunSuite(t *testing.T, connect Connector) {
+// runConformanceSuite 用给定 connector 驱动「连接 → 列工具 → 调用 → 错误结果」一致性断言。
+func runConformanceSuite(t *testing.T, connect connector) {
 	t.Helper()
 	ctx := context.Background()
-	cl, err := connect(ctx, FakeServerSpec("test"))
+	cl, err := connect(ctx, fakeServerSpec("test"))
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -84,15 +75,15 @@ func RunSuite(t *testing.T, connect Connector) {
 
 	t.Run("ListsTools", func(t *testing.T) {
 		names := cl.ToolNames()
-		if !hasTool(names, EchoTool) {
+		if !hasTool(names, echoToolName) {
 			t.Errorf("echo tool missing in %v", names)
 		}
-		if !hasTool(names, BoomTool) {
+		if !hasTool(names, boomToolName) {
 			t.Errorf("boom tool missing in %v", names)
 		}
 	})
 	t.Run("CallEcho", func(t *testing.T) {
-		text, isErr, err := cl.Call(ctx, EchoTool, map[string]any{"text": "hi"})
+		text, isErr, err := cl.Call(ctx, echoToolName, map[string]any{"text": "hi"})
 		if err != nil {
 			t.Fatalf("call echo: %v", err)
 		}
@@ -104,7 +95,7 @@ func RunSuite(t *testing.T, connect Connector) {
 		}
 	})
 	t.Run("CallBoomIsError", func(t *testing.T) {
-		_, isErr, err := cl.Call(ctx, BoomTool, nil)
+		_, isErr, err := cl.Call(ctx, boomToolName, nil)
 		if err != nil {
 			t.Fatalf("call boom: %v", err)
 		}
@@ -148,8 +139,8 @@ type rpcOut struct {
 	Error   *rpcErr         `json:"error,omitempty"`
 }
 
-// RunFakeServer 以换行分隔 JSON-RPC 2.0 在 r/w 上提供一个最小 MCP server，直至 r 读到 EOF。
-func RunFakeServer(r io.Reader, w io.Writer) error {
+// runFakeServer 以换行分隔 JSON-RPC 2.0 在 r/w 上提供一个最小 MCP server，直至 r 读到 EOF。
+func runFakeServer(r io.Reader, w io.Writer) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 8<<20)
 	enc := json.NewEncoder(w) // Encode 自动追加换行，天然满足换行分隔
@@ -193,7 +184,7 @@ func handle(in rpcIn) rpcOut {
 
 // initializeResult 回报能力声明，并回显客户端请求的协议版本（最大化兼容性）。
 func initializeResult(params json.RawMessage) map[string]any {
-	ver := ProtocolVersion
+	ver := conformProtoVersion
 	var p struct {
 		ProtocolVersion string `json:"protocolVersion"`
 	}
@@ -214,8 +205,8 @@ func toolsList() map[string]any {
 		"properties": map[string]any{"text": map[string]any{"type": "string"}},
 	}
 	return map[string]any{"tools": []map[string]any{
-		{"name": EchoTool, "description": "echo back the text argument", "inputSchema": textSchema},
-		{"name": BoomTool, "description": "always returns an error result", "inputSchema": map[string]any{"type": "object"}},
+		{"name": echoToolName, "description": "echo back the text argument", "inputSchema": textSchema},
+		{"name": boomToolName, "description": "always returns an error result", "inputSchema": map[string]any{"type": "object"}},
 	}}
 }
 
@@ -229,10 +220,10 @@ func callTool(params json.RawMessage) (map[string]any, *rpcErr) {
 		return nil, &rpcErr{Code: -32602, Message: "invalid params"}
 	}
 	switch p.Name {
-	case EchoTool:
+	case echoToolName:
 		text, _ := p.Arguments["text"].(string)
 		return textResult("echo: "+text, false), nil
-	case BoomTool:
+	case boomToolName:
 		return textResult("boom failed", true), nil
 	default:
 		return nil, &rpcErr{Code: -32602, Message: "unknown tool " + p.Name}

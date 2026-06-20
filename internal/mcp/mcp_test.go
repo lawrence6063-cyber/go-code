@@ -11,13 +11,12 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/alaindong/cogent/internal/mcp/mcpconform"
 	"github.com/alaindong/cogent/internal/tool"
 )
 
 // TestMain 在最前路由 fake server 自执行，否则跑常规测试并检测 goroutine 泄漏。
 func TestMain(m *testing.M) {
-	if mcpconform.MaybeRunFakeServer() {
+	if maybeRunFakeServer() {
 		return
 	}
 	goleak.VerifyTestMain(m)
@@ -29,7 +28,7 @@ type nopSink struct{}
 // Emit 丢弃进度文本。
 func (nopSink) Emit(string) {}
 
-// builtinAdapter 把自实现 MCPClient 适配为一致性套件所需的最小 Client。
+// builtinAdapter 把自实现 MCPClient 适配为一致性套件所需的最小 conformClient。
 type builtinAdapter struct {
 	cl MCPClient
 }
@@ -76,7 +75,7 @@ func (a *builtinAdapter) Close() error { return a.cl.Close() }
 
 // TestBuiltinClient_Conformance 用共享一致性套件验证自实现客户端的协议行为。
 func TestBuiltinClient_Conformance(t *testing.T) {
-	connect := func(ctx context.Context, spec mcpconform.ConnSpec) (mcpconform.Client, error) {
+	connect := func(ctx context.Context, spec connSpec) (conformClient, error) {
 		cl, err := NewClient(TransportBuiltin, nil)
 		if err != nil {
 			return nil, err
@@ -87,7 +86,7 @@ func TestBuiltinClient_Conformance(t *testing.T) {
 		}
 		return &builtinAdapter{cl: cl}, nil
 	}
-	mcpconform.RunSuite(t, connect)
+	runConformanceSuite(t, connect)
 }
 
 // TestNewClient_UnknownTransport 验证未知 transport 返回明确错误（不静默回落）。

@@ -80,7 +80,6 @@
       <a href="#intro">概览：本阶段目标</a>
       <a href="#why">① 为什么要接 MCP</a>
       <a href="#choice" class="lvl2">手写 vs 官方 SDK</a>
-      <a href="#oracle" class="lvl2">SDK 当对照基准</a>
       <a href="#arch">② 模块全景与依赖方向</a>
       <a href="#protocol">③ MCP stdio 协议</a>
       <a href="#transport" class="lvl2">换行分隔 JSON-RPC</a>
@@ -89,7 +88,7 @@
       <a href="#tool" class="lvl2">远端工具适配</a>
       <a href="#fuse">⑤ 工具池融合策略 ★</a>
       <a href="#cli">⑥ CLI 与配置文件</a>
-      <a href="#conform">⑦ 一致性套件 + Oracle</a>
+      <a href="#conform">⑦ 协议一致性套件</a>
       <a href="#test">⑧ 测试策略</a>
       <a href="#takeaway">⑨ 设计要点回顾</a>
     </nav>
@@ -103,12 +102,12 @@
       <div class="stats">
         <div class="stat"><b>0</b><span>新增第三方依赖（主模块）</span></div>
         <div class="stat"><b>1</b><span>新包 internal/mcp</span></div>
-        <div class="stat"><b>1</b><span>独立子模块 oracle</span></div>
+        <div class="stat"><b>4</b><span>实现的 JSON-RPC 方法</span></div>
         <div class="stat"><b>0</b><span>go test -race 告警</span></div>
       </div>
     </div>
 
-    <p>这份教学的特别看点是<b>架构上的"用 SDK 当裁判而非兜底"</b>——把官方 <code>modelcontextprotocol/go-sdk</code> 隔离在独立 go.mod 子模块里，跑同一套协议契约测试，反向印证我们手写实现的正确性。主二进制零额外依赖，叙事更硬。</p>
+    <p>这份教学的特别看点是<b>"零依赖接入外部生态"</b>——亲手实现 MCP stdio 协议，把官方 <code>modelcontextprotocol/go-sdk</code> 挡在主二进制之外；再把"协议契约"沉淀成一套<b>内联的一致性套件 + fake server</b>，验证手写实现的正确性。</p>
 
     <!-- ========== 01 为什么 ========== -->
     <h2 id="why"><span class="num">01</span>为什么要接 MCP？</h2>
@@ -121,32 +120,7 @@
       <tr><td>引入 <code>modelcontextprotocol/go-sdk</code></td><td>主 go.mod 新增 ~8 个传递依赖（jsonschema-go、oauth2、segmentio/encoding、x/tools、jwt 等）</td><td>少写约 400 行代码</td></tr>
       <tr><td><b>自实现最小 stdio 客户端</b> ✅</td><td>~400 行 Go（含测试）</td><td>主模块零新依赖；亲手实现协议可讲清原理；可裁剪到只用的 4 个 RPC</td></tr>
     </table>
-    <div class="callout warn"><b>但很多人会问：</b>"既然实现了 SDK，能不能手写出错时自动切到 SDK？"——<b>不能</b>。MCP 故障 95% 是协议/环境级（子进程拉不起、握手版本不匹配、命令不存在），手写挂了 SDK 也几乎必挂；唯一"救得了"的情况恰是手写实现自己有 bug，而 fallback 的作用是<b>悄悄掩盖这个 bug</b>——对一个以"讲清原理"为卖点的项目，这是反向的。何况 MCP 连接是有状态的，中途切换 = 杀子进程 + 重新握手 + 在途调用丢失，根本谈不上"无缝"。</div>
-
-    <h3 id="oracle">SDK 的正确用途：离线对照基准（oracle）</h3>
-    <p>但 SDK 是有用的——它是一份独立的、由官方维护的<b>第二实现</b>。让 SDK 客户端连到<b>我们手写的 fake server</b>、跑<b>同一套协议契约测试</b>，如果 SDK 都过了，说明我们的协议实现与官方理解一致。这就是 oracle 模式。</p>
-    <pre><span class="code-label">隔离方案</span><code>        ┌─────────────────────────┐
-        │   tool.Pool / engine     │  ← 只认 MCPClient 接口
-        └────────────┬─────────────┘
-                     │
-                     ▼
-   ┌──────────────────────────────────────────┐
-   │  internal/mcp/  (主模块, 零新依赖)        │
-   │   • transport.go  • client.go             │
-   │   • config.go     • manager.go            │
-   │   • remote_tool.go                         │
-   │   • mcpconform/   ← 共享协议契约套件      │
-   └──────────────────────────────────────────┘
-            ▲                          ▲
-   builtin _test                oracle/  (子模块, 独立 go.mod)
-   跑 mcpconform.RunSuite       • own go.mod + replace
-                                • require go-sdk v1.6.1
-                                • 适配 SDK 实现 Client
-                                • 跑同一份 mcpconform.RunSuite
-                                ↓
-                  主模块 go test ./... 不下钻此处
-                  主 go.mod / go.sum 一字未改</code></pre>
-    <div class="callout danger"><b>容易踩的坑：</b><code>//go:build mcp_sdk</code> 这种 build tag <b>不能</b>让主 go.mod 干净——<code>go mod tidy</code> 会扫描所有 build tag，照样把 SDK 写进主依赖。<b>唯有独立 go.mod 子模块</b>才能真正隔离。</div>
+    <div class="callout ok"><b>那如何保证手写实现没写错协议？</b>把"连接 → 列工具 → 调用 → 错误结果"的协议契约沉淀成一套<b>一致性套件</b>，再配一个协议兼容的 <b>fake server</b>（由测试二进制自执行充当，无需外部进程），对手写客户端逐条断言——详见第 ⑦ 节。</div>
 
     <!-- ========== 02 架构 ========== -->
     <h2 id="arch"><span class="num">02</span>模块全景与依赖方向</h2>
@@ -164,13 +138,12 @@
           └──────────────┘     │   mcp__&lt;server&gt;__&lt;tool&gt;   │  命名隔离
                                └─────────────┬───────────┘
                                              │
-                                ┌────────────┴───────────┐
-                                ▼                        ▼
-                       ┌───────────────┐        ┌──────────────────┐
-                       │  mcpconform   │ ◀──────│  oracle (子模块)  │
-                       │ fake server   │ 共用   │  SDK 适配 + tests │
-                       │ RunSuite      │        │  独立 go.mod      │
-                       └───────────────┘        └──────────────────┘</code></pre>
+                                             ▼
+                       ┌────────────────────────────────────┐
+                       │  conform_test.go (仅测试)           │
+                       │  一致性套件 + 协议兼容 fake server   │
+                       │  测试二进制自执行充当 server         │
+                       └────────────────────────────────────┘</code></pre>
     <p>守 §4.4 依赖方向：<code>cmd → mcp → tool/types/observe</code>，<code>mcp</code> 绝不反向依赖 <code>engine</code>。MCP 工具实现 <code>tool.Tool</code>，从内核看与内建工具完全同构，<b>engine 一行不改</b>。</p>
 
     <!-- ========== 03 协议 ========== -->
@@ -299,53 +272,32 @@ connected; 11 MCP tool(s) available:
   ...</code></pre>
     <p>启动 REPL 时同样走 <code>buildMCPManager</code>，<b><code>defer mgr.Close()</code></b> 确保 cogent 退出时所有 server 子进程被收回（关闭 stdin → 等待 → 超时强杀，从不悬挂）。</p>
 
-    <!-- ========== 07 oracle ========== -->
-    <h2 id="conform"><span class="num">07</span>一致性套件 + Oracle 对照基准</h2>
-    <p>测试架构是这个阶段最值得讲的工程亮点。我们把"MCP 协议契约"沉淀成可复用的<b>测试套件</b>，让两个独立的客户端实现（手写 + 官方 SDK）跑同一套断言：</p>
-    <pre><span class="code-label">internal/mcp/mcpconform/conform.go (节选)</span><code><span class="k">type</span> Client <span class="k">interface</span> {
+    <!-- ========== 07 一致性套件 ========== -->
+    <h2 id="conform"><span class="num">07</span>协议一致性套件</h2>
+    <p>测试架构是这个阶段值得一讲的工程亮点。我们把"MCP 协议契约"沉淀成一套可复用的<b>一致性断言</b> + 协议兼容 <b>fake server</b>，对手写客户端逐条验证「连接 → 列工具 → 调用 → 错误结果」：</p>
+    <pre><span class="code-label">internal/mcp/conform_test.go (节选)</span><code><span class="k">type</span> conformClient <span class="k">interface</span> {
     <span class="f">ToolNames</span>() []<span class="k">string</span>
     <span class="f">Call</span>(ctx context.Context, tool <span class="k">string</span>, args <span class="k">map</span>[<span class="k">string</span>]<span class="k">any</span>) (text <span class="k">string</span>, isErr <span class="k">bool</span>, err <span class="k">error</span>)
     <span class="f">Close</span>() <span class="k">error</span>
 }
 
-<span class="k">type</span> Connector <span class="k">func</span>(ctx context.Context, spec ConnSpec) (Client, <span class="k">error</span>)
+<span class="k">type</span> connector <span class="k">func</span>(ctx context.Context, spec connSpec) (conformClient, <span class="k">error</span>)
 
-<span class="k">func</span> <span class="f">RunSuite</span>(t *testing.T, connect Connector) {
-    cl, _ := <span class="f">connect</span>(ctx, <span class="f">FakeServerSpec</span>(<span class="s">"test"</span>))
+<span class="k">func</span> <span class="f">runConformanceSuite</span>(t *testing.T, connect connector) {
+    cl, _ := <span class="f">connect</span>(ctx, <span class="f">fakeServerSpec</span>(<span class="s">"test"</span>))
     t.<span class="f">Run</span>(<span class="s">"ListsTools"</span>, ...) <span class="c">// echo + boom</span>
     t.<span class="f">Run</span>(<span class="s">"CallEcho"</span>, ...)   <span class="c">// 验证内容回显</span>
     t.<span class="f">Run</span>(<span class="s">"CallBoomIsError"</span>, ...) <span class="c">// 验证 isError 通路</span>
 }
 
 <span class="c">// 自执行 fake server：测试二进制按 env 切换身份</span>
-<span class="k">func</span> <span class="f">MaybeRunFakeServer</span>() <span class="k">bool</span> {
-    <span class="k">if</span> os.<span class="f">Getenv</span>(EnvFakeServer) != <span class="s">"1"</span> { <span class="k">return</span> <span class="k">false</span> }
-    _ = <span class="f">RunFakeServer</span>(os.Stdin, os.Stdout)
+<span class="k">func</span> <span class="f">maybeRunFakeServer</span>() <span class="k">bool</span> {
+    <span class="k">if</span> os.<span class="f">Getenv</span>(envFakeServer) != <span class="s">"1"</span> { <span class="k">return</span> <span class="k">false</span> }
+    _ = <span class="f">runFakeServer</span>(os.Stdin, os.Stdout)
     <span class="k">return</span> <span class="k">true</span>
 }</code></pre>
 
-    <h3>oracle 子模块：物理隔离 SDK 依赖</h3>
-    <pre><span class="code-label">internal/mcp/oracle/go.mod</span><code><span class="k">module</span> github.com/alaindong/cogent/internal/mcp/oracle
-
-<span class="k">go</span> <span class="n">1.26</span>
-
-<span class="k">require</span> (
-    github.com/alaindong/cogent v0.0.0
-    github.com/modelcontextprotocol/go-sdk v1.6.1
-)
-
-<span class="k">replace</span> github.com/alaindong/cogent =&gt; ../../..</code></pre>
-    <pre><span class="code-label">internal/mcp/oracle/oracle_test.go (节选)</span><code><span class="k">func</span> <span class="f">TestSDKClient_Conformance</span>(t *testing.T) {
-    connect := <span class="k">func</span>(ctx context.Context, spec mcpconform.ConnSpec) (mcpconform.Client, <span class="k">error</span>) {
-        client := mcpsdk.<span class="f">NewClient</span>(&amp;mcpsdk.Implementation{Name: <span class="s">"cogent-oracle"</span>, Version: <span class="s">"0.1.0"</span>}, <span class="k">nil</span>)
-        cmd := exec.<span class="f">Command</span>(spec.Command, spec.Args...)
-        cmd.Env = <span class="f">append</span>(os.<span class="f">Environ</span>(), <span class="f">envSlice</span>(spec.Env)...)
-        session, _ := client.<span class="f">Connect</span>(ctx, &amp;mcpsdk.CommandTransport{Command: cmd}, <span class="k">nil</span>)
-        ... <span class="c">// 适配为 mcpconform.Client</span>
-    }
-    mcpconform.<span class="f">RunSuite</span>(t, connect) <span class="c">// ★ 同一份套件、不同实现</span>
-}</code></pre>
-    <div class="callout ok"><b>结果：</b>主模块 <code>go test ./...</code> 不下钻此子模块——主 go.mod / go.sum 一字未改；想验证对照基准时 <code>cd internal/mcp/oracle &amp;&amp; go test</code> 即可。<b>SDK 当裁判，不当兜底。</b></div>
+    <div class="callout ok"><b>测试二进制自执行充当 server：</b><code>TestMain</code> 检测 <code>COGENT_MCP_FAKE_SERVER</code> 后切换为 fake server 身份运行，从而无需任何外部进程即可完成端到端协议验证；整套断言全在主模块内、<b>主 go.mod / go.sum 一字未改</b>。</div>
 
     <!-- ========== 08 测试 ========== -->
     <h2 id="test"><span class="num">08</span>测试策略全景</h2>
@@ -354,13 +306,12 @@ connected; 11 MCP tool(s) available:
       <tr><td><code>mcp_test.go::TestBuiltinClient_Conformance</code></td><td>手写客户端 ↔ 手写 fake server 跑通整套协议</td><td><b>测试二进制自执行</b>充当 server（无需外部进程）</td></tr>
       <tr><td><code>mcp_test.go::TestServerConfig_Validate</code></td><td>表驱动：合法名/非法名/空命令/路径穿越</td><td><code>serverNameRe</code> 字符白名单</td></tr>
       <tr><td><code>mcp_test.go::TestLoadConfig</code></td><td>缺文件→nil、有效→排序、非法名→拒绝</td><td>tempdir + 真实 JSON</td></tr>
-      <tr><td><code>mcp_test.go::TestNewClient_UnknownTransport</code></td><td><code>sdk</code> transport 在主构建中明确报错</td><td>守"零依赖"边界</td></tr>
-      <tr><td><code>oracle/oracle_test.go::TestSDKClient_Conformance</code></td><td>官方 SDK ↔ 同一 fake server 跑通整套协议</td><td>独立 go.mod，反向印证手写实现</td></tr>
+      <tr><td><code>mcp_test.go::TestNewClient_UnknownTransport</code></td><td>未知 transport（如 <code>sdk</code>）在本构建中明确报错</td><td>守"零依赖"边界、不静默回落</td></tr>
       <tr><td>全包 TestMain</td><td><code>goleak.VerifyTestMain</code> + 检测 <code>COGENT_MCP_FAKE_SERVER</code> env 切换为 server 身份</td><td>子进程 + readLoop 不泄漏</td></tr>
     </table>
 
     <pre><span class="code-label">TestMain：身份切换 + goleak</span><code><span class="k">func</span> <span class="f">TestMain</span>(m *testing.M) {
-    <span class="k">if</span> mcpconform.<span class="f">MaybeRunFakeServer</span>() { <span class="k">return</span> } <span class="c">// 子进程模式</span>
+    <span class="k">if</span> <span class="f">maybeRunFakeServer</span>() { <span class="k">return</span> } <span class="c">// 子进程模式</span>
     goleak.<span class="f">VerifyTestMain</span>(m)
 }</code></pre>
 
@@ -372,15 +323,15 @@ connected; 11 MCP tool(s) available:
       <div class="card"><h3>③ 命名前缀 = 命名空间</h3><p style="color:var(--text-dim)"><code>mcp__&lt;server&gt;__&lt;tool&gt;</code> 物理上隔绝同名劫持；server 名走字符白名单防注入。</p></div>
       <div class="card"><h3>④ 池装配先到先得</h3><p style="color:var(--text-dim)">复用 Phase 1 的 <code>NewPool</code> 同名去重；只需把 MCP 排在内建之后传入即天然内建优先——零新增机制。</p></div>
       <div class="card"><h3>⑤ Guard 装饰器复用</h3><p style="color:var(--text-dim)">外部工具走与写/执行类内建工具完全相同的权限闸门；不发明新机制 = 不引入新攻击面。</p></div>
-      <div class="card"><h3>⑥ SDK 当裁判不当兜底</h3><p style="color:var(--text-dim)">独立 go.mod 子模块跑同一套协议契约测试；生产二进制零额外依赖；运行期 fallback 这条路被明确否决（理由：故障相关 + 掩盖 bug + 有状态切换不可能）。</p></div>
+      <div class="card"><h3>⑥ 协议契约可测</h3><p style="color:var(--text-dim)">把"连接→列工具→调用→错误结果"沉淀成内联一致性套件 + 协议兼容 fake server（测试二进制自执行充当），手写实现是否合规一目了然；全在主模块内、零额外依赖。</p></div>
     </div>
 
     <h3>STAR 话术（面试可直接用）</h3>
     <div class="callout">
       <p><b>S（Situation）：</b>Agent 工具池如果只能编进进程，能力扩展靠改源码重发版，与 MCP 生态绝缘。</p>
       <p><b>T（Task）：</b>接入 MCP 客户端，让 cogent 能动态接入任意 stdio MCP server 的工具，但不能为此牺牲<b>零依赖、安全默认、内核稳定</b>三条底线。</p>
-      <p><b>A（Action）：</b>① 自实现最小 stdio JSON-RPC 客户端约 400 行，主 go.mod 零新增依赖；② 远端工具匿名嵌入 <code>tool.Defaults</code> + 命名前缀 <code>mcp__server__tool</code>，经 <code>Guard</code> 统一过权限闸门后置于内建之后入池，借 <code>NewPool</code> 先到先得实现内建优先；③ 把协议契约沉淀成 <code>mcpconform</code> 共享套件，新建独立 go.mod 子模块用官方 SDK 跑同一套断言作离线对照基准（oracle）——明确否决"运行期 SDK fallback"方案，因为它会掩盖手写实现的 bug 且有状态切换不可能无缝。</p>
-      <p><b>R（Result）：</b>主模块 <code>gofmt / go build / go vet / go test -race ./...</code> 全绿，go.mod 一字未改；oracle 子模块独立跑通官方 SDK 对照测试；CLI <code>cogent mcp</code> 自检 + <code>run/resume</code> 自动装配 MCP 工具；纵深防御（命名隔离 + 池先到先得 + Guard）三层闭环防御恶意 server。</p>
+      <p><b>A（Action）：</b>① 自实现最小 stdio JSON-RPC 客户端约 400 行，主 go.mod 零新增依赖；② 远端工具匿名嵌入 <code>tool.Defaults</code> + 命名前缀 <code>mcp__server__tool</code>，经 <code>Guard</code> 统一过权限闸门后置于内建之后入池，借 <code>NewPool</code> 先到先得实现内建优先；③ 把协议契约沉淀成<b>内联一致性套件 + 协议兼容 fake server</b>（测试二进制自执行充当 server），对手写客户端逐条断言「连接→列工具→调用→错误结果」，全程零外部进程、零额外依赖。</p>
+      <p><b>R（Result）：</b>主模块 <code>gofmt / go build / go vet / go test -race ./...</code> 全绿，go.mod 一字未改；CLI <code>cogent mcp</code> 自检 + <code>run/resume</code> 自动装配 MCP 工具；纵深防御（命名隔离 + 池先到先得 + Guard）三层闭环防御恶意 server。</p>
     </div>
 
     <footer>
