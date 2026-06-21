@@ -19,9 +19,13 @@ type modelPrice struct {
 
 // defaultModelPrices 是常用 DeepSeek 模型的缺省单价（美元/百万 token），可经环境变量覆盖。
 // 仅作护栏估算用途，非精确账单；真实单价请以提供方公布为准并经 COGENT_PRICE_* 覆盖。
+// 注：deepseek-chat/deepseek-reasoner 为旧别名（2026-07-24 退役，分别路由到 V4-Flash 非思考/思考模式），
+// 单价沿用历史值仅作保守护栏；新接入请用 deepseek-v4-pro / deepseek-v4-flash 显式模型 ID。
 var defaultModelPrices = map[string]modelPrice{
 	"deepseek-chat":     {inputPerMTok: 0.27, outputPerMTok: 1.10},
 	"deepseek-reasoner": {inputPerMTok: 0.55, outputPerMTok: 2.19},
+	"deepseek-v4-flash": {inputPerMTok: 0.14, outputPerMTok: 0.28},
+	"deepseek-v4-pro":   {inputPerMTok: 1.74, outputPerMTok: 3.48},
 }
 
 // fallbackModelPrice 是未知模型且无环境变量覆盖时的保守单价（宁可高估，利于成本护栏早停）。

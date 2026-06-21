@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>自循环重跑实验报告 · deepseek-v4-pro × implement_fizzbuzz</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg2: #11161f;
+    --card: #161c28;
+    --line: #232c3b;
+    --txt: #e6edf3;
+    --muted: #93a1b3;
+    --accent: #5eead4;
+    --accent2: #818cf8;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --code: #0d1117;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #1a2230 0%, var(--bg) 55%);
+    color: var(--txt);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header.hero { padding: 84px 24px 52px; text-align: center; }
+  .badge {
+    display: inline-block; font-size: 13px; letter-spacing: 2px; color: var(--accent);
+    border: 1px solid rgba(94,234,212,.35); border-radius: 999px; padding: 6px 16px;
+    margin-bottom: 22px; background: rgba(94,234,212,.06);
+  }
+  h1 {
+    font-size: 42px; line-height: 1.2; margin: 0 0 16px;
+    background: linear-gradient(120deg, #fff, #9aa7ff 60%, #5eead4);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { font-size: 18px; color: var(--muted); max-width: 760px; margin: 0 auto; }
+  section { padding: 42px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  h2 { font-size: 27px; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
+  h2 .n {
+    font-size: 15px; font-weight: 700; color: var(--bg); background: var(--accent);
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none;
+  }
+  h3 { font-size: 18px; margin: 26px 0 8px; color: #cdd6e3; }
+  p { color: #c4cdd9; }
+  .lead { font-size: 17px; }
+  .muted { color: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px 22px; margin: 18px 0;
+  }
+  code, pre { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  code.inline {
+    background: #1c2433; color: #93f3df; padding: 2px 7px; border-radius: 6px; font-size: .92em;
+  }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6; color: #c9d4e3;
+  }
+  pre .c { color: #6b7689; }
+  pre .k { color: #ff7b9c; }
+  pre .s { color: #7ee787; }
+  pre .f { color: #79c0ff; }
+  .pill {
+    display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px;
+    margin-right: 6px; font-weight: 600;
+  }
+  .pill.bad { background: rgba(248,113,113,.15); color: #fca5a5; }
+  .pill.good { background: rgba(74,222,128,.15); color: #86efac; }
+  .pill.warn { background: rgba(251,191,36,.15); color: #fcd34d; }
+  .vs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 20px 0;
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  }
+  .vs > div { padding: 18px 20px; }
+  .vs .left { background: rgba(248,113,113,.05); border-right: 1px solid var(--line); }
+  .vs .right { background: rgba(74,222,128,.05); }
+  .vs h4 { margin: 0 0 12px; font-size: 15px; }
+  @media (max-width: 720px){ .vs { grid-template-columns: 1fr; } .vs .left { border-right: none; border-bottom: 1px solid var(--line);} h1 { font-size: 31px; } }
+  ul.clean { list-style: none; padding: 0; margin: 8px 0; }
+  ul.clean li { padding: 5px 0 5px 26px; position: relative; color: #c4cdd9; }
+  ul.clean li::before { content: "→"; position: absolute; left: 0; color: var(--accent2); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--accent); font-weight: 600; }
+  td .pill { white-space: nowrap; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0; }
+  .metrics .m { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-align: center; }
+  .metrics .m .v { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .metrics .m .l { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 720px){ .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .timeline { list-style: none; padding: 0; margin: 8px 0; }
+  .timeline li { padding: 10px 0 10px 28px; position: relative; border-left: 2px solid var(--line); margin-left: 8px; }
+  .timeline li::before { content: ""; position: absolute; left: -7px; top: 16px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent2); }
+  footer { padding: 40px 24px 70px; text-align: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <span class="badge">SELFLOOP RERUN · 2026-06-21</span>
+    <h1>自循环重跑实验报告</h1>
+    <p class="sub">用全新的简单任务 <code class="inline">implement_fizzbuzz</code> 与
+      <code class="inline">deepseek-v4-pro</code> 模型，验证上一轮修复（客观 verify 硬闸门 / 裁决鲁棒化 /
+      成本护栏闭环 / finish_reason 透出）在真实端到端运行中的效果。</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span>实验设置</h2>
+    <p class="lead">本轮刻意换一个<strong>极简、客观、纯本地</strong>的任务，以排除任务复杂度对循环收敛的干扰，
+      把变量集中在「模型选型 + 修复后的循环机制」上。</p>
+    <table>
+      <tr><th>维度</th><th>取值</th></tr>
+      <tr><td>任务</td><td><code class="inline">eval/tasks/implement_fizzbuzz</code>：从未实现的桩补全经典 FizzBuzz（3/5/15 倍数边界）</td></tr>
+      <tr><td>客观判据</td><td><code class="inline">verify.sh</code> → 在 repo 内跑 <code class="inline">go test ./...</code>（退出码 0 = 达标）；初始态必失败（RED）</td></tr>
+      <tr><td>maker 模型</td><td><code class="inline">deepseek-v4-pro</code>（输入 $1.74/M、输出 $3.48/M）</td></tr>
+      <tr><td>reviewer 模型</td><td><code class="inline">deepseek-v4-pro</code>（单一模型变量，便于对照）</td></tr>
+      <tr><td>执行体</td><td><code class="inline">cogent goal --review</code>（maker/reviewer 双角色，diff 回滚版）</td></tr>
+      <tr><td>护栏</td><td><code class="inline">--max-iterations 3</code> · <code class="inline">--max-cost 0.6</code> · <code class="inline">--max-wallclock 6m</code></td></tr>
+      <tr><td>可观测</td><td><code class="inline">COGENT_OBSERVE_ENABLED=true</code>，file exporter → <code class="inline">data/traces/</code></td></tr>
+    </table>
+    <div class="card">
+      <h3 style="margin-top:0">基线确认（RED）</h3>
+      <p class="muted" style="margin:0">运行前 <code class="inline">verify.sh</code> 退出码为 <span class="pill bad">1 · FAIL</span>，
+        11 个用例全部失败（<code class="inline">FizzBuzz(n)=""</code>），确保任务"有待解决"，不会空跑通过。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>结果总览</h2>
+    <p class="lead">一次迭代即达标。<span class="pill good">ACHIEVED</span> 客观 verify 通过，改动落盘。</p>
+    <div class="metrics">
+      <div class="m"><div class="v">1</div><div class="l">迭代轮数</div></div>
+      <div class="m"><div class="v">46.6s</div><div class="l">端到端墙钟</div></div>
+      <div class="m"><div class="v">$0.0384</div><div class="l">累计成本（估算）</div></div>
+      <div class="m"><div class="v">achieved</div><div class="l">循环结局</div></div>
+    </div>
+
+    <h3>trace 指标证据（<code class="inline">data/traces/metrics-*.jsonl</code>）</h3>
+    <p class="muted">以下指标共同自证：修复后的循环机制在真实运行中全部生效。</p>
+    <table>
+      <tr><th>指标</th><th>值</th><th>说明</th></tr>
+      <tr><td><code class="inline">cogent.loop.outcome</code></td><td><span class="pill good">achieved</span></td><td>目标达成（而非撞预算）</td></tr>
+      <tr><td><code class="inline">cogent.loop.iterations</code></td><td>1</td><td>单轮收敛</td></tr>
+      <tr><td><code class="inline">cogent.verify.passed</code></td><td><span class="pill good">true</span></td><td>客观 verify 执行<strong>并</strong>通过</td></tr>
+      <tr><td><code class="inline">goal.verify</code> span</td><td><span class="pill good">1 次</span></td><td>每轮发射（上轮为 <strong>0 次</strong>）→ 发现②修复生效</td></tr>
+      <tr><td><code class="inline">cogent.review.verdict</code></td><td>approved=<span class="pill good">true</span></td><td>reviewer 正确遵循裁决格式 → 发现③/④生效</td></tr>
+      <tr><td><code class="inline">cogent.loop.cost_usd</code></td><td>0.03841746</td><td>成本计量闭环 → 发现⑤生效（<code class="inline">--max-cost</code> 真正可用）</td></tr>
+      <tr><td><code class="inline">llm.finish_reason</code></td><td>已透出</td><td>实验目标 gap 闭合（span 属性命中）</td></tr>
+      <tr><td>工具调用</td><td>edit_file×2 · grep×3 · bash(go test)</td><td>maker 经工具实际改文件并自测</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>与上轮 reasoner 对比</h2>
+    <p class="lead">同一套循环机制，仅换任务与模型，结局天差地别——直接印证「客观 verify 不可被主观短路」这一修复的价值。</p>
+    <div class="vs">
+      <div class="left">
+        <h4><span class="pill bad">上轮 · deepseek-reasoner</span></h4>
+        <ul class="clean">
+          <li>reviewer 输出大段思维链，首行非 APPROVED → <strong>3/3 被判拒</strong></li>
+          <li>reviewer 拒绝即短路 → <code class="inline">goal.verify</code> span <strong>0 次</strong>，客观判据从未执行</li>
+          <li>maker 有 cwd 幻觉（<code class="inline">cd /workspace</code>），高延迟、高成本</li>
+          <li>结局：<strong>budget_spent 未达成</strong></li>
+        </ul>
+      </div>
+      <div class="right">
+        <h4><span class="pill good">本轮 · deepseek-v4-pro</span></h4>
+        <ul class="clean">
+          <li>reviewer 裁决格式合规 → <strong>approved=true</strong></li>
+          <li>客观 verify 每轮发射并执行 → <strong>verify.passed=true</strong></li>
+          <li>maker 直接用相对路径编辑，<strong>1 轮</strong>给出正确实现</li>
+          <li>结局：<strong>achieved</strong>，46.6s，$0.0384</li>
+        </ul>
+      </div>
+    </div>
+    <p class="muted">注：即便 reviewer 这次主动批准，机制上 verify 仍是<strong>最终硬闸门</strong>——
+      若 reviewer 误拒，只要 verify 通过依旧达标落盘（已由单测
+      <code class="inline">TestRunGoal_ReviewerRejectButVerifyPasses</code> 锁定）。</p>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>单轮时间线</h2>
+    <ul class="timeline">
+      <li><strong>maker（v4-pro）</strong> 读取任务 → <code class="inline">grep</code> 定位 → <code class="inline">edit_file</code> 写入 <code class="inline">switch</code> 实现（<code class="inline">n%15/%3/%5</code> + <code class="inline">strconv.Itoa</code>）</li>
+      <li><strong>maker 自测</strong> 调 <code class="inline">bash go test ./...</code></li>
+      <li><strong>reviewer（v4-pro）</strong> 只读审查 → 裁决 <span class="pill good">APPROVED</span></li>
+      <li><strong>客观 verify（硬闸门）</strong> 在改动所在工作根跑 <code class="inline">verify.sh</code> → <span class="pill good">exit 0 · PASSED</span></li>
+      <li><strong>编排器</strong> 判 achieved，改动落盘，循环结束</li>
+    </ul>
+    <h3>maker 落盘的实现</h3>
+<pre><span class="k">func</span> <span class="f">FizzBuzz</span>(n <span class="k">int</span>) <span class="k">string</span> {
+    <span class="k">switch</span> {
+    <span class="k">case</span> n%<span class="s">15</span> == <span class="s">0</span>:
+        <span class="k">return</span> <span class="s">"FizzBuzz"</span>
+    <span class="k">case</span> n%<span class="s">3</span> == <span class="s">0</span>:
+        <span class="k">return</span> <span class="s">"Fizz"</span>
+    <span class="k">case</span> n%<span class="s">5</span> == <span class="s">0</span>:
+        <span class="k">return</span> <span class="s">"Buzz"</span>
+    <span class="k">default</span>:
+        <span class="k">return</span> strconv.<span class="f">Itoa</span>(n)
+    }
+}</pre>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span>观察与结论</h2>
+    <h3>一处值得记录的小瑕疵（不影响结果）</h3>
+    <div class="card">
+      <p style="margin:0">maker 的收尾文本声称：<em>"因当前环境未安装 Go，无法自动运行测试……逐条对照用例全部一致"</em>。
+        但事实上它<strong>已经</strong>调用了 <code class="inline">bash go test ./...</code> 工具。这是 v4-pro 残留的轻微
+        <span class="pill warn">环境错觉</span>——与上轮 reasoner 的 cwd 幻觉同源但更轻。
+        <strong>关键在于：这类自述完全不参与达标判定</strong>，最终以客观 <code class="inline">verify.sh</code> 退出码为准，
+        因此瑕疵被机制天然兜住。</p>
+    </div>
+    <h3>结论</h3>
+    <ul class="clean">
+      <li>修复后的<strong>客观 verify 硬闸门</strong>在真实运行中正确发射并主导达标判定（<code class="inline">goal.verify</code> 0→1）。</li>
+      <li><strong>裁决解析鲁棒化 + reviewer 选型</strong>让主观闸门不再恒拒；即便恒拒，客观判据也能独立闭合循环。</li>
+      <li><strong>成本护栏闭环</strong>产出真实可读的 <code class="inline">cogent.loop.cost_usd</code>（$0.0384），<code class="inline">--max-cost</code> 不再形同虚设。</li>
+      <li><strong>finish_reason</strong> 端到端透出，实验目标 gap 已闭合。</li>
+      <li>v4-pro 在简单工程任务上<strong>遵循工具编排稳定、单轮收敛、成本与延迟显著优于 reasoner</strong>。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">6</span>复现方式</h2>
+    <p class="muted">任务已恢复为初始 RED 态（<code class="inline">fizzbuzz.go</code> 为未实现桩），可直接复跑。</p>
+<pre><span class="c"># 1) 基线：应为 FAIL（RED）</span>
+bash eval/tasks/implement_fizzbuzz/verify.sh
+
+<span class="c"># 2) 构建 + 注入密钥（.env 不会被自动加载）</span>
+go build -o bin/cogent ./cmd/cogent
+set -a; source .env; set +a
+
+<span class="c"># 3) 用 v4-pro 跑自循环（带护栏与 trace）</span>
+cd eval/tasks/implement_fizzbuzz/repo
+COGENT_MODEL=deepseek-v4-pro COGENT_REVIEWER_MODEL=deepseek-v4-pro \
+COGENT_YES=1 COGENT_OBSERVE_ENABLED=true COGENT_TRACE_EXPORTER=file \
+../../../../bin/cogent goal "$(cat ../task.txt)" \
+  --review --verify "$(cd ..; pwd)/verify.sh" \
+  --max-iterations 3 --max-cost 0.6 --max-wallclock 6m
+
+<span class="c"># 4) 校验达标（GREEN）+ 观测指标</span>
+bash ../verify.sh
+grep -o 'cogent.loop.outcome[^}]*' ../../../../data/traces/metrics-*.jsonl | tail -1</pre>
+  </section>
+</div>
+<footer>
+  cogent · 自循环重跑实验（deepseek-v4-pro × implement_fizzbuzz） · 2026-06-21 ·
+  配套修复说明见 <code>docs/selfloop-fixes.html</code>
+</footer>
+</body>
+</html>

@@ -39,6 +39,7 @@ cd .. && bash verify.sh   # 校验 agent 的修改是否真正通过
 | 任务 | 能力点 | 验证方式 |
 | --- | --- | --- |
 | `fix_off_by_one` | 定位并修复经典 off-by-one 循环边界缺陷 | `go test`（闭区间求和用例） |
+| `implement_fizzbuzz` | 从未实现的桩补全经典 FizzBuzz 规则 | `go test`（含 3/5/15 倍数边界用例） |
 
 ## 新增任务约定
 

@@ -1,0 +1,37 @@
+为 cogent 新增一个只读内建工具 find_files，用于在工作目录内按 glob 模式递归查找文件名。
+
+这是对 cogent 本体源码的改动，请先阅读同包既有只读工具的实现风格，再动手。
+
+## 工具契约（必须严格满足）
+- 工具名 Name()：find_files
+- 构造函数：func NewFindFiles(workRoot string) Tool，定义在新文件 internal/tool/findfiles.go，package tool。
+- 入参 JSON Schema：
+  - pattern（string，必填）：glob 模式，对“文件名 base name”匹配，使用 Go filepath.Match 语义（如 *.go、*_test.go）。
+  - path（string，可选）：检索起点目录，相对工作根；为空表示工作根。
+- 行为：
+  - 从 path 起递归遍历，收集所有“文件名匹配 pattern”的文件，输出为相对工作根的路径，每行一个，按字典序排序。
+  - 只读、并发安全：IsReadOnly 与 IsConcurrencySafe 均返回 true；CheckPermission 直接放行（permission.BehaviorAllow）。
+  - 越界路径（逃逸工作根，如 ../escape）必须返回 IsError 为 true 的 ToolResult（用 sandbox.ValidatePath 校验）。
+  - 跳过噪声目录：.git、.cogent、node_modules。
+  - 结果设上限保护，避免大仓库结果膨胀。
+  - 无匹配时返回友好提示（如 "no matches"），不报错。
+- 风格：严格参照同包既有只读工具 internal/tool/grep.go、listdir.go、readfile.go（匿名嵌入 Defaults，复用 sandbox.ValidatePath、filepath.WalkDir、全局 skippedDirs），保持命名/注释/错误处理一致。
+
+## 注册（关键，切勿漏）
+find_files 是只读工具，必须在 cmd/cogent/commands.go 的全部只读工具装配点注册，共 4 处：
+1. buildToolPool
+2. buildMakerPool
+3. buildSpawner（子探索池 subTools）
+4. buildReviewerPool
+注册方式仿现有 tool.NewGrep(workRoot)，即加入 tool.NewFindFiles(workRoot)。漏注册任何一处都会导致验收失败。
+
+## 测试
+在 internal/tool 包补充 find_files 的单元测试（仿 builtins_test.go 风格：t.TempDir() + mustJSON），覆盖：glob 命中、递归子目录、扩展名过滤、越界报错、只读/并发安全标志。
+
+## 验收标准（客观）
+- go build ./... 通过。
+- go test ./... 全部通过。
+- find_files 在上述 4 处装配点均完成注册。
+- find_files 能按 glob 递归命中文件、对越界路径报错、IsReadOnly 为 true。
+
+仅做上述相关改动；不要改动与本任务无关的代码，不要修改任何 verify 脚本或 eval/ 目录下的文件。

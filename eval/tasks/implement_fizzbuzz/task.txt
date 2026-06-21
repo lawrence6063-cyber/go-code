@@ -1,0 +1,10 @@
+实现 repo/fizzbuzz.go 中的 FizzBuzz 函数。
+
+FizzBuzz(n) 按经典规则返回字符串：
+- n 同时是 3 和 5 的倍数时返回 "FizzBuzz"
+- n 是 3 的倍数（且不是 5 的倍数）时返回 "Fizz"
+- n 是 5 的倍数（且不是 3 的倍数）时返回 "Buzz"
+- 其余情况返回 n 的十进制字符串（例如 7 返回 "7"）
+
+要求：仅修改 repo/fizzbuzz.go，使 repo 下的单元测试全部通过。
+不要修改 repo/fizzbuzz_test.go。
