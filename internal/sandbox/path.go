@@ -1,6 +1,5 @@
-// Package sandbox 约束命令执行与文件操作的安全边界。
-// Phase 2 先落地路径越界校验、控制面写禁止与危险命令识别（均为纯函数，可独立单测）；
-// 完整的命令隔离（路由 + 受限执行 + 执行后清理）留待 Phase 3 在同包补全。
+// 本文件实现 sandbox 的纯函数防线：路径越界校验、控制面写禁止、危险命令识别，均可独立单测。
+// 包级文档见 doc.go。
 package sandbox
 
 import (
@@ -18,6 +17,7 @@ var ErrPathEscape = errors.New("path escapes working directory")
 var controlPlanePrefixes = []string{".cogent", ".git"}
 
 // dangerousFragments 是保守拦截的破坏性命令片段（小写子串匹配，宁可误拦不可漏放）。
+// 仅收录明确高危且极少出现在合法工作区操作中的片段，避免误拦开发者正常命令（如 rm -rf ./build）。
 var dangerousFragments = []string{
 	"rm -rf /",
 	"rm -rf /*",
@@ -25,9 +25,14 @@ var dangerousFragments = []string{
 	"mkfs",
 	"dd if=",
 	"> /dev/sd",
+	"> /dev/sda",
+	"chmod -r 777 /",  // 递归放开根权限
+	"chown -r root /", // 递归改根属主
 }
 
 // ValidatePath 校验 target 解析后仍位于 workRoot 之内，返回清理后的绝对路径，否则返回 ErrPathEscape。
+// 在 Clean + 字符串前缀校验之上，进一步对真实落点解析符号链接（EvalSymlinks）后再次校验，
+// 堵住"工作区内 symlink 指向区外"的越界缺口（OPTIMIZE_SPEC S1）；目标不存在时解析其最近的已存在父目录。
 func ValidatePath(workRoot, target string) (string, error) {
 	root, err := filepath.Abs(workRoot)
 	if err != nil {
@@ -41,7 +46,37 @@ func ValidatePath(workRoot, target string) (string, error) {
 	if abs != root && !strings.HasPrefix(abs, root+string(os.PathSeparator)) {
 		return "", ErrPathEscape
 	}
+	// 解析软链接后再校验真实落点：root 本身也先解析（如 macOS /tmp → /private/tmp），避免前缀比对误判。
+	realRoot := evalSymlinks(root)
+	realTarget := evalSymlinks(abs)
+	if realTarget != realRoot && !strings.HasPrefix(realTarget, realRoot+string(os.PathSeparator)) {
+		return "", ErrPathEscape
+	}
 	return abs, nil
+}
+
+// evalSymlinks 解析 path 的符号链接得到真实路径；path 不存在时回退到其最近已存在父目录的真实路径，
+// 仍无法解析时返回 Clean 后的原路径（保守兜底，宁可后续前缀校验拒绝也不放过越界）。
+func evalSymlinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	dir := path
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir { // 触达根，无法再上溯
+			return filepath.Clean(path)
+		}
+		if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+			// 父目录真实路径 + 剩余未解析的相对部分。
+			rel, rerr := filepath.Rel(parent, path)
+			if rerr != nil {
+				return resolved
+			}
+			return filepath.Join(resolved, rel)
+		}
+		dir = parent
+	}
 }
 
 // IsControlPlaneWrite 报告对 target 的写入是否触碰受保护的控制面（含越界，越界一律视为禁止）。
@@ -95,14 +130,16 @@ func splitComposite(command string) []string {
 	return strings.Split(repl, "\x00")
 }
 
-// isPipeToShell 识别"远程下载内容直接管道给 shell 执行"这类高危模式（curl/wget ... | sh|bash）。
+// isPipeToShell 识别"远程下载或编码内容直接管道给 shell 执行"这类高危模式
+// （curl/wget ... | sh|bash，或 base64 -d ... | sh|bash 的编码绕过变体）。
 func isPipeToShell(command string) bool {
 	lower := strings.ToLower(command)
 	if !strings.Contains(lower, "|") {
 		return false
 	}
 	hasFetch := strings.Contains(lower, "curl") || strings.Contains(lower, "wget")
-	if !hasFetch {
+	hasDecode := strings.Contains(lower, "base64 -d") || strings.Contains(lower, "base64 --decode")
+	if !hasFetch && !hasDecode {
 		return false
 	}
 	segments := strings.Split(lower, "|")

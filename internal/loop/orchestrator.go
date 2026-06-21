@@ -162,11 +162,11 @@ func (o *orchestrator) verify(ctx context.Context, goal Goal, out chan<- LoopEve
 	}
 	vctx, end := o.tracer.Start(ctx, "goal.verify")
 	report, err := goal.Verifier.Verify(vctx, goal.WorkRoot, goal.Intent)
-	end(err)
 	if err != nil {
 		slog.Warn("verifier error (fail-closed as not passed)", "err", err)
 		report.Passed = false
 	}
+	end(err, observe.Attr{Key: "verify.passed", Value: report.Passed})
 	o.meter.Count("cogent.verify.passed", boolToInt(report.Passed),
 		observe.Attr{Key: "verify.passed", Value: report.Passed})
 	o.emitVerify(ctx, out, report)

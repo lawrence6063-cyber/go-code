@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -73,6 +74,29 @@ func envFloat(key string, def float64) float64 {
 		}
 	}
 	return def
+}
+
+// envInt 读取整型环境变量，缺省或非法时回退 def。
+func envInt(key string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+// sessionOutcome 把会话终止错误归一为 cogent.session 根 span 的 outcome 属性：
+// 取消→cancelled、其他错误→error、无错→done。
+func sessionOutcome(err error) string {
+	switch {
+	case err == nil:
+		return "done"
+	case errors.Is(err, context.Canceled):
+		return "cancelled"
+	default:
+		return "error"
+	}
 }
 
 // newRootCmd 构造根命令并挂载 run/resume/mcp 子命令。
@@ -218,9 +242,12 @@ func runREPL(ctx context.Context, opts replOptions) error {
 		return err
 	}
 
-	ctx, end := prov.Tracer().Start(ctx, "cogent.session")
+	ctx, end := prov.Tracer().Start(ctx, "cogent.session",
+		observe.Attr{Key: "session.id", Value: sid},
+		observe.Attr{Key: "mode", Value: opts.mode.String()},
+	)
 	var runErr error
-	defer func() { end(runErr) }()
+	defer func() { end(runErr, observe.Attr{Key: "outcome", Value: sessionOutcome(runErr)}) }()
 
 	slog.Info("repl started", "mode", opts.mode, "session", sid)
 	fmt.Printf("cogent — session %s — type 'exit' or 'quit' (or Ctrl-C) to leave.\n", sid)
@@ -263,16 +290,34 @@ func buildMCPManager(ctx context.Context, workRoot string, tracer observe.Tracer
 }
 
 // newLLMClient 按环境变量构造 LLM 客户端（DeepSeek OpenAI 兼容接口）；密钥仅来自 env。
+// 重试退避默认关闭（fail-closed），设 COGENT_LLM_RETRY_ATTEMPTS>1 后才对建流阶段的可重试错误退避。
 func newLLMClient() (llm.Client, error) {
 	baseURL := os.Getenv("COGENT_LLM_BASE_URL")
 	if baseURL == "" {
 		baseURL = defaultLLMBaseURL
 	}
-	llmc, err := llm.New(llm.Config{APIKey: os.Getenv("DEEPSEEK_API_KEY"), BaseURL: baseURL})
+	llmc, err := llm.New(llm.Config{
+		APIKey:  os.Getenv("DEEPSEEK_API_KEY"),
+		BaseURL: baseURL,
+		Retry:   llmRetryPolicy(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("init llm: %w", err)
 	}
 	return llmc, nil
+}
+
+// llmRetryPolicy 按环境变量构造 LLM 建流重试策略；默认 MaxAttempts=1（不重试，向后兼容）。
+func llmRetryPolicy() llm.RetryPolicy {
+	attempts := envInt("COGENT_LLM_RETRY_ATTEMPTS", 1)
+	if attempts <= 1 {
+		return llm.RetryPolicy{}
+	}
+	return llm.RetryPolicy{
+		MaxAttempts: attempts,
+		BaseDelay:   time.Duration(envInt("COGENT_LLM_RETRY_BASE_MS", 500)) * time.Millisecond,
+		MaxDelay:    time.Duration(envInt("COGENT_LLM_RETRY_MAX_MS", 10000)) * time.Millisecond,
+	}
 }
 
 // buildEngine 按环境变量装配 LLM 客户端、工具池（内建 + MCP）、会话存储与执行内核。
@@ -301,6 +346,7 @@ func buildEngine(
 		Mode:         mode,
 		Model:        os.Getenv("COGENT_MODEL"),
 		WorkRoot:     workRoot,
+		LLMTimeout:   time.Duration(envInt("COGENT_LLM_TIMEOUT_SEC", 120)) * time.Second,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("init engine: %w", err)

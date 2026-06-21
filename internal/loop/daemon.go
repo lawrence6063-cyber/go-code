@@ -30,10 +30,11 @@ func (d *Daemon) Run(ctx context.Context, goalOf func(TriggerSignal) Goal) error
 	if goalOf == nil {
 		return errors.New("daemon requires a goal factory")
 	}
+	var runs int
 	if d.Tracer != nil {
 		var end observe.EndFunc
 		ctx, end = d.Tracer.Start(ctx, "loop.daemon")
-		defer end(nil)
+		defer func() { end(nil, observe.Attr{Key: "daemon.runs", Value: runs}) }()
 	}
 	signals, err := d.Trigger.Fire(ctx)
 	if err != nil {
@@ -47,6 +48,7 @@ func (d *Daemon) Run(ctx context.Context, goalOf func(TriggerSignal) Goal) error
 			if !ok {
 				return ctx.Err()
 			}
+			runs++
 			d.runOnce(ctx, goalOf(sig))
 		}
 	}

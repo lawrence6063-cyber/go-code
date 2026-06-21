@@ -92,9 +92,12 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	}
 	defer cleanup()
 
-	ctx, end := prov.Tracer().Start(ctx, "cogent.session")
+	ctx, end := prov.Tracer().Start(ctx, "cogent.session",
+		observe.Attr{Key: "session.id", Value: sid},
+		observe.Attr{Key: "mode", Value: opts.mode.String()},
+	)
 	var runErr error
-	defer func() { end(runErr) }()
+	defer func() { end(runErr, observe.Attr{Key: "outcome", Value: sessionOutcome(runErr)}) }()
 
 	printGoalBanner(sid, opts)
 	events, err := orch.RunGoal(ctx, loop.Goal{

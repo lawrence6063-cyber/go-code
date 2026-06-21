@@ -1,6 +1,5 @@
-// Package sandbox 中的 sandbox.go 在路径/控制面/危险命令的纯函数防线之上，补全命令执行的纵深防御：
-// 命令路由（ShouldSandbox）+ 危险命令确定性拦截 + 受限环境执行 + 工作目录约束 + 超时 + 执行后清理。
-// 与既有 ValidatePath / IsControlPlaneWrite / IsDangerousCommand 共同构成"不依赖模型善意"的安全边界。
+// 本文件在纯函数防线之上补全命令执行的纵深防御：命令路由（ShouldSandbox）+ 危险命令确定性拦截
+// + 受限环境执行 + 工作目录约束 + 超时 + 执行后清理。包级文档见 doc.go。
 package sandbox
 
 import (

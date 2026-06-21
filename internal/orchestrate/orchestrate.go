@@ -10,6 +10,7 @@ package orchestrate
 
 import (
 	"context"
+	"fmt"
 
 	"golang.org/x/sync/errgroup"
 
@@ -104,7 +105,7 @@ func runSerial(ctx context.Context, blocks []types.ToolUseBlock, run RunFunc) []
 		if ctx.Err() != nil {
 			break
 		}
-		out = append(out, run(ctx, blocks[i]))
+		out = append(out, safeRun(ctx, blocks[i], run))
 	}
 	return out
 }
@@ -121,7 +122,7 @@ func runConcurrent(ctx context.Context, blocks []types.ToolUseBlock, run RunFunc
 			if gctx.Err() != nil {
 				return gctx.Err()
 			}
-			slots[i] = run(gctx, blocks[i])
+			slots[i] = safeRun(gctx, blocks[i], run)
 			done[i] = true
 			return nil
 		})
@@ -134,4 +135,21 @@ func runConcurrent(ctx context.Context, blocks []types.ToolUseBlock, run RunFunc
 		}
 	}
 	return out
+}
+
+// safeRun 在工具执行 goroutine 顶层兜底 panic：单个工具（含 MCP 外部工具）panic 时不击穿进程，
+// 而是规整为配对完整的 tool_result(IsError) 让模型把它当普通工具失败自我修正（OPTIMIZE_SPEC R3）。
+// recover 仅用于此处兜底，返回 interface{} 不假设其为 error。
+func safeRun(ctx context.Context, block types.ToolUseBlock, run RunFunc) (msg types.Message) {
+	defer func() {
+		if v := recover(); v != nil {
+			msg = types.Message{
+				Role:      types.RoleTool,
+				Text:      fmt.Sprintf("tool panicked: %v", v),
+				ToolUseID: block.ID,
+				ToolName:  block.Name,
+			}
+		}
+	}()
+	return run(ctx, block)
 }

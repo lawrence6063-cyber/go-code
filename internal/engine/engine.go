@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/alaindong/cogent/internal/contextmgr"
 	"github.com/alaindong/cogent/internal/llm"
@@ -23,17 +24,12 @@ var ErrMaxStepsExceeded = errors.New("max react steps exceeded")
 
 // 内核默认参数。
 const (
-	defaultMaxSteps = 16              // ReAct 最大轮数，防失控空转
-	defaultModel    = "deepseek-chat" // 默认模型名
+	defaultMaxSteps       = 16                // ReAct 最大轮数，防失控空转
+	defaultModel          = "deepseek-chat"   // 默认模型名
+	defaultLLMCallTimeout = 120 * time.Second // 单次 LLM 调用的独立超时上限（防首 token 长挂起，OPTIMIZE_SPEC R4）
 )
 
-// systemPrompt 是注入到上下文最前面的系统提示。
-const systemPrompt = "You are cogent, an autonomous coding agent runtime written in Go. " +
-	"You operate inside a real code repository and can call the provided tools to read, search, " +
-	"and modify files and run commands to accomplish the user's task. " +
-	"Prefer acting via tools over guessing; inspect files before editing them. " +
-	"Use relative paths within the workspace. When the task is complete, reply with a concise summary. " +
-	"If no tools are available, respond in plain text."
+// systemPrompt 见 prompt.go。
 
 // Engine 是无 UI 的执行引擎，承载单次任务的 ReAct 主循环；CLI 与 Headless 共用。
 type Engine interface {
@@ -55,6 +51,18 @@ const (
 	ModeAsk              // 只读问答，不调用任何写/执行类工具
 )
 
+// String 返回运行档位的可读名称（auto/plan/ask），未知值回退为 "auto"。
+func (m Mode) String() string {
+	switch m {
+	case ModePlan:
+		return "plan"
+	case ModeAsk:
+		return "ask"
+	default:
+		return "auto"
+	}
+}
+
 // Deps 是构造 Engine 所需的依赖集合，便于测试注入替身。
 type Deps struct {
 	LLM          llm.Client          // LLM 提供方
@@ -69,6 +77,7 @@ type Deps struct {
 	Model        string              // 模型名，用于窗口计算与请求
 	WorkRoot     string              // 工作根目录，路径校验与 memory 加载基准
 	MaxSteps     int                 // ReAct 最大轮数，防失控空转
+	LLMTimeout   time.Duration       // 单次 LLM 调用超时上限；<=0 时用 defaultLLMCallTimeout
 }
 
 // New 构造一个 Engine 实例；deps 中除 Observe 外的核心依赖必填（Tools 可选）。
@@ -80,20 +89,24 @@ func New(deps Deps) (Engine, error) {
 		return nil, errors.New("nil observe provider")
 	}
 	e := &engine{
-		llm:       deps.LLM,
-		tools:     deps.Tools,
-		ctxmgr:    deps.Context,
-		session:   deps.Session,
-		sessionID: deps.SessionID,
-		tracer:    deps.Observe.Tracer(),
-		meter:     deps.Observe.Meter(),
-		mode:      deps.Mode,
-		model:     deps.Model,
-		workRoot:  deps.WorkRoot,
-		maxSteps:  deps.MaxSteps,
+		llm:        deps.LLM,
+		tools:      deps.Tools,
+		ctxmgr:     deps.Context,
+		session:    deps.Session,
+		sessionID:  deps.SessionID,
+		tracer:     deps.Observe.Tracer(),
+		meter:      deps.Observe.Meter(),
+		mode:       deps.Mode,
+		model:      deps.Model,
+		workRoot:   deps.WorkRoot,
+		maxSteps:   deps.MaxSteps,
+		llmTimeout: deps.LLMTimeout,
 	}
 	if e.maxSteps <= 0 {
 		e.maxSteps = defaultMaxSteps
+	}
+	if e.llmTimeout <= 0 {
+		e.llmTimeout = defaultLLMCallTimeout
 	}
 	if e.model == "" {
 		e.model = defaultModel
@@ -121,20 +134,21 @@ func buildSystemPrompt(mem memory.Loader, workRoot string) string {
 
 // engine 是 Engine 的具体实现，持有跨轮的消息历史作为单一真相源。
 type engine struct {
-	llm       llm.Client
-	tools     tool.Pool
-	ctxmgr    *contextmgr.Manager
-	session   session.Store
-	tracer    observe.Tracer
-	meter     observe.Meter
-	mode      Mode
-	model     string
-	workRoot  string
-	sessionID string
-	lastUUID  string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
-	maxSteps  int
-	used      int // 最近一次调用的上下文 token 估计，用于压缩判定
-	msgs      []types.Message
+	llm        llm.Client
+	tools      tool.Pool
+	ctxmgr     *contextmgr.Manager
+	session    session.Store
+	tracer     observe.Tracer
+	meter      observe.Meter
+	mode       Mode
+	model      string
+	workRoot   string
+	sessionID  string
+	lastUUID   string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
+	maxSteps   int
+	llmTimeout time.Duration // 单次 LLM 调用超时上限
+	used       int           // 最近一次调用的上下文 token 估计，用于压缩判定
+	msgs       []types.Message
 }
 
 // Run 见 Engine 接口说明。
@@ -145,12 +159,24 @@ func (e *engine) Run(ctx context.Context, task string) (<-chan types.StreamEvent
 	out := make(chan types.StreamEvent, 16)
 	go func() {
 		defer close(out)
-		userMsg := types.Message{Role: types.RoleUser, Text: task}
-		e.msgs = append(e.msgs, userMsg)
-		e.record(ctx, userMsg)
-		e.step(ctx, out)
+		safeGo(e.onPanic(ctx, out), func() {
+			userMsg := types.Message{Role: types.RoleUser, Text: task}
+			e.msgs = append(e.msgs, userMsg)
+			e.record(ctx, userMsg)
+			e.step(ctx, out)
+		})
 	}()
 	return out, nil
+}
+
+// onPanic 返回一个把 goroutine panic 降级为 EventError 的回调：记录脱敏后的告警并上抛错误，
+// 使内核单点 panic 不击穿进程；恢复后本轮任务以失败收尾，不吞掉继续。
+func (e *engine) onPanic(ctx context.Context, out chan<- types.StreamEvent) func(v any) {
+	return func(v any) {
+		err := fmt.Errorf("engine panic recovered: %v", v)
+		slog.Error("engine goroutine panic", "panic", v)
+		emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: err})
+	}
 }
 
 // Resume 加载已有会话事件，重建并修复 function calling 配对后，注入"继续"提示，
@@ -175,10 +201,12 @@ func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.Str
 	out := make(chan types.StreamEvent, 16)
 	go func() {
 		defer close(out)
-		cont := types.Message{Role: types.RoleUser, Text: continuePrompt}
-		e.msgs = append(e.msgs, cont)
-		e.record(ctx, cont)
-		e.step(ctx, out)
+		safeGo(e.onPanic(ctx, out), func() {
+			cont := types.Message{Role: types.RoleUser, Text: continuePrompt}
+			e.msgs = append(e.msgs, cont)
+			e.record(ctx, cont)
+			e.step(ctx, out)
+		})
 	}()
 	return out, nil
 }
@@ -194,25 +222,35 @@ func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
 			return
 		}
 		stepsTaken = step + 1
+		stepStart := time.Now()
 		sctx, end := e.tracer.Start(ctx, "react.step", observe.Attr{Key: "step.index", Value: step})
 		reply, toolUses, err := e.streamAssistant(sctx, out)
 		e.appendAssistant(ctx, reply, toolUses)
 		if err != nil {
-			end(err)
+			e.endStep(end, stepStart, len(toolUses), "error", err)
 			emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: err})
 			return
 		}
 		if len(toolUses) == 0 {
-			end(nil)
+			e.endStep(end, stepStart, 0, "done", nil)
 			emitEvent(ctx, out, types.StreamEvent{Type: types.EventDone})
 			return
 		}
 		results := e.executeTools(sctx, toolUses, out)
-		end(nil)
+		e.endStep(end, stepStart, len(toolUses), "tools", nil)
 		e.appendResults(ctx, results)
 		e.maybeCompact(ctx, out)
 	}
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: ErrMaxStepsExceeded})
+}
+
+// endStep 结束一个 react.step span：记录单轮耗时指标并补 tool_use.count/step.outcome 属性（O3/O4）。
+func (e *engine) endStep(end observe.EndFunc, start time.Time, toolCount int, outcome string, err error) {
+	e.meter.Record("cogent.step.duration", float64(time.Since(start).Milliseconds()))
+	end(err,
+		observe.Attr{Key: "tool_use.count", Value: toolCount},
+		observe.Attr{Key: "step.outcome", Value: outcome},
+	)
 }
 
 // maybeCompact 在配置了上下文管理器且触达阈值时压缩历史，成功后上抛 EventCompacted。
@@ -228,15 +266,23 @@ func (e *engine) maybeCompact(ctx context.Context, out chan<- types.StreamEvent)
 	if !e.ctxmgr.ShouldCompact(used, e.model) {
 		return
 	}
-	cctx, end := e.tracer.Start(ctx, "ctx.compact")
+	before := used
+	e.meter.Count("cogent.compact.count", 1)
+	cctx, end := e.tracer.Start(ctx, "ctx.compact", observe.Attr{Key: "compact.tokens_before", Value: before})
 	compacted, err := e.ctxmgr.Compact(cctx, e.msgs, e.llm)
-	end(err)
 	if err != nil {
+		// 压缩失败会触发熔断（后续 ShouldCompact 恒 false），计入 circuit_open 指标并标注 span。
+		e.meter.Count("cogent.compact.circuit_open", 1)
+		end(err, observe.Attr{Key: "circuit_open", Value: true})
 		slog.Warn("context compact failed", "err", err)
 		return
 	}
 	e.msgs = compacted
 	e.used = contextmgr.EstimateTokens(e.msgs)
+	end(nil,
+		observe.Attr{Key: "compact.tokens_after", Value: e.used},
+		observe.Attr{Key: "circuit_open", Value: false},
+	)
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventCompacted})
 }
 
@@ -260,17 +306,24 @@ func (e *engine) appendResults(ctx context.Context, results []types.Message) {
 }
 
 // streamAssistant 发起一次流式 LLM 调用：文本增量即时上抛，并累积模型发起的工具调用。
+// 同时采集首 token 延迟（ttft）与 token 用量，作为 llm.stream span 属性与指标上抛（OPTIMIZE_SPEC O2/O3）。
 func (e *engine) streamAssistant(
 	ctx context.Context,
 	out chan<- types.StreamEvent,
 ) (reply string, toolUses []types.ToolUseBlock, err error) {
 	ctx, end := e.tracer.Start(ctx, "llm.stream", observe.Attr{Key: "llm.model", Value: e.model})
-	defer func() { end(err) }()
+	var st streamStats
+	defer func() { end(err, st.attrs()...) }()
+
+	// 每次 LLM 调用施加独立超时上限，防"首 token 迟迟不来"长时间挂起；超时即本轮失败，由 maxSteps 兜底。
+	ctx, cancel := context.WithTimeout(ctx, e.llmTimeout)
+	defer cancel()
 
 	deltas, err := e.llm.Stream(ctx, llm.Request{Messages: e.msgs, Tools: e.toolSchemas(), Model: e.model})
 	if err != nil {
 		return "", nil, fmt.Errorf("llm stream: %w", err)
 	}
+	start := time.Now()
 	var sb strings.Builder
 	for {
 		select {
@@ -283,6 +336,7 @@ func (e *engine) streamAssistant(
 			if d.Err != nil {
 				return sb.String(), toolUses, d.Err
 			}
+			st.observeFirstToken(e.meter, start)
 			if d.ToolCall != nil {
 				toolUses = append(toolUses, *d.ToolCall)
 			}
@@ -293,11 +347,45 @@ func (e *engine) streamAssistant(
 				}
 			}
 			if d.Usage != nil {
-				e.used = d.Usage.PromptTokens + d.Usage.CompletionTokens
-				e.meter.Count("cogent.tokens", int64(e.used))
-				slog.Debug("llm usage", "prompt", d.Usage.PromptTokens, "completion", d.Usage.CompletionTokens)
+				st.recordUsage(e, *d.Usage)
 			}
 		}
+	}
+}
+
+// streamStats 累积单次 LLM 流的可观测数据：首 token 延迟与 token 用量。
+type streamStats struct {
+	gotFirst   bool
+	ttftMs     int64
+	prompt     int
+	completion int
+}
+
+// observeFirstToken 在首个增量到达时记录首 token 延迟（ttft）到指标，仅记一次。
+func (s *streamStats) observeFirstToken(meter observe.Meter, start time.Time) {
+	if s.gotFirst {
+		return
+	}
+	s.gotFirst = true
+	s.ttftMs = time.Since(start).Milliseconds()
+	meter.Record("cogent.llm.ttft", float64(s.ttftMs))
+}
+
+// recordUsage 记录 token 用量到引擎窗口估计与 cogent.tokens 计数器。
+func (s *streamStats) recordUsage(e *engine, u llm.Usage) {
+	s.prompt = u.PromptTokens
+	s.completion = u.CompletionTokens
+	e.used = u.PromptTokens + u.CompletionTokens
+	e.meter.Count("cogent.tokens", int64(e.used))
+	slog.Debug("llm usage", "prompt", u.PromptTokens, "completion", u.CompletionTokens)
+}
+
+// attrs 把流统计组装为 llm.stream span 的结束属性。
+func (s streamStats) attrs() []observe.Attr {
+	return []observe.Attr{
+		{Key: "llm.prompt_tokens", Value: s.prompt},
+		{Key: "llm.completion_tokens", Value: s.completion},
+		{Key: "llm.ttft_ms", Value: int(s.ttftMs)},
 	}
 }
 

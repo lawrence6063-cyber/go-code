@@ -1,6 +1,7 @@
 // Package session 以 append-only JSONL 事件流持久化会话，支持中断后 resume 重建。
 // 设计理念（DEV_SPEC §6.5）：写入路径做简单（顺序 append、崩溃安全），
-// 把复杂性压到恢复路径（Load 去重 + 链路修复）。session 仅依赖 types，不反向依赖业务包。
+// 把复杂性压到恢复路径（Load 去重 + 链路修复）。session 仅依赖 types 与 secret（纯标准库脱敏叶子包），
+// 不反向依赖任何业务包。
 package session
 
 import (
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/alaindong/cogent/internal/secret"
 )
 
 // ErrSessionNotFound 表示 resume 时找不到对应会话的 transcript 文件。
@@ -161,18 +164,11 @@ func NewSessionID() string {
 	return time.Now().UTC().Format("20060102-150405") + "-" + hex.EncodeToString(buf[:])
 }
 
-// secretToken 匹配常见的密钥令牌（如 sk- 前缀的 API key）。
-var secretToken = regexp.MustCompile(`sk-[A-Za-z0-9_-]{8,}`)
-
-// secretField 匹配 JSON 中的密钥字段值（api_key/apikey/token/secret），容忍转义引号。
-var secretField = regexp.MustCompile(`(?i)("(?:api[_-]?key|secret|token|password)"\s*:\s*")(\\?"|[^"])*?(")`)
-
 // redactSecrets 在落盘前对 Payload 做密钥脱敏，避免密钥泄露进 transcript（§7.5）。
+// 规则统一委托 internal/secret 包，与 observe 入 trace 共用同一套脱敏规则。
 func redactSecrets(payload json.RawMessage) json.RawMessage {
 	if len(payload) == 0 {
 		return payload
 	}
-	out := secretField.ReplaceAll(payload, []byte(`${1}[REDACTED]${3}`))
-	out = secretToken.ReplaceAll(out, []byte("[REDACTED]"))
-	return out
+	return secret.Redact(payload)
 }

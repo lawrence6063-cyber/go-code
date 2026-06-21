@@ -33,6 +33,8 @@ func (g gitDiscarder) Discard(ctx context.Context) error {
 
 // pipelineAdapter 把 agent.MakerReviewer 适配为 loop.Pipeline（消费侧最小接口），
 // 使 loop 包无需 import agent——依赖更干净，符合项目「消费侧定义接口」惯例。
+// 设计动机（OPTIMIZE_SPEC A2）：LOOP_SPEC §3.2 本允许 loop→agent，但选择在 cmd 层用适配器桥接，
+// 换取 loop 对 agent 的零编译依赖（与 engineRunner/Spawner 惯例一致），是有意识的解耦权衡而非设计失误。
 type pipelineAdapter struct {
 	mr *agent.MakerReviewer
 }
@@ -64,25 +66,34 @@ type worktreePipeline struct {
 	mgr     worktree.Manager
 	baseRef string                                    // worktree 派生与合并回的基线引用
 	build   func(workRoot string) makerReviewerRunner // 按 worktree 根重建双角色（无 discarder）
+	tracer  observe.Tracer                            // worktree.* span 埋点；nil 时退化为 no-op（守依赖方向：worktree 叶子包不依赖 observe）
+}
+
+// span 在 worktreePipeline 上开启一个 worktree.* span；tracer 为 nil 时返回 no-op 结束函数（兼容测试）。
+func (p *worktreePipeline) span(ctx context.Context, name string, attrs ...observe.Attr) (context.Context, observe.EndFunc) {
+	if p.tracer == nil {
+		return ctx, func(error, ...observe.Attr) {}
+	}
+	return p.tracer.Start(ctx, name, attrs...)
 }
 
 // Iterate 见 loop.Pipeline 接口说明：Create → maker/reviewer → 通过 Merge / 否则 Discard。
 func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.PipelineResult, error) {
-	ws, err := p.mgr.Create(ctx, p.baseRef)
+	ws, err := p.create(ctx)
 	if err != nil {
 		return loop.PipelineResult{}, fmt.Errorf("create worktree: %w", err)
 	}
 	r, runErr := p.build(ws.Root).Iterate(ctx, task)
 	if runErr != nil {
-		_ = p.mgr.Discard(ctx, ws)
+		p.discard(ctx, ws)
 		return loop.PipelineResult{}, runErr
 	}
 	if !r.Verdict.Approved {
-		_ = p.mgr.Discard(ctx, ws) // 未通过：物理丢弃，主工作区零残留
+		p.discard(ctx, ws) // 未通过：物理丢弃，主工作区零残留
 		return loop.PipelineResult{Summary: r.MakerSummary, Approved: false, Feedback: r.Verdict.Feedback}, nil
 	}
-	if err := p.mgr.Merge(ctx, ws, p.baseRef); err != nil {
-		_ = p.mgr.Discard(ctx, ws)
+	if err := p.merge(ctx, ws); err != nil {
+		p.discard(ctx, ws)
 		if errors.Is(err, worktree.ErrMergeConflict) {
 			return loop.PipelineResult{
 				Summary:  r.MakerSummary,
@@ -93,6 +104,28 @@ func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.Pipel
 		return loop.PipelineResult{}, fmt.Errorf("merge worktree: %w", err)
 	}
 	return loop.PipelineResult{Summary: r.MakerSummary, Approved: true}, nil
+}
+
+// create 在 worktree.create span 下派生隔离工作区，并把分支名作为 span 属性。
+func (p *worktreePipeline) create(ctx context.Context) (worktree.Workspace, error) {
+	ctx, end := p.span(ctx, "worktree.create")
+	ws, err := p.mgr.Create(ctx, p.baseRef)
+	end(err, observe.Attr{Key: "worktree.branch", Value: ws.Branch})
+	return ws, err
+}
+
+// merge 在 worktree.merge span 下把已审核通过的 worktree 合并回基线，并标注是否冲突。
+func (p *worktreePipeline) merge(ctx context.Context, ws worktree.Workspace) error {
+	ctx, end := p.span(ctx, "worktree.merge", observe.Attr{Key: "worktree.branch", Value: ws.Branch})
+	err := p.mgr.Merge(ctx, ws, p.baseRef)
+	end(err, observe.Attr{Key: "merge.conflict", Value: errors.Is(err, worktree.ErrMergeConflict)})
+	return err
+}
+
+// discard 在 worktree.discard span 下物理丢弃 worktree；回滚失败仅记入 span，不阻断续跑。
+func (p *worktreePipeline) discard(ctx context.Context, ws worktree.Workspace) {
+	ctx, end := p.span(ctx, "worktree.discard", observe.Attr{Key: "worktree.branch", Value: ws.Branch})
+	end(p.mgr.Discard(ctx, ws))
 }
 
 // buildMakerReviewer 按指定工作根装配 maker/reviewer 双角色：maker（可写池 + Auto）+
@@ -150,6 +183,7 @@ func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, 
 	return &worktreePipeline{
 		mgr:     mgr,
 		baseRef: "HEAD",
+		tracer:  prov.Tracer(),
 		build: func(root string) makerReviewerRunner {
 			return buildMakerReviewer(llmc, prov, prompter, root, nil) // worktree 负责清理，无需 discarder
 		},

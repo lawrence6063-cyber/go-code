@@ -14,10 +14,12 @@ type Attr struct {
 }
 
 // EndFunc 结束当前 span；传入非 nil error 时自动记录错误与失败状态。
-type EndFunc func(err error)
+// 可选 attrs 在 span 结束前补写（用于把 token/ttft/outcome 等只有在结束时才知道的属性挂到 span 上）。
+type EndFunc func(err error, attrs ...Attr)
 
 // Tracer 开启一个 span，返回派生 ctx（携带新 span）与结束函数。
 // 内核统一用法：ctx, end := tr.Start(ctx, "react.step"); defer end(err)
+// 需在结束时补属性：end(err, observe.Attr{Key: "k", Value: v})
 type Tracer interface {
 	Start(ctx context.Context, name string, attrs ...Attr) (context.Context, EndFunc)
 }
@@ -70,7 +72,7 @@ func (noopProvider) Shutdown(context.Context) error { return nil }
 type noopTracer struct{}
 
 func (noopTracer) Start(ctx context.Context, _ string, _ ...Attr) (context.Context, EndFunc) {
-	return ctx, func(error) {}
+	return ctx, func(error, ...Attr) {}
 }
 
 // noopMeter 是 Meter 的空实现。

@@ -191,6 +191,36 @@ func TestEngine_RunRejectsEmptyTask(t *testing.T) {
 	}
 }
 
+// panicLLM 在 Stream 同步阶段 panic，用于验证内核 goroutine 顶层兜底。
+type panicLLM struct{}
+
+func (panicLLM) Stream(context.Context, llm.Request) (<-chan llm.Delta, error) {
+	panic("synthetic llm panic")
+}
+
+func TestEngine_RunRecoversPanic(t *testing.T) {
+	prov, _ := observe.New(observe.Config{Enabled: false})
+	eng, err := New(Deps{LLM: panicLLM{}, Observe: prov, Model: "m"})
+	if err != nil {
+		t.Fatalf("engine.New: %v", err)
+	}
+	events, err := eng.Run(context.Background(), "boom")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// 单点 panic 不得击穿进程：应降级为 EventError 并正常关闭 channel。
+	got := collect(t, events)
+	var sawError bool
+	for _, ev := range got {
+		if ev.Type == types.EventError && ev.Err != nil {
+			sawError = true
+		}
+	}
+	if !sawError {
+		t.Errorf("expected EventError from recovered panic, got %+v", got)
+	}
+}
+
 func TestEngine_ResumeRequiresSessionStore(t *testing.T) {
 	f := &fakeLLM{}
 	eng := newTestEngine(t, f)

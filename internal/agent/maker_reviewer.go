@@ -32,6 +32,14 @@ func (r Role) spanName() string {
 	return "agent.maker"
 }
 
+// String 返回角色的可读名（maker/reviewer），用于 span 属性。
+func (r Role) String() string {
+	if r == RoleReviewer {
+		return "reviewer"
+	}
+	return "maker"
+}
+
 // ReviewVerdict 是审查者的结构化裁决（独立于 maker，不批改自己作业）。
 type ReviewVerdict struct {
 	Approved bool   // 是否通过；fail-closed：解析失败/异常一律视为未通过
@@ -113,14 +121,14 @@ func (m *MakerReviewer) runRole(ctx context.Context, role Role, deps engine.Deps
 	if err != nil {
 		return "", fmt.Errorf("build %s engine: %w", role.spanName(), err)
 	}
-	sctx, end := m.tracer.Start(ctx, role.spanName())
+	sctx, end := m.tracer.Start(ctx, role.spanName(), observe.Attr{Key: "agent.role", Value: role.String()})
 	events, err := eng.Run(sctx, task)
 	if err != nil {
 		end(err)
 		return "", fmt.Errorf("run %s: %w", role.spanName(), err)
 	}
 	summary := collectText(events, m.maxSummaryBytes)
-	end(nil)
+	end(nil, observe.Attr{Key: "summary.bytes", Value: len(summary)})
 	return summary, nil
 }
 

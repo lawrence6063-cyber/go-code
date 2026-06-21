@@ -55,13 +55,16 @@ func (s *SubAgent) Spawn(ctx context.Context, prompt string) (summary string, er
 	}
 
 	ctx, end := s.tracer.Start(ctx, "agent.spawn")
-	defer func() { end(err) }()
+	var summaryLen int
+	defer func() { end(err, observe.Attr{Key: "summary.bytes", Value: summaryLen}) }()
 
 	events, err := eng.Run(ctx, prompt)
 	if err != nil {
 		return "", fmt.Errorf("run sub-agent: %w", err)
 	}
-	return s.collectSummary(events), nil
+	summary = s.collectSummary(events)
+	summaryLen = len(summary)
+	return summary, nil
 }
 
 // collectSummary 排空子 Engine 的事件流并累积文本为摘要（截断到上限）。

@@ -160,3 +160,72 @@ func TestNewSessionID_Format(t *testing.T) {
 		t.Error("two session ids collided")
 	}
 }
+
+// TestStore_LoadToleratesHalfWrittenLine 验证进程崩溃留下的半行 JSON 被跳过，
+// 且其后的完整行仍能正常恢复（OPTIMIZE_SPEC R5 边界显式化）。
+func TestStore_LoadToleratesHalfWrittenLine(t *testing.T) {
+	dir := t.TempDir()
+	st := NewStore(dir)
+	ctx := context.Background()
+	sid := "halfline"
+
+	if err := st.Append(ctx, sid, Event{UUID: "u1", Type: "user", Payload: payload(t, map[string]string{"text": "a"})}); err != nil {
+		t.Fatalf("Append u1: %v", err)
+	}
+	// 模拟崩溃留下的坏行（残缺 JSON，以换行结尾自成一行），再追加一条完整事件。
+	f, err := os.OpenFile(filepath.Join(dir, sid+fileSuffix), os.O_APPEND|os.O_WRONLY, filePerms)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := f.WriteString(`{"uuid":"broken","type":"user","payload":{"text":"` + "\n"); err != nil {
+		t.Fatalf("write half line: %v", err)
+	}
+	_ = f.Close()
+	if err := st.Append(ctx, sid, Event{UUID: "u2", Type: "assistant", Payload: payload(t, map[string]string{"text": "b"})}); err != nil {
+		t.Fatalf("Append u2: %v", err)
+	}
+
+	got, err := st.Load(ctx, sid)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// 半行被跳过，u1 与 u2 仍恢复（broken 行不应进入结果）。
+	if len(got) != 2 {
+		t.Fatalf("loaded %d events, want 2 (half line must be skipped): %+v", len(got), got)
+	}
+	for _, e := range got {
+		if e.UUID == "broken" {
+			t.Errorf("half-written line should not be recovered: %+v", e)
+		}
+	}
+}
+
+// TestStore_RedactsExtendedCredentials 验证扩充后的脱敏规则覆盖 GitHub/AWS/Bearer 等高熵凭据。
+func TestStore_RedactsExtendedCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		leak string
+	}{
+		{"github pat", "use ghp_0123456789ABCDEFabcdef0123 now", "ghp_0123456789ABCDEFabcdef0123"},
+		{"aws key", "id AKIAIOSFODNN7EXAMPLE here", "AKIAIOSFODNN7EXAMPLE"},
+		{"bearer", "Authorization: Bearer abcdef0123456789ABCDEF", "abcdef0123456789ABCDEF"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			st := NewStore(dir)
+			sid := "extcred"
+			if err := st.Append(context.Background(), sid, Event{UUID: "u", Type: "user", Payload: payload(t, map[string]string{"text": tt.text})}); err != nil {
+				t.Fatalf("Append: %v", err)
+			}
+			raw, err := os.ReadFile(filepath.Join(dir, sid+fileSuffix))
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if strings.Contains(string(raw), tt.leak) {
+				t.Errorf("credential %q leaked: %s", tt.leak, raw)
+			}
+		})
+	}
+}

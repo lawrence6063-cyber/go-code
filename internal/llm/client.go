@@ -53,8 +53,9 @@ type Usage struct {
 
 // Config 配置 LLM 客户端连接参数；由 cmd 层按 env 构造后注入。
 type Config struct {
-	APIKey  string // 密钥，仅来自环境变量，严禁硬编码
-	BaseURL string // OpenAI 兼容接口 BaseURL（DeepSeek）
+	APIKey  string      // 密钥，仅来自环境变量，严禁硬编码
+	BaseURL string      // OpenAI 兼容接口 BaseURL（DeepSeek）
+	Retry   RetryPolicy // 建流阶段的可重试错误退避策略；零值表示不重试（向后兼容）
 }
 
 // New 构造一个走 DeepSeek OpenAI 兼容接口的 Client；APIKey 为空时启动期 fail-fast。
@@ -66,27 +67,59 @@ func New(cfg Config) (Client, error) {
 	if cfg.BaseURL != "" {
 		oc.BaseURL = cfg.BaseURL
 	}
-	return &client{api: openai.NewClientWithConfig(oc)}, nil
+	return &client{api: openai.NewClientWithConfig(oc), retry: cfg.Retry}, nil
 }
 
 // client 是 Client 的 DeepSeek OpenAI 兼容实现。
 type client struct {
-	api *openai.Client
+	api   *openai.Client
+	retry RetryPolicy
 }
 
 // Stream 发起一次流式补全，启动后台 goroutine 把 SSE 增量泵入 channel。
+// 仅对"建立流"阶段的可重试错误（429/5xx/网络瞬时）做指数退避重试；
+// 流已开始吐 token 后失败不重试（破坏增量语义），转整轮失败由上层 maxSteps 兜底。
 func (c *client) Stream(ctx context.Context, req Request) (<-chan Delta, error) {
-	stream, err := c.api.CreateChatCompletionStream(ctx, toOpenAIRequest(req))
+	stream, err := c.openStream(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("create stream: %w", err)
+		return nil, err
 	}
 	out := make(chan Delta, 16)
 	go func() {
 		defer close(out)
 		defer func() { _ = stream.Close() }()
+		defer func() {
+			if v := recover(); v != nil {
+				emit(ctx, out, Delta{Err: fmt.Errorf("llm stream panic: %v", v)})
+			}
+		}()
 		pump(ctx, stream, out)
 	}()
 	return out, nil
+}
+
+// openStream 建立底层 SSE 流，按 RetryPolicy 对可重试错误做指数退避重试；ctx 取消即收手。
+func (c *client) openStream(ctx context.Context, req Request) (*openai.ChatCompletionStream, error) {
+	oreq := toOpenAIRequest(req)
+	var lastErr error
+	attempts := 1
+	if c.retry.enabled() {
+		attempts = c.retry.MaxAttempts
+	}
+	for attempt := 1; attempt <= attempts; attempt++ {
+		stream, err := c.api.CreateChatCompletionStream(ctx, oreq)
+		if err == nil {
+			return stream, nil
+		}
+		lastErr = err
+		if attempt == attempts || !isRetryable(err) {
+			break
+		}
+		if werr := sleep(ctx, c.retry.backoff(attempt)); werr != nil {
+			return nil, fmt.Errorf("create stream: %w", werr)
+		}
+	}
+	return nil, fmt.Errorf("create stream: %w", lastErr)
 }
 
 // pump 循环读取 SSE 增量并上抛 Delta；按 index 累积流式 tool_calls，

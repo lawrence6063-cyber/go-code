@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/alaindong/cogent/internal/secret"
 )
 
 // 服务标识常量，写入 Resource，便于在 Jaeger/Tempo 中区分来源。
@@ -102,13 +104,17 @@ type otelTracer struct {
 	tracer trace.Tracer
 }
 
-// Start 开启一个 span，返回派生 ctx 与结束函数；end(err) 非 nil 时记录错误与失败状态。
+// Start 开启一个 span，返回派生 ctx 与结束函数；end(err) 非 nil 时记录错误与失败状态，
+// 可选 attrs 在 span.End() 前补写（用于补 token/ttft/outcome 等结束时才确定的属性，OPTIMIZE_SPEC O2）。
 func (t *otelTracer) Start(ctx context.Context, name string, attrs ...Attr) (context.Context, EndFunc) {
 	ctx, span := t.tracer.Start(ctx, name)
 	if len(attrs) > 0 {
 		span.SetAttributes(toKeyValues(attrs)...)
 	}
-	return ctx, func(err error) {
+	return ctx, func(err error, endAttrs ...Attr) {
+		if len(endAttrs) > 0 {
+			span.SetAttributes(toKeyValues(endAttrs)...)
+		}
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
@@ -192,10 +198,11 @@ func toKeyValues(attrs []Attr) []attribute.KeyValue {
 }
 
 // toKeyValue 把单个 Attr 转换为 attribute.KeyValue，按值类型选择对应构造器，其余类型字符串兜底。
+// 字符串型值在入 span/metric 前统一过 secret.Redact（集中拦截，避免每个埋点处遗漏脱敏，OPTIMIZE_SPEC S3）。
 func toKeyValue(a Attr) attribute.KeyValue {
 	switch v := a.Value.(type) {
 	case string:
-		return attribute.String(a.Key, v)
+		return attribute.String(a.Key, secret.RedactString(v))
 	case bool:
 		return attribute.Bool(a.Key, v)
 	case int:
@@ -205,6 +212,6 @@ func toKeyValue(a Attr) attribute.KeyValue {
 	case float64:
 		return attribute.Float64(a.Key, v)
 	default:
-		return attribute.String(a.Key, fmt.Sprint(v))
+		return attribute.String(a.Key, secret.RedactString(fmt.Sprint(v)))
 	}
 }

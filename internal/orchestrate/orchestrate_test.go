@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -177,5 +178,52 @@ func TestRun_CancelSkipsRemaining(t *testing.T) {
 	}
 	if atomic.LoadInt32(&calls) != 0 {
 		t.Errorf("calls = %d, want 0", calls)
+	}
+}
+
+func TestRun_SerialToolPanicIsolated(t *testing.T) {
+	run := func(_ context.Context, block types.ToolUseBlock) types.Message {
+		if block.Name == "boom" {
+			panic("kaboom")
+		}
+		return types.Message{Role: types.RoleTool, ToolUseID: block.ID, ToolName: block.Name, Text: "ok"}
+	}
+	batches := []Batch{
+		{Concurrent: false, Blocks: blocks("boom")},
+		{Concurrent: false, Blocks: blocks("safe")},
+	}
+	got := Run(context.Background(), batches, run, testTracer())
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2 (panic must not abort the run)", len(got))
+	}
+	// panic 的工具被规整为配对完整的错误结果，兄弟工具仍正常完成。
+	if got[0].ToolUseID != "boom" || got[0].ToolName != "boom" {
+		t.Errorf("panicked result pairing lost: %+v", got[0])
+	}
+	if !strings.Contains(got[0].Text, "tool panicked") {
+		t.Errorf("result[0].Text = %q, want contains 'tool panicked'", got[0].Text)
+	}
+	if got[1].Text != "ok" {
+		t.Errorf("result[1].Text = %q, want 'ok'", got[1].Text)
+	}
+}
+
+func TestRun_ConcurrentToolPanicIsolated(t *testing.T) {
+	run := func(_ context.Context, block types.ToolUseBlock) types.Message {
+		if block.Name == "b" {
+			panic("boom")
+		}
+		return types.Message{Role: types.RoleTool, ToolUseID: block.ID, ToolName: block.Name, Text: "ok"}
+	}
+	batches := []Batch{{Concurrent: true, Blocks: blocks("a", "b", "c")}}
+	got := Run(context.Background(), batches, run, testTracer())
+	if len(got) != 3 {
+		t.Fatalf("len = %d, want 3 (sibling panic must not drop slots)", len(got))
+	}
+	if !strings.Contains(got[1].Text, "tool panicked") || got[1].ToolUseID != "b" {
+		t.Errorf("result[1] = %+v, want paired 'tool panicked'", got[1])
+	}
+	if got[0].Text != "ok" || got[2].Text != "ok" {
+		t.Errorf("siblings not completed: %+v / %+v", got[0], got[2])
 	}
 }
