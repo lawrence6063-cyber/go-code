@@ -82,7 +82,7 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	in := newInputReader(os.Stdin)
-	prompter := newCLIPrompter(in)
+	prompter := newPrompter(in)
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 
@@ -119,12 +119,21 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 // buildVerifier 构造独立判定器：脚本为空时返回 nil（fail-closed，跑到撞预算）。
 // 验收脚本是开发者提供的可信控制面，需继承宿主 PATH（如 go 工具链），故沙箱 Enabled=false——
 // 仍保留危险命令拦截 + WorkRoot 约束 + 超时，但不施加受限环境。
+// 用 NewSandbox 工厂按传入工作根构造沙箱：使验收脚本能跑在 maker 改动所在目录（如 worktree 根），
+// 让客观判据看到真实改动（修复 reviewer 双闸门短路客观 verify 的问题）；空工作根回退主工作区。
 func buildVerifier(script, workRoot string) verify.Verifier {
 	if strings.TrimSpace(script) == "" {
 		return nil
 	}
-	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false, Timeout: verifyTimeout})
-	return verify.NewScriptVerifier(script, sb)
+	return verify.ScriptVerifier{
+		Script: script,
+		NewSandbox: func(root string) sandbox.Sandbox {
+			if strings.TrimSpace(root) == "" {
+				root = workRoot
+			}
+			return sandbox.New(sandbox.Config{WorkRoot: root, Enabled: false, Timeout: verifyTimeout})
+		},
+	}
 }
 
 // printGoalBanner 打印目标循环的启动横幅。

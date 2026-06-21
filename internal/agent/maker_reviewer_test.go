@@ -153,6 +153,31 @@ func TestParseVerdict(t *testing.T) {
 		{"rejected", "REJECTED: needs tests", false},
 		{"empty fail-closed", "", false},
 		{"garbage fail-closed", "I think maybe it is fine?", false},
+		{
+			name:     "reasoning then structured approved",
+			in:       "I'll start by inspecting the files.\nThe change looks correct.\nVERDICT: APPROVED",
+			approved: true,
+		},
+		{
+			name:     "reasoning then structured rejected",
+			in:       "Let me check whether this should be approved.\nThe error path is wrong.\nVERDICT: REJECTED",
+			approved: false,
+		},
+		{
+			name:     "structured rejected overrides earlier mention of approved",
+			in:       "This could be approved if fixed.\nVERDICT: REJECTED",
+			approved: false,
+		},
+		{
+			name:     "markdown emphasized verdict",
+			in:       "Analysis done.\n**VERDICT: APPROVED**",
+			approved: true,
+		},
+		{
+			name:     "bare rejected after reasoning",
+			in:       "I inspected the diff thoroughly.\nREJECTED because tests are missing",
+			approved: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

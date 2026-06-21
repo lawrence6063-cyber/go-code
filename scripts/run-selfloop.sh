@@ -24,6 +24,8 @@ export COGENT_OBSERVE_ENABLED="true"
 export COGENT_TRACE_EXPORTER="file"
 export COGENT_TRACE_DIR="./data/traces"
 export COGENT_TRACE_SAMPLE_RATIO="1.0"
+# 无人值守自动批准权限中断（危险命令仍被 sandbox 拦截、worktree 物理隔离兜底）。
+export COGENT_YES="1"
 
 VERIFY="$ROOT/eval/tasks/finish_reason_selfloop/verify.sh"
 INTENT="$(cat "$ROOT/eval/tasks/finish_reason_selfloop/task.txt")"
@@ -36,6 +38,8 @@ echo "verify   : $VERIFY"
 echo "traces   : $COGENT_TRACE_DIR"
 echo "===================================================="
 
+# 无人值守：maker 的写/执行工具经 Guard 走 HITL；COGENT_YES=1 启用自动批准（见上），
+# 危险命令仍被 sandbox 确定性拦截、worktree 物理隔离兜底。
 ./bin/cogent goal --worktree \
 	--verify "$VERIFY" \
 	--max-iterations 8 \

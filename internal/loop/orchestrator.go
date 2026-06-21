@@ -108,10 +108,12 @@ func (o *orchestrator) iterate(
 	return report, false
 }
 
-// runPipeline 走「制造-审查」双角色：maker 实现 → reviewer 审查。reviewer 拒 = 本轮未达标
-// 并带反馈续跑（跳过客观验收）；reviewer 通过 → 再过 goal.Verifier 客观验收（主观+客观双闸门）。
+// runPipeline 走「制造-审查」双角色，并把客观 verify 作为不可被主观裁决短路的最终硬闸门：
+// 执行体在改动所在工作根执行 verifyAt（由 goal.Verifier 适配），verify 通过即达标并落盘；
+// reviewer 裁决降级为建议性反馈，仅在 verify 未通过时拼入续跑反馈。未配置 Verifier 时回退到
+// 执行体自身裁决作为落盘闸门（向后兼容 `--review` 无 `--verify`）。
 func (o *orchestrator) runPipeline(ctx context.Context, task string, goal Goal, out chan<- LoopEvent) verify.Report {
-	pr, err := o.pipeline.Iterate(ctx, task)
+	pr, err := o.pipeline.Iterate(ctx, task, o.makeVerifyAt(goal))
 	if err != nil {
 		ev := types.StreamEvent{Type: types.EventError, Err: err}
 		o.emit(ctx, out, LoopEvent{Type: LoopInner, Inner: &ev})
@@ -121,12 +123,46 @@ func (o *orchestrator) runPipeline(ctx context.Context, task string, goal Goal, 
 		ev := types.StreamEvent{Type: types.EventText, Text: pr.Summary}
 		o.emit(ctx, out, LoopEvent{Type: LoopInner, Inner: &ev})
 	}
-	if !pr.Approved {
-		report := verify.Report{Summary: "reviewer rejected: " + pr.Feedback}
-		o.emitVerify(ctx, out, report)
+	report := o.pipelineReport(pr)
+	o.emitVerify(ctx, out, report)
+	return report
+}
+
+// pipelineReport 把流水线产出收敛为本轮判定报告：有客观判定结果时以其为准（reviewer 反馈在未通过时附注）；
+// 无客观判定（未配置 Verifier）时回退到 reviewer 裁决。
+func (o *orchestrator) pipelineReport(pr PipelineResult) verify.Report {
+	if pr.Report != nil {
+		report := *pr.Report
+		if !report.Passed && strings.TrimSpace(pr.Feedback) != "" {
+			report.Detail = strings.TrimSpace(report.Detail + "\n\nreviewer feedback: " + pr.Feedback)
+		}
 		return report
 	}
-	return o.verify(ctx, goal, out) // reviewer 通过 → 客观验收闸门
+	if !pr.Approved {
+		return verify.Report{Summary: "reviewer rejected: " + pr.Feedback}
+	}
+	return verify.Report{Passed: true, Summary: "reviewer approved (no verify script configured)"}
+}
+
+// makeVerifyAt 把 goal.Verifier 适配为 VerifyAtFunc：在执行体的工作根上判定，
+// 每次调用开一个 goal.verify span 并计量，保证客观判据每轮都被触达（fail-closed）。
+// Verifier 为 nil 时返回 nil，执行体据此回退到自身裁决作为落盘闸门。
+func (o *orchestrator) makeVerifyAt(goal Goal) VerifyAtFunc {
+	if goal.Verifier == nil {
+		return nil
+	}
+	return func(ctx context.Context, workRoot string) verify.Report {
+		vctx, end := o.tracer.Start(ctx, "goal.verify")
+		report, err := goal.Verifier.Verify(vctx, workRoot, goal.Intent)
+		if err != nil {
+			slog.Warn("verifier error (fail-closed as not passed)", "err", err)
+			report.Passed = false
+		}
+		end(err, observe.Attr{Key: "verify.passed", Value: report.Passed})
+		o.meter.Count("cogent.verify.passed", boolToInt(report.Passed),
+			observe.Attr{Key: "verify.passed", Value: report.Passed})
+		return report
+	}
 }
 
 // runInner 调内层 engine 跑一轮任务，把其 StreamEvent 经 LoopInner 透传；

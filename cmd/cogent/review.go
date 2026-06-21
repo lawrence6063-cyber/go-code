@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/alaindong/cogent/internal/agent"
 	"github.com/alaindong/cogent/internal/engine"
@@ -14,6 +16,7 @@ import (
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
+	"github.com/alaindong/cogent/internal/verify"
 	"github.com/alaindong/cogent/internal/worktree"
 )
 
@@ -35,21 +38,47 @@ func (g gitDiscarder) Discard(ctx context.Context) error {
 // 使 loop 包无需 import agent——依赖更干净，符合项目「消费侧定义接口」惯例。
 // 设计动机（OPTIMIZE_SPEC A2）：LOOP_SPEC §3.2 本允许 loop→agent，但选择在 cmd 层用适配器桥接，
 // 换取 loop 对 agent 的零编译依赖（与 engineRunner/Spawner 惯例一致），是有意识的解耦权衡而非设计失误。
+// 落盘闸门：verifyAt 非 nil 时由客观 verify 决定保留/回滚（reviewer 降级为建议）；为 nil 时回退 reviewer 裁决。
 type pipelineAdapter struct {
-	mr *agent.MakerReviewer
+	mr        *agent.MakerReviewer
+	workRoot  string          // maker 改动所在工作根，供 verifyAt 在其上执行客观判定
+	discarder agent.Discarder // verify/裁决未通过时回滚工作区改动；为 nil 不回滚
 }
 
-// Iterate 见 loop.Pipeline 接口说明：转调 agent 流水线并把结果投影为 loop 视图。
-func (a pipelineAdapter) Iterate(ctx context.Context, task string) (loop.PipelineResult, error) {
+// Iterate 见 loop.Pipeline 接口说明：maker/reviewer → 客观 verify 硬闸门 → 通过保留 / 否则回滚。
+func (a pipelineAdapter) Iterate(ctx context.Context, task string, verifyAt loop.VerifyAtFunc) (loop.PipelineResult, error) {
 	r, err := a.mr.Iterate(ctx, task)
 	if err != nil {
 		return loop.PipelineResult{}, err
 	}
-	return loop.PipelineResult{
-		Summary:  r.MakerSummary,
-		Approved: r.Verdict.Approved,
-		Feedback: r.Verdict.Feedback,
-	}, nil
+	if verifyAt != nil {
+		report := verifyAt(ctx, a.workRoot)
+		if !report.Passed {
+			a.discard(ctx) // 客观未通过：回滚 maker 改动，主工作区零残留
+			return loop.PipelineResult{
+				Summary:  r.MakerSummary,
+				Approved: r.Verdict.Approved,
+				Feedback: r.Verdict.Feedback,
+				Report:   &report,
+			}, nil
+		}
+		return loop.PipelineResult{Summary: r.MakerSummary, Approved: true, Report: &report}, nil
+	}
+	if !r.Verdict.Approved {
+		a.discard(ctx) // 无客观判据：回退 reviewer 裁决作为落盘闸门（向后兼容）
+		return loop.PipelineResult{Summary: r.MakerSummary, Approved: false, Feedback: r.Verdict.Feedback}, nil
+	}
+	return loop.PipelineResult{Summary: r.MakerSummary, Approved: true}, nil
+}
+
+// discard 在未通过时回滚 maker 改动；无 discarder 则不操作，回滚失败仅告警不阻断续跑。
+func (a pipelineAdapter) discard(ctx context.Context) {
+	if a.discarder == nil {
+		return
+	}
+	if err := a.discarder.Discard(ctx); err != nil {
+		slog.Warn("discard rejected changes failed", "err", err)
+	}
 }
 
 // makerReviewerRunner 抽象 worktree 内执行的「一轮双角色」（maker 改 + reviewer 审），
@@ -77,8 +106,10 @@ func (p *worktreePipeline) span(ctx context.Context, name string, attrs ...obser
 	return p.tracer.Start(ctx, name, attrs...)
 }
 
-// Iterate 见 loop.Pipeline 接口说明：Create → maker/reviewer → 通过 Merge / 否则 Discard。
-func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.PipelineResult, error) {
+// Iterate 见 loop.Pipeline 接口说明：Create → maker/reviewer → 客观 verify 硬闸门 → 通过 Merge / 否则 Discard。
+// verifyAt 非 nil 时在 worktree 根执行客观判定，verify 通过才 Merge 落盘（reviewer 降级为建议，不可短路）；
+// 为 nil 时回退到 reviewer 裁决作为落盘闸门（向后兼容）。
+func (p *worktreePipeline) Iterate(ctx context.Context, task string, verifyAt loop.VerifyAtFunc) (loop.PipelineResult, error) {
 	ws, err := p.create(ctx)
 	if err != nil {
 		return loop.PipelineResult{}, fmt.Errorf("create worktree: %w", err)
@@ -88,9 +119,20 @@ func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.Pipel
 		p.discard(ctx, ws)
 		return loop.PipelineResult{}, runErr
 	}
-	if !r.Verdict.Approved {
+	approved := r.Verdict.Approved
+	feedback := r.Verdict.Feedback
+	var report *verify.Report
+	if verifyAt != nil { // 客观判据为最终硬闸门：verify 通过即落盘，reviewer 降级为建议
+		rep := verifyAt(ctx, ws.Root)
+		report = &rep
+		approved = rep.Passed
+		if !rep.Passed {
+			feedback = combineFeedback(r.Verdict.Feedback, rep)
+		}
+	}
+	if !approved {
 		p.discard(ctx, ws) // 未通过：物理丢弃，主工作区零残留
-		return loop.PipelineResult{Summary: r.MakerSummary, Approved: false, Feedback: r.Verdict.Feedback}, nil
+		return loop.PipelineResult{Summary: r.MakerSummary, Approved: false, Feedback: feedback, Report: report}, nil
 	}
 	if err := p.merge(ctx, ws); err != nil {
 		p.discard(ctx, ws)
@@ -98,12 +140,25 @@ func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.Pipel
 			return loop.PipelineResult{
 				Summary:  r.MakerSummary,
 				Approved: false,
-				Feedback: "merge conflict while landing approved changes: " + err.Error(),
+				Feedback: "merge conflict while landing changes: " + err.Error(),
+				Report:   report,
 			}, nil
 		}
 		return loop.PipelineResult{}, fmt.Errorf("merge worktree: %w", err)
 	}
-	return loop.PipelineResult{Summary: r.MakerSummary, Approved: true}, nil
+	return loop.PipelineResult{Summary: r.MakerSummary, Approved: true, Report: report}, nil
+}
+
+// combineFeedback 把客观 verify 摘要与 reviewer 建议合并为续跑反馈（verify 未通过时）。
+func combineFeedback(reviewerFeedback string, report verify.Report) string {
+	fb := strings.TrimSpace(report.Summary)
+	if d := strings.TrimSpace(report.Detail); d != "" {
+		fb = strings.TrimSpace(fb + "\n\n" + d)
+	}
+	if rf := strings.TrimSpace(reviewerFeedback); rf != "" {
+		fb = strings.TrimSpace(fb + "\n\nreviewer feedback: " + rf)
+	}
+	return fb
 }
 
 // create 在 worktree.create span 下派生隔离工作区，并把分支名作为 span 属性。
@@ -159,16 +214,17 @@ func buildMakerReviewer(
 	return agent.NewMakerReviewer(makerDeps, reviewerDeps, discarder)
 }
 
-// buildPipeline 装配 maker/reviewer 双角色流水线（diff 回滚版）：maker 改工作区，
-// reviewer 审，未通过经 git 回滚（向后兼容默认）。
+// buildPipeline 装配 maker/reviewer 双角色流水线（diff 回滚版）：maker 改工作区，reviewer 审，
+// 客观 verify 作为落盘硬闸门（未通过经 git 回滚）。MakerReviewer 不持有 discarder——
+// 回滚时机改由 adapter 在客观 verify 之后决定，使 reviewer 不再能短路客观判据。
 func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
 	llmc, err := newLLMClient()
 	if err != nil {
 		return nil, err
 	}
 	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false})
-	mr := buildMakerReviewer(llmc, prov, prompter, workRoot, gitDiscarder{sb: sb})
-	return pipelineAdapter{mr: mr}, nil
+	mr := buildMakerReviewer(llmc, prov, prompter, workRoot, nil)
+	return pipelineAdapter{mr: mr, workRoot: workRoot, discarder: gitDiscarder{sb: sb}}, nil
 }
 
 // buildWorktreePipeline 装配 worktree 暂存版双角色流水线（L4-2）：每轮在隔离 worktree 内执行，
@@ -190,12 +246,17 @@ func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, 
 	}, nil
 }
 
-// reviewerModel 返回审查者使用的模型：优先 COGENT_REVIEWER_MODEL，否则沿用 maker 模型。
-func reviewerModel(makerModel string) string {
+// defaultReviewerModel 是审查者的缺省模型：选用指令遵循更稳的对话模型，
+// 避免 reasoner 输出思维链导致裁决格式不合规而被 fail-closed 恒拒（发现③/④）。
+const defaultReviewerModel = "deepseek-chat"
+
+// reviewerModel 返回审查者使用的模型：优先 COGENT_REVIEWER_MODEL，否则用缺省对话模型
+// （与 maker 模型解耦——maker 可用 reasoner 强推理，reviewer 用 chat 稳遵循裁决格式）。
+func reviewerModel(string) string {
 	if m := os.Getenv("COGENT_REVIEWER_MODEL"); m != "" {
 		return m
 	}
-	return makerModel
+	return defaultReviewerModel
 }
 
 // buildOrchestrator 装配目标循环编排器：
@@ -213,12 +274,18 @@ func buildOrchestrator(
 	review, useWorktree bool,
 ) (loop.Orchestrator, func(), error) {
 	noop := func() {}
+	// 装饰 provider 注入成本计量：拦截 cogent.tokens 累计美元成本，并作为 loop.CostMeter 接入护栏，
+	// 使 --max-cost 真正生效（修复发现⑤：成本护栏此前是空接线）。
+	costProv := newCostProvider(prov)
+	prov = costProv
 	if review || useWorktree {
 		pipeline, err := pipelineFor(prov, prompter, workRoot, useWorktree)
 		if err != nil {
 			return nil, noop, err
 		}
-		orch, err := loop.New(loop.Deps{Pipeline: pipeline, Tracer: prov.Tracer(), Meter: prov.Meter()})
+		orch, err := loop.New(loop.Deps{
+			Pipeline: pipeline, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.meter,
+		})
 		if err != nil {
 			return nil, noop, fmt.Errorf("init loop: %w", err)
 		}
@@ -233,7 +300,9 @@ func buildOrchestrator(
 		_ = mgr.Close()
 		return nil, noop, err
 	}
-	orch, err := loop.New(loop.Deps{Engine: eng, Tracer: prov.Tracer(), Meter: prov.Meter()})
+	orch, err := loop.New(loop.Deps{
+		Engine: eng, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.meter,
+	})
 	if err != nil {
 		_ = mgr.Close()
 		return nil, noop, fmt.Errorf("init loop: %w", err)

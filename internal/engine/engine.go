@@ -115,21 +115,25 @@ func New(deps Deps) (Engine, error) {
 	return e, nil
 }
 
-// buildSystemPrompt 把基础系统提示与项目记忆（若有）拼成最终系统提示。
+// buildSystemPrompt 把基础系统提示、工作根环境感知提示与项目记忆（若有）拼成最终系统提示。
 // 记忆是可选增强，加载失败仅告警不影响内核启动。
 func buildSystemPrompt(mem memory.Loader, workRoot string) string {
+	base := systemPrompt
+	if strings.TrimSpace(workRoot) != "" {
+		base += fmt.Sprintf(workspaceHintTemplate, workRoot)
+	}
 	if mem == nil {
-		return systemPrompt
+		return base
 	}
 	text, err := mem.Build(context.Background(), workRoot)
 	if err != nil {
 		slog.Warn("load memory", "err", err)
-		return systemPrompt
+		return base
 	}
 	if strings.TrimSpace(text) == "" {
-		return systemPrompt
+		return base
 	}
-	return systemPrompt + "\n\n# Project memory (.cogent/MEMORY.md)\n" + text
+	return base + "\n\n# Project memory (.cogent/MEMORY.md)\n" + text
 }
 
 // engine 是 Engine 的具体实现，持有跨轮的消息历史作为单一真相源。
@@ -316,7 +320,8 @@ func (e *engine) streamAssistant(
 	defer func() { end(err, st.attrs()...) }()
 
 	// 每次 LLM 调用施加独立超时上限，防"首 token 迟迟不来"长时间挂起；超时即本轮失败，由 maxSteps 兜底。
-	ctx, cancel := context.WithTimeout(ctx, e.llmTimeout)
+	// 取「单次超时」与「父 ctx 剩余时间（如外层墙钟）」的较小值，收紧墙钟到顶时的取消滞后（发现⑥）。
+	ctx, cancel := context.WithTimeout(ctx, e.effectiveLLMTimeout(ctx))
 	defer cancel()
 
 	deltas, err := e.llm.Stream(ctx, llm.Request{Messages: e.msgs, Tools: e.toolSchemas(), Model: e.model})
@@ -340,6 +345,9 @@ func (e *engine) streamAssistant(
 			if d.ToolCall != nil {
 				toolUses = append(toolUses, *d.ToolCall)
 			}
+			if d.FinishReason != "" {
+				st.finishReason = d.FinishReason
+			}
 			if d.Text != "" {
 				sb.WriteString(d.Text)
 				if !emitEvent(ctx, out, types.StreamEvent{Type: types.EventText, Text: d.Text}) {
@@ -353,12 +361,26 @@ func (e *engine) streamAssistant(
 	}
 }
 
-// streamStats 累积单次 LLM 流的可观测数据：首 token 延迟与 token 用量。
+// streamStats 累积单次 LLM 流的可观测数据：首 token 延迟、token 用量与结束原因。
 type streamStats struct {
-	gotFirst   bool
-	ttftMs     int64
-	prompt     int
-	completion int
+	gotFirst     bool
+	ttftMs       int64
+	prompt       int
+	completion   int
+	finishReason string
+}
+
+// effectiveLLMTimeout 取「单次 LLM 调用超时上限」与「父 ctx 剩余时间（如外层墙钟）」的较小值。
+// 当外层墙钟将到顶而剩余时间小于单次超时时，按剩余时间收紧本次调用超时，使墙钟更接近硬上界
+// （避免墙钟已到却仍等满一次慢调用，发现⑥）。
+func (e *engine) effectiveLLMTimeout(ctx context.Context) time.Duration {
+	d := e.llmTimeout
+	if dl, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(dl); remaining > 0 && remaining < d {
+			return remaining
+		}
+	}
+	return d
 }
 
 // observeFirstToken 在首个增量到达时记录首 token 延迟（ttft）到指标，仅记一次。
@@ -372,11 +394,17 @@ func (s *streamStats) observeFirstToken(meter observe.Meter, start time.Time) {
 }
 
 // recordUsage 记录 token 用量到引擎窗口估计与 cogent.tokens 计数器。
+// 按 input/output 分别计数并附 token.kind 与 llm.model 属性，便于成本计量做差异定价（OPTIMIZE_SPEC R5）；
+// 总量仍为 prompt+completion，聚合语义不变。
 func (s *streamStats) recordUsage(e *engine, u llm.Usage) {
 	s.prompt = u.PromptTokens
 	s.completion = u.CompletionTokens
 	e.used = u.PromptTokens + u.CompletionTokens
-	e.meter.Count("cogent.tokens", int64(e.used))
+	modelAttr := observe.Attr{Key: "llm.model", Value: e.model}
+	e.meter.Count("cogent.tokens", int64(u.PromptTokens),
+		observe.Attr{Key: "token.kind", Value: "input"}, modelAttr)
+	e.meter.Count("cogent.tokens", int64(u.CompletionTokens),
+		observe.Attr{Key: "token.kind", Value: "output"}, modelAttr)
 	slog.Debug("llm usage", "prompt", u.PromptTokens, "completion", u.CompletionTokens)
 }
 
@@ -386,6 +414,7 @@ func (s streamStats) attrs() []observe.Attr {
 		{Key: "llm.prompt_tokens", Value: s.prompt},
 		{Key: "llm.completion_tokens", Value: s.completion},
 		{Key: "llm.ttft_ms", Value: int(s.ttftMs)},
+		{Key: "llm.finish_reason", Value: s.finishReason},
 	}
 }
 

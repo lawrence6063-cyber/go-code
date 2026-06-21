@@ -40,7 +40,10 @@ func (f VerifierFunc) Verify(ctx context.Context, workRoot, goalIntent string) (
 // 从评估框架接回主循环的关键一步。脚本是开发者提供的可信控制面，与不可信的模型输出隔离。
 type ScriptVerifier struct {
 	Script  string          // 验收脚本路径（如 eval/tasks/<name>/verify.sh）
-	Sandbox sandbox.Sandbox // 复用 v1 沙箱执行，继承危险命令拦截与工作目录约束
+	Sandbox sandbox.Sandbox // 固定沙箱（NewSandbox 为 nil 时使用，忽略传入的 workRoot；向后兼容）
+	// NewSandbox 可选：按传入 workRoot 构造受限沙箱，使验收脚本跑在改动所在目录
+	// （如 worktree 根），让客观判据能看到 maker 的真实改动。为 nil 时回退固定 Sandbox。
+	NewSandbox func(workRoot string) sandbox.Sandbox
 }
 
 // NewScriptVerifier 构造一个脚本判定器。script 为空或 sb 为 nil 时仍可构造，
@@ -50,15 +53,19 @@ func NewScriptVerifier(script string, sb sandbox.Sandbox) ScriptVerifier {
 }
 
 // Verify 见 Verifier 接口说明：经沙箱执行脚本，退出码 0=通过；执行失败一律 fail-closed=未通过。
-// workRoot/goalIntent 对脚本判定不直接使用（脚本自定位仓库），保留以满足接口契约。
-func (v ScriptVerifier) Verify(ctx context.Context, _ /*workRoot*/, _ /*goalIntent*/ string) (Report, error) {
+// 设有 NewSandbox 时按传入 workRoot 构造沙箱，使脚本跑在改动所在目录；否则用固定沙箱。
+func (v ScriptVerifier) Verify(ctx context.Context, workRoot, _ /*goalIntent*/ string) (Report, error) {
 	if strings.TrimSpace(v.Script) == "" {
 		return Report{Summary: "no verify script configured"}, errors.New("empty verify script")
 	}
-	if v.Sandbox == nil {
+	sb := v.Sandbox
+	if v.NewSandbox != nil {
+		sb = v.NewSandbox(workRoot)
+	}
+	if sb == nil {
 		return Report{Summary: "no sandbox configured"}, errors.New("nil sandbox")
 	}
-	res, err := v.Sandbox.Exec(ctx, "bash "+v.Script)
+	res, err := sb.Exec(ctx, "bash "+v.Script)
 	detail := strings.TrimSpace(strings.TrimSpace(res.Stdout) + "\n" + strings.TrimSpace(res.Stderr))
 	if err != nil {
 		return Report{Summary: "verifier failed to run: " + err.Error(), Detail: detail},

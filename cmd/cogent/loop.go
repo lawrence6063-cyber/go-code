@@ -90,7 +90,7 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	in := newInputReader(os.Stdin)
-	prompter := newCLIPrompter(in)
+	prompter := newPrompter(in)
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 

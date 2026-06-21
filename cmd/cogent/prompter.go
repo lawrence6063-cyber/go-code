@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/alaindong/cogent/internal/permission"
@@ -49,6 +50,35 @@ type cliPrompter struct {
 // newCLIPrompter 构造一个基于共享输入的 CLI 中断决策器。
 func newCLIPrompter(in *inputReader) permission.Prompter {
 	return &cliPrompter{in: in}
+}
+
+// yesPrompter 是无人值守自动批准决策器：对每个权限中断一律 Approve（不读 stdin）。
+// 仅在显式设置 COGENT_YES 时启用，用于 goal/loop 等无人值守场景；
+// 危险命令仍由 sandbox 确定性拦截、worktree/diff 隔离兜底，故自动批准的爆炸半径可控。
+type yesPrompter struct{}
+
+// Ask 见 permission.Prompter 接口说明：始终批准。
+func (yesPrompter) Ask(_ context.Context, req permission.Interrupt) (permission.Resolution, error) {
+	fmt.Printf("\n[permission:auto-approve] tool %q\n  input: %s\n", req.Tool, string(req.Input))
+	return permission.Resolution{Action: permission.ActionApprove}, nil
+}
+
+// autoApprove 报告是否启用无人值守自动批准（COGENT_YES=1/true/yes）。
+func autoApprove() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("COGENT_YES"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+// newPrompter 按是否无人值守选择决策器：COGENT_YES 时自动批准，否则交互式 CLI。
+func newPrompter(in *inputReader) permission.Prompter {
+	if autoApprove() {
+		return yesPrompter{}
+	}
+	return newCLIPrompter(in)
 }
 
 // Ask 见 permission.Prompter 接口说明。

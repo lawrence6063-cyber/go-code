@@ -347,7 +347,9 @@ func TestWithDefaults(t *testing.T) {
 	}
 }
 
-// fakePipeline 是 Pipeline 的脚本化替身：按调用次数返回预设的「制造-审查」产出。
+// fakePipeline 是 Pipeline 的脚本化替身：按调用次数返回预设的「制造-审查」产出，
+// 并在 verifyAt 非 nil 时调用它（在改动所在工作根做客观判定），把结果回填 Report——
+// 模拟「客观 verify 为最终硬闸门」的真实执行体行为。
 type fakePipeline struct {
 	mu       sync.Mutex
 	results  []PipelineResult
@@ -355,16 +357,24 @@ type fakePipeline struct {
 	call     int
 }
 
-func (f *fakePipeline) Iterate(_ context.Context, task string) (PipelineResult, error) {
+func (f *fakePipeline) Iterate(ctx context.Context, task string, verifyAt VerifyAtFunc) (PipelineResult, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.gotTasks = append(f.gotTasks, task)
 	idx := f.call
 	f.call++
+	var res PipelineResult
 	if idx < len(f.results) {
-		return f.results[idx], nil
+		res = f.results[idx]
+	} else {
+		res = PipelineResult{Approved: false, Feedback: "default reject"}
 	}
-	return PipelineResult{Approved: false, Feedback: "default reject"}, nil
+	f.mu.Unlock()
+
+	if verifyAt != nil {
+		rep := verifyAt(ctx, "")
+		res.Report = &rep
+	}
+	return res, nil
 }
 
 func (f *fakePipeline) tasks() []string {
@@ -382,13 +392,13 @@ func newPipelineOrch(t *testing.T, fp Pipeline, cost CostMeter) Orchestrator {
 	return o
 }
 
-// TestRunGoal_PipelineRejectThenApprove：reviewer 首轮拒（带反馈续跑），次轮过→客观验收通过→达标。
-func TestRunGoal_PipelineRejectThenApprove(t *testing.T) {
+// TestRunGoal_PipelineVerifyFailThenPass：客观 verify 首轮失败（带反馈续跑），次轮通过→达标。
+func TestRunGoal_PipelineVerifyFailThenPass(t *testing.T) {
 	fp := &fakePipeline{results: []PipelineResult{
-		{Summary: "attempt 1", Approved: false, Feedback: "needs error handling"},
+		{Summary: "attempt 1", Approved: true, Feedback: "needs error handling"},
 		{Summary: "attempt 2", Approved: true},
 	}}
-	fv := &fakeVerifier{reports: []verify.Report{passed()}} // 仅在 reviewer 通过后被调用
+	fv := &fakeVerifier{reports: []verify.Report{failed(), passed()}}
 	o := newPipelineOrch(t, fp, nil)
 
 	events, err := o.RunGoal(context.Background(), Goal{
@@ -405,20 +415,44 @@ func TestRunGoal_PipelineRejectThenApprove(t *testing.T) {
 	if res.Outcome != OutcomeAchieved || res.Iterations != 2 {
 		t.Errorf("got Outcome=%v Iterations=%d, want Achieved/2", res.Outcome, res.Iterations)
 	}
-	tasks := fp.tasks()
-	if len(tasks) != 2 {
-		t.Fatalf("pipeline called %d times, want 2", len(tasks))
+	if fv.call != 2 {
+		t.Errorf("verifier called %d times, want 2 (every iteration)", fv.call)
 	}
-	if !strings.Contains(tasks[1], "reviewer rejected") || !strings.Contains(tasks[1], "needs error handling") {
-		t.Errorf("second task missing reviewer feedback: %q", tasks[1])
-	}
-	if fv.call != 1 {
-		t.Errorf("verifier called %d times, want 1 (only after reviewer approves)", fv.call)
+	if len(fp.tasks()) != 2 {
+		t.Fatalf("pipeline called %d times, want 2", len(fp.tasks()))
 	}
 }
 
-// TestRunGoal_PipelineApproveButVerifierFails：reviewer 通过但客观验收失败=未达标（双闸门）。
-func TestRunGoal_PipelineApproveButVerifierFails(t *testing.T) {
+// TestRunGoal_ReviewerRejectButVerifyPasses：reviewer 拒绝但客观 verify 通过 → 仍达标。
+// 这是发现②修复的核心断言：主观闸门不可短路客观判据。
+func TestRunGoal_ReviewerRejectButVerifyPasses(t *testing.T) {
+	fp := &fakePipeline{results: []PipelineResult{
+		{Summary: "implemented", Approved: false, Feedback: "reviewer grumbles about style"},
+	}}
+	fv := &fakeVerifier{reports: []verify.Report{passed()}}
+	o := newPipelineOrch(t, fp, nil)
+
+	events, err := o.RunGoal(context.Background(), Goal{
+		Intent:   "implement feature",
+		Verifier: fv,
+		Budget:   Budget{MaxIterations: 5},
+	})
+	if err != nil {
+		t.Fatalf("RunGoal: %v", err)
+	}
+	got := collectLoop(t, events)
+
+	res := lastResult(t, got)
+	if res.Outcome != OutcomeAchieved || res.Iterations != 1 {
+		t.Errorf("got Outcome=%v Iterations=%d, want Achieved/1 (verify is the hard gate)", res.Outcome, res.Iterations)
+	}
+	if fv.call != 1 {
+		t.Errorf("verifier called %d times, want 1 (runs even when reviewer rejects)", fv.call)
+	}
+}
+
+// TestRunGoal_PipelineVerifierAlwaysFails：客观 verify 始终失败 → 撞预算未达成（双闸门退化为单客观闸门）。
+func TestRunGoal_PipelineVerifierAlwaysFails(t *testing.T) {
 	fp := &fakePipeline{results: []PipelineResult{
 		{Summary: "a", Approved: true},
 		{Summary: "b", Approved: true},
@@ -438,7 +472,7 @@ func TestRunGoal_PipelineApproveButVerifierFails(t *testing.T) {
 
 	res := lastResult(t, got)
 	if res.Outcome != OutcomeBudgetSpent {
-		t.Errorf("Outcome = %v, want BudgetSpent (reviewer ok but tests fail)", res.Outcome)
+		t.Errorf("Outcome = %v, want BudgetSpent (objective verify keeps failing)", res.Outcome)
 	}
 	if fv.call != 2 {
 		t.Errorf("verifier called %d times, want 2", fv.call)

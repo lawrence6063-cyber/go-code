@@ -103,16 +103,23 @@ type CostMeter interface {
 
 // PipelineResult 是一轮「制造-审查」执行体的产出（消费侧最小视图）。
 type PipelineResult struct {
-	Summary  string // maker 改动摘要（透传给 UI）
-	Approved bool   // reviewer 是否通过
-	Feedback string // 未通过时的修改意见（拼入下一轮反馈）
+	Summary  string         // maker 改动摘要（透传给 UI）
+	Approved bool           // reviewer 是否通过（Report 非 nil 时降级为建议性，不决定达标）
+	Feedback string         // 未达标时的修改意见（拼入下一轮反馈）
+	Report   *verify.Report // 客观判定结果（verifyAt 在改动所在工作根执行后回填）；nil 表示本轮未做客观判定
 }
+
+// VerifyAtFunc 在 maker 改动所在的工作根上执行客观判定（由 loop 用 goal.Verifier 适配后注入 Pipeline）。
+// 它是「客观判据可被触达且不被主观闸门短路」的关键：执行体在落盘决策前必须用它判定，
+// verify 通过即视为目标达成（客观为最终硬闸门）。为 nil 时执行体回退到自身裁决作为落盘闸门。
+type VerifyAtFunc func(ctx context.Context, workRoot string) verify.Report
 
 // Pipeline 抽象「maker 实现 → reviewer 审查」的执行体。本接口在消费侧（loop）定义，
 // agent 包的 MakerReviewer 经 cmd 层薄适配满足之——使 loop 无需 import agent（依赖更干净）。
 type Pipeline interface {
-	// Iterate 让实现者完成 task 并由独立审查者裁决，返回摘要与是否通过。
-	Iterate(ctx context.Context, task string) (PipelineResult, error)
+	// Iterate 让实现者完成 task，并在改动所在工作根经 verifyAt 做客观判定后决定落盘/丢弃。
+	// verifyAt 非 nil 时以其结果（回填 PipelineResult.Report）为达标依据；为 nil 时回退到执行体自身裁决。
+	Iterate(ctx context.Context, task string, verifyAt VerifyAtFunc) (PipelineResult, error)
 }
 
 // Orchestrator 是目标驱动外层循环的编排器。

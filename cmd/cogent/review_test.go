@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alaindong/cogent/internal/agent"
+	"github.com/alaindong/cogent/internal/verify"
 	"github.com/alaindong/cogent/internal/worktree"
 )
 
@@ -59,7 +60,8 @@ func TestWorktreePipeline_ApprovedMerges(t *testing.T) {
 	}}
 	p := newWTPipeline(mgr, run)
 
-	res, err := p.Iterate(context.Background(), "task")
+	// verifyAt 为 nil：回退到 reviewer 裁决作为落盘闸门（向后兼容）。
+	res, err := p.Iterate(context.Background(), "task", nil)
 	if err != nil {
 		t.Fatalf("Iterate: %v", err)
 	}
@@ -78,7 +80,7 @@ func TestWorktreePipeline_RejectedDiscards(t *testing.T) {
 	}}
 	p := newWTPipeline(mgr, run)
 
-	res, err := p.Iterate(context.Background(), "task")
+	res, err := p.Iterate(context.Background(), "task", nil)
 	if err != nil {
 		t.Fatalf("Iterate: %v", err)
 	}
@@ -100,7 +102,7 @@ func TestWorktreePipeline_MergeConflictDegradesToNotApproved(t *testing.T) {
 	}}
 	p := newWTPipeline(mgr, run)
 
-	res, err := p.Iterate(context.Background(), "task")
+	res, err := p.Iterate(context.Background(), "task", nil)
 	if err != nil {
 		t.Fatalf("conflict should degrade, not error: %v", err)
 	}
@@ -122,7 +124,65 @@ func TestWorktreePipeline_MergeFatalErrorPropagates(t *testing.T) {
 	}}
 	p := newWTPipeline(mgr, run)
 
-	if _, err := p.Iterate(context.Background(), "task"); err == nil {
+	if _, err := p.Iterate(context.Background(), "task", nil); err == nil {
 		t.Fatal("non-conflict merge error should propagate")
+	}
+}
+
+// TestWorktreePipeline_VerifyPassMergesDespiteReviewerReject 断言发现②修复：
+// reviewer 拒绝，但客观 verify 通过 → 仍 Merge 落盘（客观为最终硬闸门，不可被主观短路）。
+func TestWorktreePipeline_VerifyPassMergesDespiteReviewerReject(t *testing.T) {
+	mgr := &fakeWTManager{}
+	run := fakeRunner{result: agent.PipelineResult{
+		MakerSummary: "done",
+		Verdict:      agent.ReviewVerdict{Approved: false, Feedback: "style nit"},
+	}}
+	p := newWTPipeline(mgr, run)
+
+	var gotRoot string
+	verifyAt := func(_ context.Context, workRoot string) verify.Report {
+		gotRoot = workRoot
+		return verify.Report{Passed: true, Summary: "ok"}
+	}
+	res, err := p.Iterate(context.Background(), "task", verifyAt)
+	if err != nil {
+		t.Fatalf("Iterate: %v", err)
+	}
+	if !res.Approved || res.Report == nil || !res.Report.Passed {
+		t.Errorf("verify pass should land as achieved; res=%+v", res)
+	}
+	if gotRoot != "/tmp/ws" {
+		t.Errorf("verifyAt workRoot = %q, want worktree root /tmp/ws", gotRoot)
+	}
+	if mgr.merged != 1 || mgr.discarded != 0 {
+		t.Errorf("verify pass should merge once, no discard; merged=%d discarded=%d", mgr.merged, mgr.discarded)
+	}
+}
+
+// TestWorktreePipeline_VerifyFailDiscardsDespiteReviewerApprove 断言：
+// reviewer 通过，但客观 verify 失败 → Discard（客观判据可否决主观通过），反馈含 verify 与 reviewer 建议。
+func TestWorktreePipeline_VerifyFailDiscardsDespiteReviewerApprove(t *testing.T) {
+	mgr := &fakeWTManager{}
+	run := fakeRunner{result: agent.PipelineResult{
+		MakerSummary: "done",
+		Verdict:      agent.ReviewVerdict{Approved: true, Feedback: ""},
+	}}
+	p := newWTPipeline(mgr, run)
+
+	verifyAt := func(context.Context, string) verify.Report {
+		return verify.Report{Passed: false, Summary: "go vet failed"}
+	}
+	res, err := p.Iterate(context.Background(), "task", verifyAt)
+	if err != nil {
+		t.Fatalf("Iterate: %v", err)
+	}
+	if res.Approved || res.Report == nil || res.Report.Passed {
+		t.Errorf("verify fail should not land; res=%+v", res)
+	}
+	if !strings.Contains(res.Feedback, "go vet failed") {
+		t.Errorf("feedback = %q, want verify summary", res.Feedback)
+	}
+	if mgr.merged != 0 || mgr.discarded != 1 {
+		t.Errorf("verify fail should discard once, no merge; merged=%d discarded=%d", mgr.merged, mgr.discarded)
 	}
 }

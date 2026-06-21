@@ -115,3 +115,42 @@ func TestVerifierFunc_Adapts(t *testing.T) {
 		t.Errorf("workRoot = %q, want /work", got)
 	}
 }
+
+func TestScriptVerifier_NewSandboxHonorsWorkRoot(t *testing.T) {
+	var gotRoot string
+	sb := &fakeSandbox{res: sandbox.ExecResult{ExitCode: 0, Stdout: "PASS"}}
+	v := ScriptVerifier{
+		Script: "/tmp/verify.sh",
+		NewSandbox: func(workRoot string) sandbox.Sandbox {
+			gotRoot = workRoot
+			return sb
+		},
+	}
+	report, err := v.Verify(context.Background(), "/private/var/cogent-wt-1", "goal")
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !report.Passed {
+		t.Errorf("Passed = false, want true")
+	}
+	if gotRoot != "/private/var/cogent-wt-1" {
+		t.Errorf("factory workRoot = %q, want worktree root", gotRoot)
+	}
+	if sb.execHit != 1 {
+		t.Errorf("exec hit = %d, want 1 (factory sandbox used)", sb.execHit)
+	}
+}
+
+func TestScriptVerifier_NilSandboxFromFactoryFailsClosed(t *testing.T) {
+	v := ScriptVerifier{
+		Script:     "/tmp/verify.sh",
+		NewSandbox: func(string) sandbox.Sandbox { return nil },
+	}
+	report, err := v.Verify(context.Background(), "/work", "goal")
+	if err == nil {
+		t.Error("nil sandbox from factory should fail-closed with error")
+	}
+	if report.Passed {
+		t.Error("nil sandbox should not pass")
+	}
+}

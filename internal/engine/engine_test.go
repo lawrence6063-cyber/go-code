@@ -230,6 +230,20 @@ func TestEngine_ResumeRequiresSessionStore(t *testing.T) {
 	}
 }
 
+func TestStreamStats_AttrsCarryFinishReason(t *testing.T) {
+	st := streamStats{prompt: 8, completion: 3, ttftMs: 42, finishReason: "stop"}
+	got := map[string]any{}
+	for _, a := range st.attrs() {
+		got[a.Key] = a.Value
+	}
+	if got["llm.finish_reason"] != "stop" {
+		t.Errorf("llm.finish_reason = %v, want %q", got["llm.finish_reason"], "stop")
+	}
+	if got["llm.prompt_tokens"] != 8 || got["llm.completion_tokens"] != 3 {
+		t.Errorf("token attrs = %v/%v, want 8/3", got["llm.prompt_tokens"], got["llm.completion_tokens"])
+	}
+}
+
 func mustRun(t *testing.T, eng Engine, task string) <-chan types.StreamEvent {
 	t.Helper()
 	events, err := eng.Run(context.Background(), task)

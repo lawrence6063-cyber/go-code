@@ -144,6 +144,8 @@ func (m *MakerReviewer) discard(ctx context.Context) {
 
 // reviewPrompt 把评审 rubric 拼进任务 prompt（engine 的 system prompt 为固定 const，
 // 不可注入；故评审指令走任务侧）。reviewer 以只读档位读代码后据此输出裁决。
+// 要求在最后单独一行输出结构化裁决 `VERDICT: APPROVED|REJECTED`，使裁决解析对思维链型
+// 模型（先推理后结论）更鲁棒，同时保持 fail-closed（无明确 APPROVED 标记即判拒）。
 func reviewPrompt(task, makerSummary string) string {
 	var sb strings.Builder
 	sb.WriteString("You are an independent code reviewer. Do NOT modify files; only read and inspect.\n\n")
@@ -152,16 +154,18 @@ func reviewPrompt(task, makerSummary string) string {
 	sb.WriteString("\n\nThe implementer reported:\n")
 	sb.WriteString(makerSummary)
 	sb.WriteString("\n\nInspect the actual repository changes and judge whether the task is correctly and safely done. ")
-	sb.WriteString("Reply with 'APPROVED' on the first line if it is correct; ")
-	sb.WriteString("otherwise reply 'REJECTED' followed by a concise explanation of what must be fixed.")
+	sb.WriteString("You may reason step by step first. ")
+	sb.WriteString("Then, on the FINAL line, output your verdict in exactly this form:\n")
+	sb.WriteString("VERDICT: APPROVED   (if the change is correct and safe)\n")
+	sb.WriteString("VERDICT: REJECTED   (otherwise, and explain above what must be fixed)")
 	return sb.String()
 }
 
-// parseVerdict 解析 reviewer 输出的裁决；fail-closed：仅当首个非空行明确以 APPROVED 开头
-// 才判为通过，其余（含解析失败、空输出、REJECTED）一律未通过并把全文作为反馈。
+// parseVerdict 解析 reviewer 输出的裁决；fail-closed：仅当全文出现明确的 APPROVED 裁决标记
+// 才判为通过，其余（含 REJECTED、无裁决、空输出、解析失败）一律未通过并把全文作为反馈。
+// 不再只看首行：思维链型模型常先输出推理过程，故全文扫描结构化裁决标记并取最终裁决为准。
 func parseVerdict(out string) ReviewVerdict {
-	first := firstNonEmptyLine(out)
-	if strings.HasPrefix(strings.ToUpper(first), "APPROVED") {
+	if verdictApproved(out) {
 		return ReviewVerdict{Approved: true}
 	}
 	feedback := strings.TrimSpace(out)
@@ -171,14 +175,55 @@ func parseVerdict(out string) ReviewVerdict {
 	return ReviewVerdict{Approved: false, Feedback: feedback}
 }
 
-// firstNonEmptyLine 返回去除首尾空白后的第一个非空行。
-func firstNonEmptyLine(s string) string {
-	for _, line := range strings.Split(s, "\n") {
-		if t := strings.TrimSpace(line); t != "" {
-			return t
+// verdictApproved 全文扫描裁决标记，返回最终裁决是否为通过（fail-closed：无明确 APPROVED 标记即 false）。
+// 优先采用结构化的 `VERDICT: APPROVED|REJECTED`（取最后一个）；缺失时回退到独立成行的
+// APPROVED/REJECTED（取最后一个），以兼容未严格遵循格式的模型输出。
+func verdictApproved(out string) bool {
+	lines := strings.Split(out, "\n")
+	if v, ok := lastStructuredVerdict(lines); ok {
+		return v
+	}
+	v, ok := lastBareVerdict(lines)
+	return ok && v
+}
+
+// lastStructuredVerdict 返回最后一个 `VERDICT:` 标记的裁决（true=通过）；无此标记时 ok=false。
+func lastStructuredVerdict(lines []string) (approved, ok bool) {
+	for _, raw := range lines {
+		line := normalizeVerdictLine(raw)
+		if !strings.HasPrefix(line, "VERDICT:") {
+			continue
+		}
+		v := strings.TrimSpace(strings.TrimPrefix(line, "VERDICT:"))
+		switch {
+		case strings.HasPrefix(v, "APPROVED"):
+			approved, ok = true, true
+		case strings.HasPrefix(v, "REJECTED"):
+			approved, ok = false, true
 		}
 	}
-	return ""
+	return approved, ok
+}
+
+// lastBareVerdict 返回最后一个独立成行的 APPROVED/REJECTED 裁决（true=通过）；无则 ok=false。
+func lastBareVerdict(lines []string) (approved, ok bool) {
+	for _, raw := range lines {
+		line := normalizeVerdictLine(raw)
+		switch {
+		case strings.HasPrefix(line, "APPROVED"):
+			approved, ok = true, true
+		case strings.HasPrefix(line, "REJECTED"):
+			approved, ok = false, true
+		}
+	}
+	return approved, ok
+}
+
+// normalizeVerdictLine 归一化裁决行：去首尾空白、转大写、剥离 markdown 列表/引用/强调前缀，
+// 便于稳健匹配裁决标记。
+func normalizeVerdictLine(s string) string {
+	line := strings.ToUpper(strings.TrimSpace(s))
+	return strings.TrimSpace(strings.TrimLeft(line, "#*->` \t"))
 }
 
 // collectText 排空事件流并把文本累积、错误附注为摘要（UTF-8 边界截断到上限）。

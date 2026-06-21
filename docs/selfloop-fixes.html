@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>自循环实验问题修复说明 · finish_reason</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --bg2: #11161f;
+    --card: #161c28;
+    --line: #232c3b;
+    --txt: #e6edf3;
+    --muted: #93a1b3;
+    --accent: #5eead4;
+    --accent2: #818cf8;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --code: #0d1117;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #1a2230 0%, var(--bg) 55%);
+    color: var(--txt);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header.hero { padding: 84px 24px 52px; text-align: center; }
+  .badge {
+    display: inline-block; font-size: 13px; letter-spacing: 2px; color: var(--accent);
+    border: 1px solid rgba(94,234,212,.35); border-radius: 999px; padding: 6px 16px;
+    margin-bottom: 22px; background: rgba(94,234,212,.06);
+  }
+  h1 {
+    font-size: 42px; line-height: 1.2; margin: 0 0 16px;
+    background: linear-gradient(120deg, #fff, #9aa7ff 60%, #5eead4);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0 auto; }
+  section { padding: 42px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+  h2 { font-size: 27px; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
+  h2 .n {
+    font-size: 15px; font-weight: 700; color: var(--bg); background: var(--accent);
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none;
+  }
+  h3 { font-size: 18px; margin: 26px 0 8px; color: #cdd6e3; }
+  p { color: #c4cdd9; }
+  .lead { font-size: 17px; }
+  .muted { color: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px 22px; margin: 18px 0;
+  }
+  code, pre { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  code.inline {
+    background: #1c2433; color: #93f3df; padding: 2px 7px; border-radius: 6px; font-size: .92em;
+  }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6; color: #c9d4e3;
+  }
+  pre .c { color: #6b7689; }
+  pre .k { color: #ff7b9c; }
+  pre .s { color: #7ee787; }
+  pre .f { color: #79c0ff; }
+  .pill {
+    display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px;
+    margin-right: 6px; font-weight: 600;
+  }
+  .pill.bad { background: rgba(248,113,113,.15); color: #fca5a5; }
+  .pill.good { background: rgba(74,222,128,.15); color: #86efac; }
+  .pill.warn { background: rgba(251,191,36,.15); color: #fcd34d; }
+  .vs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 20px 0;
+    border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  }
+  .vs > div { padding: 18px 20px; }
+  .vs .left { background: rgba(248,113,113,.05); border-right: 1px solid var(--line); }
+  .vs .right { background: rgba(74,222,128,.05); }
+  .vs h4 { margin: 0 0 12px; font-size: 15px; }
+  @media (max-width: 720px){ .vs { grid-template-columns: 1fr; } .vs .left { border-right: none; border-bottom: 1px solid var(--line);} h1 { font-size: 31px; } }
+  ul.clean { list-style: none; padding: 0; margin: 8px 0; }
+  ul.clean li { padding: 5px 0 5px 26px; position: relative; color: #c4cdd9; }
+  ul.clean li::before { content: "→"; position: absolute; left: 0; color: var(--accent2); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--accent); font-weight: 600; }
+  td.prim { color: #fff; font-weight: 600; white-space: nowrap; }
+  .key {
+    border-left: 3px solid var(--accent); padding: 4px 0 4px 18px; margin: 18px 0;
+    color: #d6dfe9; font-size: 16px;
+  }
+  footer { padding: 48px 24px 70px; text-align: center; color: var(--muted); font-size: 14px; }
+  .toc { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 30px; }
+  .toc a {
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--line); padding: 6px 13px; border-radius: 999px; transition: .2s;
+  }
+  .toc a:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="badge">SELF-LOOP FIXES · 修复说明</div>
+  <h1>自循环实验问题 · 一次性修复说明</h1>
+  <p class="sub">针对 <code class="inline">docs/selfloop-report.md</code> 暴露的循环机制缺陷，一次性（不分批）完成修复：让<strong style="color:#fff">客观 verify 成为不可被 reviewer 短路的最终硬闸门</strong>、裁决解析鲁棒化、成本护栏闭环、墙钟硬化、reviewer 选型与环境感知工程化，并直接闭合 finish_reason gap。</p>
+  <div class="toc">
+    <a href="#overview">总览</a>
+    <a href="#table">修复点对照表</a>
+    <a href="#gate">②verify 硬闸门</a>
+    <a href="#verdict">③裁决解析</a>
+    <a href="#cost">⑤成本护栏</a>
+    <a href="#misc">④⑥选型与硬化</a>
+    <a href="#finish">finish_reason</a>
+    <a href="#verify">验证方式</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ===== 1 总览 ===== -->
+<section id="overview">
+  <h2><span class="n">1</span>总览</h2>
+  <p class="lead">原实验报告的结论是：<strong>循环机制端到端跑通且可观测，但目标未达成</strong>——根因是「主观闸门（reviewer）在客观判据（verify）之前持续拒绝」，叠加裁决格式不合规、成本护栏空接线等问题。本次修复按报告逐条对症下药。</p>
+  <div class="key">核心原则：<strong style="color:var(--accent)">客观判据必须处于循环终止路径上，且不被任何前置主观闸门短路</strong>。「达目标才停」从此回归为「verify 通过才停」，而非「reviewer 满意才停」。</div>
+  <p class="muted">范围：发现①（已就地修复，仅标注）+ 发现②③④⑤⑥ + 实验目标 finish_reason gap。全部改动配套单元测试，<code class="inline">go test ./...</code> 全绿、<code class="inline">verify.sh</code> 退出码 0。</p>
+</section>
+
+<!-- ===== 2 对照表 ===== -->
+<section id="table">
+  <h2><span class="n">2</span>修复点对照表</h2>
+  <table>
+    <thead>
+      <tr><th>发现</th><th>问题</th><th>根因</th><th>修复</th><th>涉及文件</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="prim">①</td>
+        <td>无人值守 loop 缺自动批准开关，后台卡死</td>
+        <td>空 StaticPolicy → 一律 Ask → 无 TTY 阻塞</td>
+        <td><code class="inline">COGENT_YES</code> 门控的 <code class="inline">yesPrompter</code>（沙箱/worktree 兜底）</td>
+        <td>cmd/cogent/prompter.go</td>
+        <td><span class="pill good">此前已修</span></td>
+      </tr>
+      <tr>
+        <td class="prim">②</td>
+        <td>reviewer 拒绝则客观 verify 永不执行（最重要）</td>
+        <td>双闸门顺序：reviewer 通过才 Merge 才跑 verify；拒绝即 discard</td>
+        <td>verify 与 reviewer 并联：在改动所在工作根执行 verify，<strong>verify 通过即达标并落盘</strong>，reviewer 降级为建议</td>
+        <td>loop/orchestrator.go、loop/loop.go、verify/verify.go、cmd/cogent/review.go、goal.go</td>
+        <td><span class="pill good">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="prim">③</td>
+        <td>reasoner 思维链导致裁决恒被判拒</td>
+        <td><code class="inline">parseVerdict</code> 仅看首行是否 APPROVED</td>
+        <td>要求结尾输出 <code class="inline">VERDICT: APPROVED|REJECTED</code>；全文扫描裁决标记并保持 fail-closed</td>
+        <td>agent/maker_reviewer.go</td>
+        <td><span class="pill good">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="prim">④</td>
+        <td>reasoner 作 reviewer/maker：裁决不稳、cwd 幻觉</td>
+        <td>reviewer 沿用 maker 模型；系统提示无真实工作根</td>
+        <td>reviewer 缺省 <code class="inline">deepseek-chat</code>（可 env 覆盖）；系统提示注入真实仓库根、禁 <code class="inline">cd /workspace</code></td>
+        <td>cmd/cogent/review.go、engine/prompt.go、engine.go</td>
+        <td><span class="pill good">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="prim">⑤</td>
+        <td><code class="inline">--max-cost</code> 护栏形同虚设</td>
+        <td><code class="inline">buildOrchestrator</code> 未注入 CostMeter → <code class="inline">overCost</code> 恒 false</td>
+        <td>装饰 provider 拦截 <code class="inline">cogent.tokens</code> 按模型单价累计成本，接入 <code class="inline">loop.Deps.Cost</code></td>
+        <td>cmd/cogent/cost.go（新）、review.go、engine/engine.go</td>
+        <td><span class="pill good">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="prim">⑥</td>
+        <td>墙钟取消有滞后（软上界）</td>
+        <td>单次 LLM 调用超时固定 120s，墙钟到顶仍等满</td>
+        <td>单次超时取 <code class="inline">min(llmTimeout, 剩余墙钟)</code></td>
+        <td>engine/engine.go</td>
+        <td><span class="pill good">已修复</span></td>
+      </tr>
+      <tr>
+        <td class="prim">gap</td>
+        <td>finish_reason 未端到端透出（实验目标）</td>
+        <td>流式 <code class="inline">Delta</code> 未带 FinishReason；span 缺 <code class="inline">llm.finish_reason</code></td>
+        <td><code class="inline">Delta.FinishReason</code> 透出 + engine 补 span 属性</td>
+        <td>llm/client.go、engine/engine.go、spec/DEV_SPEC.md</td>
+        <td><span class="pill good">已闭合</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 3 verify 硬闸门 ===== -->
+<section id="gate">
+  <h2><span class="n">3</span>发现②：客观 verify 升级为最终硬闸门</h2>
+  <p class="lead">这是本次最关键的改造。原流水线是「maker 改 → reviewer 审 → <strong>通过才</strong> Merge → 再跑 verify」的串行双闸门——reviewer 一旦拒绝，worktree 立即被物理丢弃，客观 verify 既跑不到、也看不到改动。</p>
+
+  <div class="vs">
+    <div class="left">
+      <h4><span class="pill bad">修复前</span> reviewer 短路客观判据</h4>
+      <pre><span class="c">// orchestrator.go · runPipeline（旧）</span>
+<span class="k">if</span> !pr.Approved {
+    <span class="c">// reviewer 拒 → 直接返回，跳过 verify</span>
+    <span class="k">return</span> Report{Summary: <span class="s">"reviewer rejected"</span>}
+}
+<span class="k">return</span> o.verify(ctx, goal, out) <span class="c">// 仅通过才验收</span></pre>
+      <ul class="clean">
+        <li><code class="inline">goal.verify</code> span 数 = 0（从未执行）</li>
+        <li>退化为「reviewer 满意才停」</li>
+        <li>reviewer 失灵 = 整个目标无法收敛</li>
+      </ul>
+    </div>
+    <div class="right">
+      <h4><span class="pill good">修复后</span> verify 并联且不可短路</h4>
+      <pre><span class="c">// orchestrator.go · runPipeline（新）</span>
+pr, _ := o.pipeline.Iterate(ctx, task,
+        o.makeVerifyAt(goal)) <span class="c">// 注入客观判定</span>
+report := o.pipelineReport(pr)
+<span class="c">// report.Passed 来自 verify，reviewer 仅作建议反馈</span>
+<span class="k">return</span> report</pre>
+      <ul class="clean">
+        <li>每轮都开 <code class="inline">goal.verify</code> span（可观测自证）</li>
+        <li>verify 通过即 <strong>达标 + 落盘</strong>，reviewer 不能否决</li>
+        <li>verify 失败：合并 reviewer 建议续跑</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>关键机制</h3>
+  <ul class="clean">
+    <li>新增 <code class="inline">loop.VerifyAtFunc func(ctx, workRoot) verify.Report</code>，由 orchestrator 用 <code class="inline">goal.Verifier</code> 适配，扩展 <code class="inline">Pipeline.Iterate(ctx, task, verifyAt)</code>。</li>
+    <li><code class="inline">verify.ScriptVerifier</code> 新增 <code class="inline">NewSandbox</code> 工厂：按传入 workRoot 构造沙箱，使脚本跑在 <strong>maker 改动所在目录（worktree 根）</strong>，看到真实改动。</li>
+    <li>worktree 流水线：在 <code class="inline">ws.Root</code> 执行 verify，<strong>通过才 Merge</strong>、否则 Discard；diff 回滚版同理（通过保留、失败 <code class="inline">git checkout</code> 回滚）。</li>
+    <li>向后兼容：未配置 <code class="inline">--verify</code> 时 <code class="inline">verifyAt==nil</code>，回退到 reviewer 裁决作为落盘闸门。</li>
+  </ul>
+</section>
+
+<!-- ===== 4 裁决解析 ===== -->
+<section id="verdict">
+  <h2><span class="n">4</span>发现③：裁决解析鲁棒化（fail-closed 不变）</h2>
+  <p>思维链型模型常先输出大段推理，首行不是裁决。解析改为<strong>全文扫描结构化裁决标记并取最终裁决</strong>，并要求 reviewer 在最后一行输出 <code class="inline">VERDICT: APPROVED|REJECTED</code>。仍保持 fail-closed：无明确 APPROVED 标记一律判拒（防自评虚高）。</p>
+  <div class="vs">
+    <div class="left">
+      <h4><span class="pill bad">修复前</span></h4>
+      <pre><span class="k">func</span> parseVerdict(out) {
+  first := firstNonEmptyLine(out)
+  <span class="k">if</span> HasPrefix(upper(first), <span class="s">"APPROVED"</span>) {
+    <span class="k">return</span> Approved
+  }
+  <span class="k">return</span> Rejected <span class="c">// 思维链首行恒非 APPROVED → 恒拒</span>
+}</pre>
+    </div>
+    <div class="right">
+      <h4><span class="pill good">修复后</span></h4>
+      <pre><span class="k">func</span> verdictApproved(out) bool {
+  <span class="c">// 优先结构化 VERDICT: 标记（取最后一个）</span>
+  <span class="k">if</span> v, ok := lastStructuredVerdict(lines); ok {
+    <span class="k">return</span> v
+  }
+  <span class="c">// 回退独立成行 APPROVED/REJECTED</span>
+  v, ok := lastBareVerdict(lines)
+  <span class="k">return</span> ok && v
+}</pre>
+    </div>
+  </div>
+  <p class="muted">新增单测覆盖：先推理后 <code class="inline">VERDICT: APPROVED</code>、markdown 强调 <code class="inline">**VERDICT: APPROVED**</code>、文中提及 approved 但结尾 REJECTED（结构化优先）等场景。</p>
+</section>
+
+<!-- ===== 5 成本护栏 ===== -->
+<section id="cost">
+  <h2><span class="n">5</span>发现⑤：成本护栏闭环</h2>
+  <p>由于 <code class="inline">observe.Meter</code> 只写不可读，新增 <code class="inline">cmd/cogent/cost.go</code>：一个<strong>装饰 Provider/Meter</strong> 的成本计量器，拦截 <code class="inline">cogent.tokens</code> 计数，按 <code class="inline">token.kind</code>(input/output) 与 <code class="inline">llm.model</code> 属性按模型单价累计美元，并实现 <code class="inline">loop.CostMeter</code>。</p>
+  <pre><span class="c">// engine.recordUsage：按 input/output 分计并附属性（支持差异定价）</span>
+e.meter.Count(<span class="s">"cogent.tokens"</span>, u.PromptTokens,
+    Attr{<span class="s">"token.kind"</span>, <span class="s">"input"</span>}, Attr{<span class="s">"llm.model"</span>, e.model})
+e.meter.Count(<span class="s">"cogent.tokens"</span>, u.CompletionTokens,
+    Attr{<span class="s">"token.kind"</span>, <span class="s">"output"</span>}, Attr{<span class="s">"llm.model"</span>, e.model})
+
+<span class="c">// buildOrchestrator：装饰 provider + 注入 Cost，--max-cost 真正生效</span>
+costProv := newCostProvider(prov)
+loop.New(loop.Deps{ ..., Meter: costProv.Meter(), Cost: costProv.meter })</pre>
+  <ul class="clean">
+    <li>缺省单价：<code class="inline">deepseek-chat</code> 0.27/1.10，<code class="inline">deepseek-reasoner</code> 0.55/2.19（美元/百万 token，输入/输出）。</li>
+    <li>可经 <code class="inline">COGENT_PRICE_&lt;MODEL&gt;_INPUT/OUTPUT</code> 覆盖；未知模型用保守回退价（宁可高估，利于早停）。</li>
+    <li>线程安全（引擎多 goroutine 写、loop 读），<code class="inline">cogent.loop.cost_usd</code> 指标随之有值。</li>
+  </ul>
+</section>
+
+<!-- ===== 6 选型与硬化 ===== -->
+<section id="misc">
+  <h2><span class="n">6</span>发现④⑥：选型、环境感知与墙钟硬化</h2>
+  <h3>reviewer 选型解耦（④）</h3>
+  <p><code class="inline">reviewerModel</code> 缺省返回指令遵循更稳的 <code class="inline">deepseek-chat</code>（不再沿用 maker 模型），仍可由 <code class="inline">COGENT_REVIEWER_MODEL</code> 覆盖——maker 可用 reasoner 强推理，reviewer 用 chat 稳输出裁决格式。</p>
+  <h3>消除 cwd 幻觉（④）</h3>
+  <p>系统提示注入真实仓库根，明确「shell 与工具已位于仓库根、用相对路径、勿 <code class="inline">cd</code> 到 <code class="inline">/workspace</code> 等虚构路径」：</p>
+  <pre><span class="c">// engine/prompt.go</span>
+<span class="k">const</span> workspaceHintTemplate = <span class="s">"\nYour shell and tools already run from "</span> +
+    <span class="s">"the repository root: %s\nAlways use paths relative to this root; "</span> +
+    <span class="s">"do NOT `cd` into invented absolute paths such as /workspace."</span></pre>
+  <h3>墙钟硬化（⑥）</h3>
+  <pre><span class="c">// engine.effectiveLLMTimeout：取单次超时与剩余墙钟的较小值</span>
+<span class="k">if</span> dl, ok := ctx.Deadline(); ok {
+    <span class="k">if</span> remaining := time.Until(dl); remaining &gt; 0 && remaining &lt; d {
+        <span class="k">return</span> remaining <span class="c">// 墙钟将到顶 → 收紧本次调用超时</span>
+    }
+}</pre>
+</section>
+
+<!-- ===== 7 finish_reason ===== -->
+<section id="finish">
+  <h2><span class="n">7</span>实验目标：finish_reason 端到端闭合</h2>
+  <p>原实验要 dogfood 闭合的 gap，本次直接落地。</p>
+  <div class="vs">
+    <div class="left">
+      <h4><span class="pill bad">修复前</span></h4>
+      <pre><span class="c">// llm.Delta 无 FinishReason 字段</span>
+<span class="k">type</span> Delta <span class="k">struct</span> {
+  Text     string
+  ToolCall *ToolUseBlock
+  Usage    *Usage
+}
+<span class="c">// engine span 缺 llm.finish_reason</span></pre>
+    </div>
+    <div class="right">
+      <h4><span class="pill good">修复后</span></h4>
+      <pre><span class="c">// llm/client.go</span>
+<span class="k">type</span> Delta <span class="k">struct</span> {
+  Text         string
+  ToolCall     *ToolUseBlock
+  Usage        *Usage
+  FinishReason string <span class="c">// 透出</span>
+}
+<span class="c">// engine attrs()：{Key:"llm.finish_reason", Value: s.finishReason}</span></pre>
+    </div>
+  </div>
+  <p class="muted"><code class="inline">processFrame</code> 在收到 <code class="inline">choice.FinishReason</code> 时以收尾增量上抛；<code class="inline">streamStats</code> 捕获后补入 <code class="inline">llm.stream</code> span 属性。<code class="inline">spec/DEV_SPEC.md §8.3</code> 标注由「暂未落地」更新为已落地。</p>
+</section>
+
+<!-- ===== 8 验证 ===== -->
+<section id="verify">
+  <h2><span class="n">8</span>验证方式</h2>
+  <h3>单元测试 + 静态检查</h3>
+  <pre><span class="f">cd</span> cogent
+gofmt -l ./cmd ./internal   <span class="c"># 无输出 = 格式合规</span>
+go vet ./...                <span class="c"># 通过</span>
+go build ./...              <span class="c"># 通过</span>
+go test ./...               <span class="c"># 全部 ok</span></pre>
+  <h3>客观判据（finish_reason gap 闭合）</h3>
+  <pre><span class="f">bash</span> eval/tasks/finish_reason_selfloop/verify.sh; <span class="f">echo</span> <span class="s">"exit=$?"</span>
+<span class="c"># == gofmt == / == go vet == / == go build ==</span>
+<span class="c"># == engine wires llm.finish_reason ==</span>
+<span class="c"># ALL PASS: finish_reason surfaced end-to-end</span>
+<span class="c"># exit=0   ← 由报告记录的「必失败」转为达标</span></pre>
+  <h3>运行期可观测断言</h3>
+  <ul class="clean">
+    <li><code class="inline">goal.verify</code> span 数 &gt; 0（不再被 reviewer 短路）。</li>
+    <li><code class="inline">llm.stream</code> span 带 <code class="inline">llm.finish_reason</code> 属性。</li>
+    <li><code class="inline">cogent.loop.cost_usd</code> 指标有值（成本护栏闭环）。</li>
+  </ul>
+  <div class="key">关键回归断言：单测 <code class="inline">TestRunGoal_ReviewerRejectButVerifyPasses</code> 与 <code class="inline">TestWorktreePipeline_VerifyPassMergesDespiteReviewerReject</code> 直接验证「reviewer 拒绝但 verify 通过 → 仍达标并落盘」——发现②已被根治。</div>
+</section>
+
+</div>
+
+<footer>
+  cogent · 自循环实验问题修复说明 · 一次性修复（不分批）<br/>
+  关联文档：docs/selfloop-report.md（原始实验报告）｜ spec/DEV_SPEC.md §8.3 ｜ spec/LOOP_SPEC.md
+</footer>
+
+</body>
+</html>

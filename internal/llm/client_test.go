@@ -33,6 +33,7 @@ func TestClient_StreamParsesSSE(t *testing.T) {
 	chunks := []string{
 		`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"}}]}`,
 		`{"choices":[{"index":0,"delta":{"content":" world"}}]}`,
+		`{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
 		`{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":2}}`,
 		"[DONE]",
 	}
@@ -53,6 +54,7 @@ func TestClient_StreamParsesSSE(t *testing.T) {
 
 	var text string
 	var usage *Usage
+	var finishReason string
 	for d := range deltas {
 		if d.Err != nil {
 			t.Fatalf("delta error: %v", d.Err)
@@ -60,6 +62,9 @@ func TestClient_StreamParsesSSE(t *testing.T) {
 		text += d.Text
 		if d.Usage != nil {
 			usage = d.Usage
+		}
+		if d.FinishReason != "" {
+			finishReason = d.FinishReason
 		}
 	}
 	if text != "Hello world" {
@@ -70,6 +75,9 @@ func TestClient_StreamParsesSSE(t *testing.T) {
 	}
 	if usage.PromptTokens != 10 || usage.CompletionTokens != 2 {
 		t.Errorf("usage = %+v, want {10 2}", *usage)
+	}
+	if finishReason != "stop" {
+		t.Errorf("finish reason = %q, want %q", finishReason, "stop")
 	}
 }
 

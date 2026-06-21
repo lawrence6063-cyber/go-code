@@ -39,10 +39,11 @@ type Request struct {
 
 // Delta 是流式响应的一个增量片段。
 type Delta struct {
-	Text     string              // 文本增量
-	ToolCall *types.ToolUseBlock // 工具调用（Phase 2 起有效）
-	Usage    *Usage              // 末尾增量携带 token 计量
-	Err      error               // 流中错误
+	Text         string              // 文本增量
+	ToolCall     *types.ToolUseBlock // 工具调用（Phase 2 起有效）
+	Usage        *Usage              // 末尾增量携带 token 计量
+	FinishReason string              // 本轮结束原因（stop/tool_calls/length 等）；仅在收尾增量携带
+	Err          error               // 流中错误
 }
 
 // Usage 记录一次调用的 token 消耗。
@@ -144,7 +145,8 @@ func pump(ctx context.Context, stream *openai.ChatCompletionStream, out chan<- D
 }
 
 // processFrame 处理一帧 SSE：上抛文本与 usage、累积 tool_calls 分片，
-// finish_reason=tool_calls 时刷出已集齐的工具调用。返回 false 表示 ctx 已取消。
+// finish_reason=tool_calls 时刷出已集齐的工具调用，并把 finish_reason 透出为收尾增量。
+// 返回 false 表示 ctx 已取消。
 func processFrame(ctx context.Context, resp openai.ChatCompletionStreamResponse, acc *toolAcc, out chan<- Delta) bool {
 	if len(resp.Choices) > 0 {
 		choice := resp.Choices[0]
@@ -155,6 +157,9 @@ func processFrame(ctx context.Context, resp openai.ChatCompletionStreamResponse,
 		}
 		acc.add(choice.Delta.ToolCalls)
 		if choice.FinishReason == openai.FinishReasonToolCalls && !acc.flush(ctx, out) {
+			return false
+		}
+		if choice.FinishReason != "" && !emit(ctx, out, Delta{FinishReason: string(choice.FinishReason)}) {
 			return false
 		}
 	}
