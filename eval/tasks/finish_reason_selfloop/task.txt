@@ -1,0 +1,16 @@
+在 cogent 的 internal/llm 流式响应中透出 finish_reason，并让 engine 的 llm.stream span 带上 llm.finish_reason 属性。这是 OPTIMIZE_SPEC O2/C2 记录的遗留 gap，请补全它。
+
+背景：当前 internal/llm/client.go 仅在 processFrame 内部用 choice.FinishReason == openai.FinishReasonToolCalls 检测工具调用，没有把 finish_reason 透出给上层；engine 的 llm.stream span 因此缺少 llm.finish_reason 属性（DEV_SPEC §8.3 已标注「暂未落地」）。
+
+具体要求：
+1. 给 internal/llm/client.go 的 Delta 结构体增加一个导出字段 FinishReason string（必须带符合 Go 规范的注释），在 processFrame 解析到 choice.FinishReason 非空时，把它通过 Delta 透出给上层（可随末尾增量或单独一个 Delta 发出），不要破坏现有的 tool_calls 检测与累积逻辑。
+2. 在 internal/engine/engine.go 的 streamAssistant 中捕获该 finish_reason，并在 llm.stream span 结束时通过 attrs 增加一个 observe.Attr{Key: "llm.finish_reason", Value: <捕获到的值>}。可复用现有的 streamStats 聚合结构。
+3. 保持 llm.Client.Stream 接口签名不变、function calling 配对完整（不得产生悬空 tool_use/孤立 tool_result）、所有现有测试通过。
+4. 遵循项目 Go 规范：导出符号带注释、error 末位且必处理、gofmt 格式化、函数不超过 80 行、嵌套不超过 4 层。
+
+验收方式（verify.sh，退出码 0 = 达标）：
+- 注入一段含 "finish_reason":"stop" 的 OpenAI 兼容 SSE 流，通过公开的 Stream 接口断言某个 Delta 的 FinishReason 字段等于 "stop"；
+- 检查 internal/engine 中确实写入了 "llm.finish_reason" span 属性；
+- gofmt / go vet / go build / go test 全部通过。
+
+完成后请用一句话总结你做了哪些改动。

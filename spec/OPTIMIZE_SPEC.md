@@ -1,7 +1,7 @@
 # Cogent · 工程打磨与加固规格 — OPTIMIZE_SPEC
 
 > 版本 0.1（v1+v2 收官后的打磨增量）｜代号 `cogent-polish`｜主语言 **Golang**
-> 定位：在 `cogent` 已 100% 完成 [`DEV_SPEC.md`](./DEV_SPEC.md)（v1，22/22）与 [`LOOP_SPEC.md`](./LOOP_SPEC.md)（v2，23/23）的基础上，**以 Claude Code 为标杆**，从**可靠性 / 安全性 / 可观测性 / 可读性**四个维度做最后一轮工程加固。
+> 定位：在 `cogent` 已 100% 完成 [`DEV_SPEC.md`](DEV_SPEC.md)（v1，22/22）与 [`LOOP_SPEC.md`](LOOP_SPEC.md)（v2，23/23）的基础上，**以 Claude Code 为标杆**，从**可靠性 / 安全性 / 可观测性 / 可读性**四个维度做最后一轮工程加固。
 > 性质：**纯设计/审查产出，未改动任何 `.go` 代码、不新增功能**——只盘点现状、定位差距、给出分级改进排期。
 
 ## 目录
