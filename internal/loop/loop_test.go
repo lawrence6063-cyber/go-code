@@ -346,3 +346,101 @@ func TestWithDefaults(t *testing.T) {
 		t.Errorf("MaxIterations = %d, want default fill", got.MaxIterations)
 	}
 }
+
+// fakePipeline 是 Pipeline 的脚本化替身：按调用次数返回预设的「制造-审查」产出。
+type fakePipeline struct {
+	mu       sync.Mutex
+	results  []PipelineResult
+	gotTasks []string
+	call     int
+}
+
+func (f *fakePipeline) Iterate(_ context.Context, task string) (PipelineResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.gotTasks = append(f.gotTasks, task)
+	idx := f.call
+	f.call++
+	if idx < len(f.results) {
+		return f.results[idx], nil
+	}
+	return PipelineResult{Approved: false, Feedback: "default reject"}, nil
+}
+
+func (f *fakePipeline) tasks() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.gotTasks...)
+}
+
+func newPipelineOrch(t *testing.T, fp Pipeline, cost CostMeter) Orchestrator {
+	t.Helper()
+	o, err := New(Deps{Pipeline: fp, Cost: cost})
+	if err != nil {
+		t.Fatalf("loop.New(pipeline): %v", err)
+	}
+	return o
+}
+
+// TestRunGoal_PipelineRejectThenApprove：reviewer 首轮拒（带反馈续跑），次轮过→客观验收通过→达标。
+func TestRunGoal_PipelineRejectThenApprove(t *testing.T) {
+	fp := &fakePipeline{results: []PipelineResult{
+		{Summary: "attempt 1", Approved: false, Feedback: "needs error handling"},
+		{Summary: "attempt 2", Approved: true},
+	}}
+	fv := &fakeVerifier{reports: []verify.Report{passed()}} // 仅在 reviewer 通过后被调用
+	o := newPipelineOrch(t, fp, nil)
+
+	events, err := o.RunGoal(context.Background(), Goal{
+		Intent:   "implement feature",
+		Verifier: fv,
+		Budget:   Budget{MaxIterations: 5},
+	})
+	if err != nil {
+		t.Fatalf("RunGoal: %v", err)
+	}
+	got := collectLoop(t, events)
+
+	res := lastResult(t, got)
+	if res.Outcome != OutcomeAchieved || res.Iterations != 2 {
+		t.Errorf("got Outcome=%v Iterations=%d, want Achieved/2", res.Outcome, res.Iterations)
+	}
+	tasks := fp.tasks()
+	if len(tasks) != 2 {
+		t.Fatalf("pipeline called %d times, want 2", len(tasks))
+	}
+	if !strings.Contains(tasks[1], "reviewer rejected") || !strings.Contains(tasks[1], "needs error handling") {
+		t.Errorf("second task missing reviewer feedback: %q", tasks[1])
+	}
+	if fv.call != 1 {
+		t.Errorf("verifier called %d times, want 1 (only after reviewer approves)", fv.call)
+	}
+}
+
+// TestRunGoal_PipelineApproveButVerifierFails：reviewer 通过但客观验收失败=未达标（双闸门）。
+func TestRunGoal_PipelineApproveButVerifierFails(t *testing.T) {
+	fp := &fakePipeline{results: []PipelineResult{
+		{Summary: "a", Approved: true},
+		{Summary: "b", Approved: true},
+	}}
+	fv := &fakeVerifier{reports: []verify.Report{failed(), failed()}}
+	o := newPipelineOrch(t, fp, nil)
+
+	events, err := o.RunGoal(context.Background(), Goal{
+		Intent:   "subtly wrong",
+		Verifier: fv,
+		Budget:   Budget{MaxIterations: 2},
+	})
+	if err != nil {
+		t.Fatalf("RunGoal: %v", err)
+	}
+	got := collectLoop(t, events)
+
+	res := lastResult(t, got)
+	if res.Outcome != OutcomeBudgetSpent {
+		t.Errorf("Outcome = %v, want BudgetSpent (reviewer ok but tests fail)", res.Outcome)
+	}
+	if fv.call != 2 {
+		t.Errorf("verifier called %d times, want 2", fv.call)
+	}
+}

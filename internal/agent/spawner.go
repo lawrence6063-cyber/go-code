@@ -8,7 +8,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/alaindong/cogent/internal/engine"
@@ -68,18 +67,7 @@ func (s *SubAgent) Spawn(ctx context.Context, prompt string) (summary string, er
 // collectSummary 排空子 Engine 的事件流并累积文本为摘要（截断到上限）。
 // 完整 range 至 channel 关闭可保子 Engine goroutine 不泄漏（其在 ctx 取消时也会关闭 out）。
 func (s *SubAgent) collectSummary(events <-chan types.StreamEvent) string {
-	var sb strings.Builder
-	for ev := range events {
-		switch ev.Type {
-		case types.EventText:
-			sb.WriteString(ev.Text)
-		case types.EventError:
-			if ev.Err != nil {
-				sb.WriteString("\n[sub-agent error] " + ev.Err.Error())
-			}
-		}
-	}
-	return truncateSummary(sb.String(), s.maxSummaryBytes)
+	return collectText(events, s.maxSummaryBytes)
 }
 
 // truncateSummary 把摘要截断到不超过 maxBytes，并在 UTF-8 字符边界处切断避免乱码。

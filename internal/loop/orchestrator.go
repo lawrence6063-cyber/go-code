@@ -17,10 +17,11 @@ var errEmptyIntent = errors.New("empty goal intent")
 
 // orchestrator 是 Orchestrator 的默认实现：外层目标循环，单次执行委托给内层 engine。
 type orchestrator struct {
-	engine engineRunner
-	tracer observe.Tracer
-	meter  observe.Meter
-	cost   CostMeter
+	engine   engineRunner
+	pipeline Pipeline
+	tracer   observe.Tracer
+	meter    observe.Meter
+	cost     CostMeter
 }
 
 // engineRunner 是 orchestrator 对内层执行体的最小依赖（engine.Engine 满足之），
@@ -86,18 +87,46 @@ func (o *orchestrator) loop(
 	return o.result(OutcomeBudgetSpent, budget.MaxIterations, last, start)
 }
 
-// iterate 执行单轮：开 loop.iteration span，跑内层执行体并透传事件，随后独立判定。
+// iterate 执行单轮：开 loop.iteration span，跑执行体（双角色 Pipeline 或单 engine）并独立判定。
 // 返回本轮判定报告；stopped=true 表示 ctx（墙钟 / 取消）已结束，应终止外层循环。
 func (o *orchestrator) iterate(
 	ctx context.Context, iter int, task string, goal Goal, out chan<- LoopEvent,
 ) (report verify.Report, stopped bool) {
 	ictx, end := o.tracer.Start(ctx, "loop.iteration", observe.Attr{Key: "iter.index", Value: iter})
 	defer end(nil)
-	o.runInner(ictx, task, out)
+	if o.pipeline != nil {
+		report = o.runPipeline(ictx, task, goal, out)
+	} else {
+		o.runInner(ictx, task, out)
+		if ctx.Err() == nil {
+			report = o.verify(ictx, goal, out)
+		}
+	}
 	if ctx.Err() != nil {
 		return verify.Report{}, true
 	}
-	return o.verify(ictx, goal, out), false
+	return report, false
+}
+
+// runPipeline 走「制造-审查」双角色：maker 实现 → reviewer 审查。reviewer 拒 = 本轮未达标
+// 并带反馈续跑（跳过客观验收）；reviewer 通过 → 再过 goal.Verifier 客观验收（主观+客观双闸门）。
+func (o *orchestrator) runPipeline(ctx context.Context, task string, goal Goal, out chan<- LoopEvent) verify.Report {
+	pr, err := o.pipeline.Iterate(ctx, task)
+	if err != nil {
+		ev := types.StreamEvent{Type: types.EventError, Err: err}
+		o.emit(ctx, out, LoopEvent{Type: LoopInner, Inner: &ev})
+		return verify.Report{Summary: "pipeline error: " + err.Error()}
+	}
+	if pr.Summary != "" {
+		ev := types.StreamEvent{Type: types.EventText, Text: pr.Summary}
+		o.emit(ctx, out, LoopEvent{Type: LoopInner, Inner: &ev})
+	}
+	if !pr.Approved {
+		report := verify.Report{Summary: "reviewer rejected: " + pr.Feedback}
+		o.emitVerify(ctx, out, report)
+		return report
+	}
+	return o.verify(ctx, goal, out) // reviewer 通过 → 客观验收闸门
 }
 
 // runInner 调内层 engine 跑一轮任务，把其 StreamEvent 经 LoopInner 透传；

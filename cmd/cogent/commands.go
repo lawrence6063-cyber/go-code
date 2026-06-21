@@ -83,7 +83,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newRunCmd(), newResumeCmd(), newGoalCmd(), newMCPCmd())
+	root.AddCommand(newRunCmd(), newResumeCmd(), newGoalCmd(), newLoopCmd(), newMCPCmd())
 	return root
 }
 
@@ -262,6 +262,19 @@ func buildMCPManager(ctx context.Context, workRoot string, tracer observe.Tracer
 	return mgr, nil
 }
 
+// newLLMClient 按环境变量构造 LLM 客户端（DeepSeek OpenAI 兼容接口）；密钥仅来自 env。
+func newLLMClient() (llm.Client, error) {
+	baseURL := os.Getenv("COGENT_LLM_BASE_URL")
+	if baseURL == "" {
+		baseURL = defaultLLMBaseURL
+	}
+	llmc, err := llm.New(llm.Config{APIKey: os.Getenv("DEEPSEEK_API_KEY"), BaseURL: baseURL})
+	if err != nil {
+		return nil, fmt.Errorf("init llm: %w", err)
+	}
+	return llmc, nil
+}
+
 // buildEngine 按环境变量装配 LLM 客户端、工具池（内建 + MCP）、会话存储与执行内核。
 func buildEngine(
 	prov observe.Provider,
@@ -271,13 +284,9 @@ func buildEngine(
 	workRoot string,
 	mcpTools []tool.Tool,
 ) (engine.Engine, error) {
-	baseURL := os.Getenv("COGENT_LLM_BASE_URL")
-	if baseURL == "" {
-		baseURL = defaultLLMBaseURL
-	}
-	llmc, err := llm.New(llm.Config{APIKey: os.Getenv("DEEPSEEK_API_KEY"), BaseURL: baseURL})
+	llmc, err := newLLMClient()
 	if err != nil {
-		return nil, fmt.Errorf("init llm: %w", err)
+		return nil, err
 	}
 	spawner := buildSpawner(llmc, prov, workRoot)
 	eng, err := engine.New(engine.Deps{
@@ -343,6 +352,30 @@ func buildToolPool(
 		tools = append(tools, guard(mt)) // 外部不可信：统一过 permission/HITL
 	}
 	return tool.NewPool(tools...)
+}
+
+// buildReviewerPool 装配审查者工具池：仅只读工具（reviewer 绝不改代码，fail-closed）。
+func buildReviewerPool(workRoot string) tool.Pool {
+	return tool.NewPool(
+		tool.NewReadFile(workRoot),
+		tool.NewListDir(workRoot),
+		tool.NewGrep(workRoot),
+	)
+}
+
+// buildMakerPool 装配实现者工具池：只读 + 写/执行类（经 Guard 过权限闸门），供 maker 改代码。
+func buildMakerPool(workRoot string, prompter permission.Prompter, tracer observe.Tracer) tool.Pool {
+	policy := permission.StaticPolicy{}
+	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: true})
+	return tool.NewPool(
+		tool.NewReadFile(workRoot),
+		tool.NewListDir(workRoot),
+		tool.NewGrep(workRoot),
+		guard(tool.NewWriteFile(workRoot)),
+		guard(tool.NewEditFile(workRoot)),
+		guard(tool.NewBash(sb, tracer)),
+	)
 }
 
 // replLoop 驱动对话循环：先处理 first（若有），再进入共享的多轮输入循环。

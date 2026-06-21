@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Loop Phase 2+3 教学 · 制造-审查分离 与 持续自治心跳</title>
+<style>
+  :root {
+    --bg: #0B0E14; --bg-soft: #161C28; --bg-card: #1A2130; --border: #28324a;
+    --text: #E6EDF3; --text-dim: #93A1B3;
+    --accent: #5EEAD4; --accent2: #818CF8; --ok: #4ADE80; --warn: #FBBF24; --danger: #F87171; --purple: #c4b5fd;
+    --code-bg: #0a0d13; --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 16px; }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+  aside { position: sticky; top: 0; align-self: flex-start; width: 272px; height: 100vh; overflow-y: auto; padding: 30px 18px; border-right: 1px solid var(--border); flex-shrink: 0; }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+  aside .brand span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a { display: block; color: var(--text-dim); text-decoration: none; padding: 7px 12px; border-radius: 8px; font-size: 14px; margin: 2px 0; border-left: 2px solid transparent; transition: all .15s; }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); border-left-color: var(--accent); transform: translateX(2px); }
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+  .hero { background: radial-gradient(1200px 420px at 0% 0%, rgba(94,234,212,.13), transparent), radial-gradient(900px 420px at 100% 0%, rgba(129,140,248,.12), transparent); border: 1px solid var(--border); border-radius: 18px; padding: 44px 40px; margin-bottom: 36px; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(94,234,212,.4); border-radius: 999px; padding: 4px 14px; margin-bottom: 18px; }
+  .hero h1 { font-size: 38px; margin: 0 0 14px; line-height: 1.22; letter-spacing: -.5px; }
+  .hero h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 800px; }
+  .hero .stats { display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 25px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+  h2 { font-size: 25px; margin: 58px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { font-family: var(--mono); margin-right: 10px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  h3 { font-size: 19px; margin: 32px 0 12px; scroll-margin-top: 20px; }
+  p { color: #c4cdd9; }
+  a { color: var(--accent); }
+  code:not(pre code) { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.62; font-family: var(--mono); position: relative; margin: 16px 0; }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label { position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim); background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono); }
+  .k { color: #F87171; } .s { color: #5EEAD4; } .c { color: #6b7689; font-style: italic; } .f { color: #818CF8; } .n { color: #79c0ff; } .t { color: #FBBF24; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin: 16px 0; transition: transform .15s, border-color .15s; }
+  .card:hover { transform: translateY(-2px); border-color: rgba(94,234,212,.4); }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .callout { border-left: 3px solid var(--accent); background: rgba(94,234,212,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(251,191,36,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(248,113,113,.08); }
+  .callout.ok { border-color: var(--ok); background: rgba(74,222,128,.07); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 9px 13px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c4cdd9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .fig { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin: 22px 0; text-align: center; }
+  .fig svg { max-width: 100%; height: auto; }
+  .fig .cap { color: var(--text-dim); font-size: 13px; margin-top: 12px; }
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+  .key { background: linear-gradient(90deg, rgba(94,234,212,.1), rgba(129,140,248,.08)); border: 1px solid rgba(94,234,212,.25); border-radius: 12px; padding: 18px 22px; margin: 24px 0; font-size: 16px; }
+  .key b { color: var(--accent); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 9px; border-radius: 999px; display: inline-block; }
+  .b-ok { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand"><span>cogent</span> · Loop</div>
+  <div class="sub">Phase 2 + 3 教学</div>
+  <nav>
+    <a href="#intro">0 · 这一步在做什么</a>
+    <a href="#why">1 · 为什么要双角色</a>
+    <a href="#pipeline">2 · maker/reviewer 流水线</a>
+    <a href="#gate">3 · 主观+客观 双闸门</a>
+    <a href="#heartbeat">4 · L3 心跳 Trigger</a>
+    <a href="#daemon">5 · Daemon + progress 看板</a>
+    <a href="#cli">6 · 怎么跑起来</a>
+    <a href="#wrap">7 · 收尾与衔接</a>
+  </nav>
+</aside>
+<main>
+
+<div class="hero">
+  <div class="tag">LOOP_SPEC · L2 + L3 · 已落地</div>
+  <h1>把 Agent 变成<span>会自我审查</span>、能<span>自己醒来</span>的团队</h1>
+  <p>上一阶段（L0+L1）让 cogent 学会「达目标才停」。这一阶段更进一步：<strong>L2</strong> 把执行体拆成「写代码的 maker」+「独立审查的 reviewer」，实现「不批改自己的作业、通过才落盘」；<strong>L3</strong> 给循环装上「心跳」——可被定时或文件变更唤醒，跨多次运行用 <code>progress.md</code> 记住「还剩什么没做」。从「你点一下跑一次」迈向「无人值守的自治团队」。</p>
+  <div class="stats">
+    <div class="stat"><b>2</b><span>角色：maker / reviewer</span></div>
+    <div class="stat"><b>2</b><span>道闸门：主观审 + 客观验</span></div>
+    <div class="stat"><b>1</b><span>新命令 cogent loop</span></div>
+    <div class="stat"><b>0</b><span>行 v1 内核改动</span></div>
+  </div>
+</div>
+
+<!-- 0 -->
+<section id="intro">
+  <h2><span class="num">0</span>这一步在做什么</h2>
+  <p>Loop Engineering 的「六原语」里，这一阶段补齐两块关键拼图：</p>
+  <div class="grid cols2">
+    <div class="card">
+      <p style="margin:0 0 6px"><span class="badge b-ok">L2 · Sub-agents</span> <b>制造-审查分离</b></p>
+      <p style="color:var(--text-dim);font-size:14px;margin:0">写代码的不能给自己的代码打分。引入两个独立上下文的子 Agent：maker 负责改、reviewer 负责审，审查通过才真正落盘。</p>
+    </div>
+    <div class="card">
+      <p style="margin:0 0 6px"><span class="badge b-ok">L3 · Automations + State</span> <b>心跳 + 看板</b></p>
+      <p style="color:var(--text-dim);font-size:14px;margin:0">让循环能自己「醒来」（定时 / 文件变更触发），并把跨多次运行的「已做/待做/阻塞」写进磁盘 <code>progress.md</code>，仓库不忘记。</p>
+    </div>
+  </div>
+  <div class="key">延续铁律：<b>叠加而非重写</b>。engine / tool / sandbox 一行没改——L2 复用 v1 的「隔离子 Engine」模式扩展 <code>agent</code>，L3 新增 <code>progress</code> 叶子包 + <code>loop</code> 的 Trigger/Daemon。</div>
+</section>
+
+<!-- 1 -->
+<section id="why">
+  <h2><span class="num">1</span>为什么必须双角色：别让学生自己改卷</h2>
+  <p>如果让<strong>同一个</strong> Agent 既写代码又自评，它有强烈的「确认偏置」——刚写完的代码，它会本能地觉得「挺好的」。这等于让学生改自己的卷子。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 820 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="自评 vs 双角色独立审查">
+      <defs>
+        <marker id="w1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#F87171"/></marker>
+        <marker id="w2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#4ADE80"/></marker>
+      </defs>
+      <text x="200" y="26" fill="#fca5a5" font-size="15" font-weight="700" text-anchor="middle">❌ 自评（同一上下文）</text>
+      <circle cx="200" cy="110" r="46" fill="#2a1a1f" stroke="#F87171"/>
+      <text x="200" y="105" fill="#fca5a5" font-size="13" text-anchor="middle">同一个我</text>
+      <text x="200" y="123" fill="#fca5a5" font-size="11" text-anchor="middle">写 + 自评</text>
+      <path d="M200 156 C140 185 260 185 200 156" fill="none" stroke="#F87171" stroke-width="2" marker-end="url(#w1)"/>
+      <text x="200" y="200" fill="#7c899c" font-size="11.5" text-anchor="middle">「我觉得挺好」→ 确认偏置</text>
+
+      <line x1="410" y1="40" x2="410" y2="190" stroke="#28324a"/>
+
+      <text x="615" y="26" fill="#86efac" font-size="15" font-weight="700" text-anchor="middle">✓ 双角色（独立上下文）</text>
+      <circle cx="530" cy="110" r="42" fill="#13241a" stroke="#5EEAD4"/>
+      <text x="530" y="106" fill="#5EEAD4" font-size="12.5" text-anchor="middle">maker</text>
+      <text x="530" y="123" fill="#7c899c" font-size="10.5" text-anchor="middle">可写/Auto</text>
+      <circle cx="710" cy="110" r="42" fill="#13202e" stroke="#818CF8"/>
+      <text x="710" y="106" fill="#a5b4fc" font-size="12.5" text-anchor="middle">reviewer</text>
+      <text x="710" y="123" fill="#7c899c" font-size="10.5" text-anchor="middle">只读/Ask</text>
+      <path d="M572 110 L666 110" stroke="#4ADE80" stroke-width="2" marker-end="url(#w2)"/>
+      <text x="640" y="100" fill="#86efac" font-size="11" text-anchor="middle">审</text>
+      <text x="620" y="185" fill="#7c899c" font-size="11.5" text-anchor="middle">两套独立子 Engine，消除自我背书</text>
+    </svg>
+    <div class="cap">reviewer 用<b>独立子 Engine + 独立上下文</b>（甚至可指不同模型），没看过 maker 的「内心戏」，只看实际代码——审查才客观。</div>
+  </div>
+  <div class="callout"><b>成本逻辑：</b>maker 可用便宜快的模型（迭代次数多），reviewer 用更强的模型（质量闸门）——通过 <code>COGENT_REVIEWER_MODEL</code> 指定，把钱花在刀刃上。</div>
+</section>
+
+<!-- 2 -->
+<section id="pipeline">
+  <h2><span class="num">2</span>maker / reviewer 流水线：通过才落盘</h2>
+  <p>一轮双角色流水线分四步，核心是<strong>「通过才落盘」</strong>——reviewer 不通过就丢弃 maker 的本轮改动，带着审查意见重做。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="maker reviewer 流水线流程">
+      <defs>
+        <marker id="p1" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="#818CF8"/></marker>
+        <marker id="p1g" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="#4ADE80"/></marker>
+        <marker id="p1y" markerWidth="10" markerHeight="10" refX="7" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 Z" fill="#FBBF24"/></marker>
+      </defs>
+      <rect x="40" y="60" width="150" height="50" rx="10" fill="rgba(94,234,212,.08)" stroke="#5EEAD4"/>
+      <text x="115" y="82" fill="#5EEAD4" font-size="13" font-weight="700" text-anchor="middle">① maker 改</text>
+      <text x="115" y="99" fill="#7c899c" font-size="10.5" text-anchor="middle">可写池 / Auto</text>
+      <path d="M190 85 L243 85" stroke="#818CF8" stroke-width="2" marker-end="url(#p1)"/>
+      <rect x="245" y="60" width="150" height="50" rx="10" fill="rgba(129,140,248,.1)" stroke="#818CF8"/>
+      <text x="320" y="82" fill="#a5b4fc" font-size="13" font-weight="700" text-anchor="middle">② reviewer 审</text>
+      <text x="320" y="99" fill="#7c899c" font-size="10.5" text-anchor="middle">只读池 / Ask</text>
+      <path d="M395 85 L448 85" stroke="#818CF8" stroke-width="2" marker-end="url(#p1)"/>
+      <rect x="450" y="60" width="150" height="50" rx="10" fill="#1A2130" stroke="#3a4459"/>
+      <text x="525" y="82" fill="#c4cdd9" font-size="13" text-anchor="middle">③ 解析裁决</text>
+      <text x="525" y="99" fill="#7c899c" font-size="10.5" text-anchor="middle">APPROVED?</text>
+      <!-- approve -->
+      <path d="M600 78 L690 78" stroke="#4ADE80" stroke-width="2" marker-end="url(#p1g)"/>
+      <rect x="692" y="56" width="92" height="40" rx="9" fill="rgba(74,222,128,.14)" stroke="#4ADE80"/>
+      <text x="738" y="81" fill="#86efac" font-size="12" font-weight="700" text-anchor="middle">落盘 ✓</text>
+      <!-- reject loop -->
+      <path d="M525 110 L525 165 L115 165 L115 112" fill="none" stroke="#FBBF24" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#p1y)"/>
+      <text x="320" y="158" fill="#FBBF24" font-size="11.5" text-anchor="middle">REJECTED → ④ 丢弃改动(git checkout) + 带反馈让 maker 重做</text>
+      <text x="400" y="210" fill="#7c899c" font-size="11.5" text-anchor="middle">「通过才落盘」：未通过的改动不留痕，下一轮从干净状态重来</text>
+    </svg>
+    <div class="cap">reviewer 输出首行 <code>APPROVED</code> / <code>REJECTED: 理由</code>，<code>parseVerdict</code> 解析——<b>fail-closed</b>：解析不出明确 APPROVED 一律视为未通过。</div>
+  </div>
+
+  <pre><span class="code-label">internal/agent/maker_reviewer.go</span><code><span class="k">func</span> (m *MakerReviewer) <span class="f">Iterate</span>(ctx context.Context, task <span class="k">string</span>) (PipelineResult, <span class="k">error</span>) {
+	makerSummary, _ := m.<span class="f">runRole</span>(ctx, RoleMaker, m.maker, task)            <span class="c">// ① maker 改（可写池）</span>
+	reviewOut, _   := m.<span class="f">runRole</span>(ctx, RoleReviewer, m.reviewer,
+	                       <span class="f">reviewPrompt</span>(task, makerSummary))               <span class="c">// ② reviewer 审（只读池）</span>
+	verdict := <span class="f">parseVerdict</span>(reviewOut)                                 <span class="c">// ③ fail-closed 解析裁决</span>
+	<span class="k">if</span> !verdict.Approved {
+		m.<span class="f">discard</span>(ctx)                                            <span class="c">// ④ 未通过 → 回滚改动</span>
+	}
+	<span class="k">return</span> PipelineResult{MakerSummary: makerSummary, Verdict: verdict}, <span class="k">nil</span>
+}</code></pre>
+  <div class="callout warn"><b>一个工程约束：</b>engine 的 system prompt 是固定常量，无法给 reviewer 注入「你是审查者」的系统提示。解法：把评审 rubric 放进<strong>任务 prompt</strong>，reviewer 以只读档位读代码后据此输出裁决——不动 engine 一行。</div>
+</section>
+
+<!-- 3 -->
+<section id="gate">
+  <h2><span class="num">3</span>双闸门：主观审查 + 客观验收</h2>
+  <p>L2 的 reviewer 接进 L1 的目标循环后，形成<strong>两道闸门</strong>：reviewer 的「主观代码审查」+ Verifier 的「客观测试验收」，两道都过才算达标。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 780 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="双闸门">
+      <defs><marker id="g1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#5EEAD4"/></marker></defs>
+      <rect x="40" y="65" width="120" height="50" rx="10" fill="rgba(94,234,212,.08)" stroke="#5EEAD4"/>
+      <text x="100" y="95" fill="#5EEAD4" font-size="12.5" text-anchor="middle">maker 改完</text>
+      <path d="M160 90 L210 90" stroke="#5EEAD4" stroke-width="2" marker-end="url(#g1)"/>
+      <rect x="212" y="62" width="150" height="56" rx="10" fill="rgba(129,140,248,.1)" stroke="#818CF8"/>
+      <text x="287" y="86" fill="#a5b4fc" font-size="13" font-weight="700" text-anchor="middle">闸门一</text>
+      <text x="287" y="104" fill="#93a1b3" font-size="11" text-anchor="middle">reviewer 主观审</text>
+      <path d="M362 90 L412 90" stroke="#5EEAD4" stroke-width="2" marker-end="url(#g1)"/>
+      <rect x="414" y="62" width="150" height="56" rx="10" fill="rgba(74,222,128,.08)" stroke="#4ADE80"/>
+      <text x="489" y="86" fill="#86efac" font-size="13" font-weight="700" text-anchor="middle">闸门二</text>
+      <text x="489" y="104" fill="#93a1b3" font-size="11" text-anchor="middle">Verifier 客观验</text>
+      <path d="M564 90 L614 90" stroke="#5EEAD4" stroke-width="2" marker-end="url(#g1)"/>
+      <rect x="616" y="65" width="130" height="50" rx="25" fill="rgba(74,222,128,.14)" stroke="#4ADE80"/>
+      <text x="681" y="95" fill="#86efac" font-size="13" font-weight="700" text-anchor="middle">达标 ✓</text>
+      <text x="390" y="155" fill="#7c899c" font-size="11.5" text-anchor="middle">任一闸门未过 = 本轮未达标 → 带反馈续跑（reviewer 拒则跳过客观验收，省钱）</text>
+    </svg>
+    <div class="cap">reviewer 拒 → 直接判未达标、带审查意见续跑；reviewer 通过 → 再跑验收脚本（<code>go test</code> 退出码）做客观确认。</div>
+  </div>
+  <div class="callout ok"><b>为什么这样设计？</b>主观审查能抓「客观测试测不到」的问题（命名、可维护性、潜在坑），客观验收能抓「reviewer 看走眼」的回归。两者互补，比单一判据更可靠。</div>
+</section>
+
+<!-- 4 -->
+<section id="heartbeat">
+  <h2><span class="num">4</span>L3 · 心跳 Trigger：让循环自己醒来</h2>
+  <p>到目前为止，循环还是「你敲一次 <code>cogent goal</code> 才跑」。L3 加上 <strong>Trigger（触发源）</strong>——把「何时干活」与「干什么」解耦，让循环能被定时或事件唤醒。</p>
+
+  <div class="grid cols2">
+    <div class="card">
+      <p style="margin:0 0 6px">⏰ <b>CronTrigger</b>（定时）</p>
+      <p style="color:var(--text-dim);font-size:14px;margin:0">基于 <code>time.Ticker</code>，每隔 <code>--interval</code>（如 10m）醒一次。零第三方依赖。适合「每 10 分钟检查有没有失败测试」。</p>
+    </div>
+    <div class="card">
+      <p style="margin:0 0 6px">👀 <b>FSWatchTrigger</b>（文件变更）</p>
+      <p style="color:var(--text-dim);font-size:14px;margin:0">零依赖轮询扫描目录最近修改时间 + 抖动合并；检测到改动就触发。适合「CI 一红/文件一变就修」。跳过 <code>.git/.cogent/data</code> 防自触发。</p>
+    </div>
+  </div>
+
+  <pre><span class="code-label">internal/loop/trigger.go</span><code><span class="c">// Trigger 把「何时该干活」与「干什么」（Goal）解耦。</span>
+<span class="k">type</span> Trigger <span class="k">interface</span> {
+	<span class="c">// Fire 返回事件 channel；每个元素=触发一次目标循环。ctx 取消即关闭 channel（无泄漏）。</span>
+	<span class="f">Fire</span>(ctx context.Context) (&lt;-<span class="k">chan</span> TriggerSignal, <span class="k">error</span>)
+}</code></pre>
+</section>
+
+<!-- 5 -->
+<section id="daemon">
+  <h2><span class="num">5</span>Daemon + progress.md：守护进程与跨 run 看板</h2>
+  <p><strong>Daemon</strong> 把 Trigger 和目标循环接起来：<strong>串行</strong>消费触发信号（一次只跑一个 <code>RunGoal</code>，防并发膨胀），每轮结局写进 <code>progress.md</code> 看板。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 780 210" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Daemon 串行消费触发">
+      <defs><marker id="d1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 Z" fill="#5EEAD4"/></marker></defs>
+      <rect x="40" y="80" width="120" height="48" rx="10" fill="rgba(251,191,36,.1)" stroke="#FBBF24"/>
+      <text x="100" y="100" fill="#FBBF24" font-size="12.5" text-anchor="middle">Trigger</text>
+      <text x="100" y="117" fill="#7c899c" font-size="10.5" text-anchor="middle">心跳信号</text>
+      <path d="M160 104 L210 104" stroke="#5EEAD4" stroke-width="2" marker-end="url(#d1)"/>
+      <rect x="212" y="72" width="150" height="64" rx="10" fill="rgba(94,234,212,.08)" stroke="#5EEAD4"/>
+      <text x="287" y="96" fill="#5EEAD4" font-size="13" font-weight="700" text-anchor="middle">Daemon</text>
+      <text x="287" y="114" fill="#93a1b3" font-size="10.5" text-anchor="middle">串行消费 → RunGoal</text>
+      <text x="287" y="128" fill="#93a1b3" font-size="10.5" text-anchor="middle">drain 事件</text>
+      <path d="M362 104 L412 104" stroke="#5EEAD4" stroke-width="2" marker-end="url(#d1)"/>
+      <rect x="414" y="72" width="150" height="64" rx="10" fill="rgba(129,140,248,.1)" stroke="#818CF8"/>
+      <text x="489" y="96" fill="#a5b4fc" font-size="13" font-weight="700" text-anchor="middle">目标循环</text>
+      <text x="489" y="114" fill="#93a1b3" font-size="10.5" text-anchor="middle">L1/L2 那套</text>
+      <path d="M489 136 L489 165 L600 165" stroke="#5EEAD4" stroke-width="2" fill="none" marker-end="url(#d1)"/>
+      <rect x="602" y="146" width="150" height="40" rx="9" fill="#1A2130" stroke="#3a4459"/>
+      <text x="677" y="171" fill="#c4cdd9" font-size="11.5" text-anchor="middle">写 progress.md</text>
+      <path d="M40 150 Q40 200 250 195 Q560 190 489 138" stroke="#7c899c" stroke-width="1.5" fill="none" stroke-dasharray="4 3"/>
+      <text x="250" y="205" fill="#7c899c" font-size="11" text-anchor="middle">Ctrl-C → ctx 取消 → 全链路优雅停</text>
+    </svg>
+    <div class="cap">守护进程 O(触发次数) 串行执行 + 预算护栏兜底，绝不并发膨胀、不失控烧钱；Ctrl-C 经 <code>signal.NotifyContext</code> 全链路收手。</div>
+  </div>
+
+  <h3>三层状态各司其职（别搞混）</h3>
+  <table>
+    <tr><th></th><th>session（v1）</th><th>memory（v1）</th><th class="prim">progress（L3 新增）</th></tr>
+    <tr><td>粒度</td><td>单任务消息事件</td><td>项目长期约定</td><td>跨 run 的待办进度</td></tr>
+    <tr><td>生命周期</td><td>一次任务（可 resume）</td><td>长期沉淀</td><td>一条自治循环全程</td></tr>
+    <tr><td>读者</td><td>engine 重建上下文</td><td>注入系统提示</td><td>Daemon 决定「下一步干什么」</td></tr>
+    <tr><td>语义</td><td>重放</td><td>事实/约定</td><td>当前还剩什么</td></tr>
+  </table>
+  <div class="callout"><b>progress.md 是控制面：</b>它落在写禁止区 <code>.cogent/</code>，只许经 <code>progress.Board</code> 这条受控通道写，模型工具不能直接改——防「注入 → 篡改进度 → 长期跑偏」。看板是人可读、可手改、可 diff 的 Markdown 表格。</div>
+</section>
+
+<!-- 6 -->
+<section id="cli">
+  <h2><span class="num">6</span>怎么跑起来</h2>
+  <pre><span class="code-label">terminal</span><code><span class="c"># 双角色模式：maker 改 + reviewer 独立审，通过才落盘</span>
+<span class="f">cogent</span> goal <span class="s">"给 user 服务加限流中间件"</span> --review \
+  --verify=./verify_ratelimit.sh --max-iterations=<span class="t">8</span>
+
+<span class="c"># 守护进程：每 10 分钟醒一次，自动跑目标循环，进度写 progress.md</span>
+<span class="f">cogent</span> loop --interval=<span class="s">10m</span> --goal-file=.cogent/goal.md \
+  --verify=./verify.sh --review --max-iterations=<span class="t">8</span>
+
+<span class="c"># 或：盯着目录文件变更触发（CI 一红就修）</span>
+<span class="f">cogent</span> loop --watch=<span class="s">.</span> --verify=./verify.sh
+
+<span class="c"># Ctrl-C 随时优雅停，进度已写进 .cogent/progress.md</span></code></pre>
+  <p>守护进程跑完每轮后，<code>.cogent/progress.md</code> 大致长这样（人可读、可手改）：</p>
+  <pre><span class="code-label">.cogent/progress.md</span><code># cogent progress
+
+| ID | Status | Title | Note | Updated |
+| --- | --- | --- | --- | --- |
+| add-rate-limiter | <span style="color:#4ADE80">done</span> | 给 user 服务加限流中间件 | achieved after 3 iter(s) | 1750000000 |
+| fix-flaky-test  | <span style="color:#FBBF24">blocked</span> | 修复偶发失败的测试 | budget_spent after 8 iter(s) | 1750000500 |</code></pre>
+</section>
+
+<!-- 7 -->
+<section id="wrap">
+  <h2><span class="num">7</span>收尾：这一步把 cogent 推到了哪</h2>
+  <div class="grid cols3">
+    <div class="card"><p style="margin:0"><b>① 不批改自己的作业</b></p><p style="color:var(--text-dim);font-size:13.5px;margin:6px 0 0">maker / reviewer 独立上下文分离，通过才落盘，双闸门把关。</p></div>
+    <div class="card"><p style="margin:0"><b>② 会自己醒来</b></p><p style="color:var(--text-dim);font-size:13.5px;margin:6px 0 0">Cron / FSWatch 心跳 + Daemon 守护，从命令式迈向持续自治。</p></div>
+    <div class="card"><p style="margin:0"><b>③ 仓库不忘记</b></p><p style="color:var(--text-dim);font-size:13.5px;margin:6px 0 0">progress.md 跨 run 看板，重启后知道「还剩什么没做」。</p></div>
+  </div>
+
+  <div class="key">六原语已落地五项（Connectors / State / Sub-agents / Automations / goal），cogent 正式成为一个<b>会自我审查、能无人值守</b>的自治循环系统。配合 L0+L1 的「达目标才停」，它已是一台完整的「高度 3」Loop 引擎。</div>
+
+  <h3>下一步衔接（L4，P2）</h3>
+  <ul style="color:#c4cdd9">
+    <li><b>Worktrees 并行隔离</b>：把「通过才落盘」从 git checkout 回滚升级为 git worktree 物理隔离，支持多个 maker 并行不互相覆盖。</li>
+    <li><b>Skills（SKILL.md）</b>：把「怎么给本项目加限流中间件」这类流程固化为可复用技能包。</li>
+    <li><b>MCP 跨进程 trace 传播</b>：W3C traceparent 经 env 注入子进程，打通跨进程链路。</li>
+  </ul>
+
+  <footer>
+    cogent · Loop Engineering 改造 · Phase 2+3（L2 maker/reviewer 双角色 + L3 Automations 心跳 / progress.md 看板）已落地 ·
+    新增 <code>internal/progress</code> + 扩展 <code>internal/agent</code> + <code>loop.Trigger/Daemon</code> + <code>cogent loop</code> / <code>goal --review</code> ·
+    v1 内核零改动 · 零新增第三方依赖 · 全部测试 -race + goleak 通过。
+  </footer>
+</section>
+
+</main>
+</div>
+</body>
+</html>

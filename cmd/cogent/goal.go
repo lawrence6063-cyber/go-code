@@ -27,6 +27,7 @@ type goalOptions struct {
 	intent       string      // 自然语言目标
 	mode         engine.Mode // 运行档位
 	verifyScript string      // 验收脚本路径；为空则无判定器（fail-closed，跑到撞预算）
+	review       bool        // 是否启用 maker/reviewer 双角色执行体
 	budget       loop.Budget // 三重预算护栏
 }
 
@@ -36,6 +37,7 @@ func newGoalCmd() *cobra.Command {
 	var (
 		mode         string
 		verifyScript string
+		review       bool
 		maxIter      int
 		maxCost      float64
 		maxWall      time.Duration
@@ -53,19 +55,21 @@ func newGoalCmd() *cobra.Command {
 				intent:       strings.Join(args, " "),
 				mode:         m,
 				verifyScript: verifyScript,
+				review:       review,
 				budget:       loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: maxWall},
 			})
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
 	cmd.Flags().StringVar(&verifyScript, "verify", "", "验收脚本路径（退出码 0 = 目标达成）")
+	cmd.Flags().BoolVar(&review, "review", false, "启用 maker/reviewer 双角色（实现者改、独立审查者审，通过才落盘）")
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限；需成本计量接入）")
 	cmd.Flags().DurationVar(&maxWall, "max-wallclock", 0, "端到端墙钟上限（如 15m，0 = 不限）")
 	return cmd
 }
 
-// runGoalCmd 装配可观测/MCP/引擎/目标循环编排器，执行目标循环并流式渲染外层事件。
+// runGoalCmd 装配可观测/执行体/目标循环编排器，执行目标循环并流式渲染外层事件。
 func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	prov, err := observe.New(observeConfig())
 	if err != nil {
@@ -78,20 +82,11 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 
-	mgr, err := buildMCPManager(ctx, wd, prov.Tracer())
+	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = mgr.Close() }()
-
-	eng, err := buildEngine(prov, prompter, opts.mode, sid, wd, mgr.Tools())
-	if err != nil {
-		return err
-	}
-	orch, err := loop.New(loop.Deps{Engine: eng, Tracer: prov.Tracer(), Meter: prov.Meter()})
-	if err != nil {
-		return fmt.Errorf("init loop: %w", err)
-	}
+	defer cleanup()
 
 	ctx, end := prov.Tracer().Start(ctx, "cogent.session")
 	var runErr error
@@ -133,6 +128,9 @@ func printGoalBanner(sid string, opts goalOptions) {
 		fmt.Println("  verify : (none — fail-closed, runs until budget)")
 	} else {
 		fmt.Printf("  verify : %s\n", opts.verifyScript)
+	}
+	if opts.review {
+		fmt.Println("  exec   : maker/reviewer (双角色：实现者改 + 独立审查者审，通过才落盘)")
 	}
 }
 

@@ -101,6 +101,20 @@ type CostMeter interface {
 	SpentUSD() float64
 }
 
+// PipelineResult 是一轮「制造-审查」执行体的产出（消费侧最小视图）。
+type PipelineResult struct {
+	Summary  string // maker 改动摘要（透传给 UI）
+	Approved bool   // reviewer 是否通过
+	Feedback string // 未通过时的修改意见（拼入下一轮反馈）
+}
+
+// Pipeline 抽象「maker 实现 → reviewer 审查」的执行体。本接口在消费侧（loop）定义，
+// agent 包的 MakerReviewer 经 cmd 层薄适配满足之——使 loop 无需 import agent（依赖更干净）。
+type Pipeline interface {
+	// Iterate 让实现者完成 task 并由独立审查者裁决，返回摘要与是否通过。
+	Iterate(ctx context.Context, task string) (PipelineResult, error)
+}
+
 // Orchestrator 是目标驱动外层循环的编排器。
 type Orchestrator interface {
 	// RunGoal 执行目标循环：每轮跑一次 engine、独立判定、未达标则带反馈续跑，
@@ -110,16 +124,17 @@ type Orchestrator interface {
 
 // Deps 是构造 Orchestrator 的注入依赖（与 engine.Deps 风格一致，便于测试替身）。
 type Deps struct {
-	Engine engine.Engine  // 单次任务执行体（单一真相源仍在它内部，必填）
-	Tracer observe.Tracer // loop.* span 埋点；nil 时回退 no-op
-	Meter  observe.Meter  // 预算 / 轮数指标；nil 时回退 no-op
-	Cost   CostMeter      // 累计成本读取器；nil 时不计成本预算
+	Engine   engine.Engine  // 单次任务执行体（Pipeline 为 nil 时必填）
+	Pipeline Pipeline       // 可选：制造-审查双角色执行体；非 nil 时本轮走双角色（L2）
+	Tracer   observe.Tracer // loop.* span 埋点；nil 时回退 no-op
+	Meter    observe.Meter  // 预算 / 轮数指标；nil 时回退 no-op
+	Cost     CostMeter      // 累计成本读取器；nil 时不计成本预算
 }
 
-// New 构造目标循环编排器；Engine 必填，Tracer/Meter 缺省回退 no-op，Cost 可为 nil。
+// New 构造目标循环编排器；Engine 与 Pipeline 至少一个非空，Tracer/Meter 缺省回退 no-op。
 func New(deps Deps) (Orchestrator, error) {
-	if deps.Engine == nil {
-		return nil, errors.New("nil engine")
+	if deps.Engine == nil && deps.Pipeline == nil {
+		return nil, errors.New("loop requires an engine or a pipeline")
 	}
 	if deps.Tracer == nil || deps.Meter == nil {
 		prov, err := observe.New(observe.Config{Enabled: false})
@@ -134,9 +149,10 @@ func New(deps Deps) (Orchestrator, error) {
 		}
 	}
 	return &orchestrator{
-		engine: deps.Engine,
-		tracer: deps.Tracer,
-		meter:  deps.Meter,
-		cost:   deps.Cost,
+		engine:   deps.Engine,
+		pipeline: deps.Pipeline,
+		tracer:   deps.Tracer,
+		meter:    deps.Meter,
+		cost:     deps.Cost,
 	}, nil
 }
