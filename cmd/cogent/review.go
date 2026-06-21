@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/alaindong/cogent/internal/agent"
 	"github.com/alaindong/cogent/internal/engine"
+	"github.com/alaindong/cogent/internal/llm"
 	"github.com/alaindong/cogent/internal/loop"
 	"github.com/alaindong/cogent/internal/memory"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
+	"github.com/alaindong/cogent/internal/worktree"
 )
 
 // gitDiscarder 在审查未通过时经沙箱回滚工作区改动（「通过才落盘」的 diff 暂存版，L2）。
@@ -47,13 +50,61 @@ func (a pipelineAdapter) Iterate(ctx context.Context, task string) (loop.Pipelin
 	}, nil
 }
 
-// buildPipeline 装配 maker/reviewer 双角色流水线：maker（可写池 + Auto）+ reviewer（只读池 + Ask）
-// + git 回滚。maker 与 reviewer 可指不同模型（COGENT_REVIEWER_MODEL 覆盖），成本花在质量闸门刀刃上。
-func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
-	llmc, err := newLLMClient()
+// makerReviewerRunner 抽象 worktree 内执行的「一轮双角色」（maker 改 + reviewer 审），
+// 便于对 worktreePipeline 的落盘分支逻辑做注入式测试；*agent.MakerReviewer 隐式满足。
+type makerReviewerRunner interface {
+	Iterate(ctx context.Context, task string) (agent.PipelineResult, error)
+}
+
+// worktreePipeline 是「通过才落盘」的 worktree 暂存版（L4-2）：每轮在独立 git worktree 内
+// 让 maker 改、reviewer 审同一 worktree，审查通过则 Merge 回基线、否则 Discard 整个 worktree。
+// 相比 diff 回滚，物理隔离更干净（无「回滚不彻底」风险），且天然支持多 maker 并行。
+// 合并冲突降级为「本轮未通过」并附说明，交上层带反馈续跑（最终撞预算时由 daemon 落为 Blocked）。
+type worktreePipeline struct {
+	mgr     worktree.Manager
+	baseRef string                                    // worktree 派生与合并回的基线引用
+	build   func(workRoot string) makerReviewerRunner // 按 worktree 根重建双角色（无 discarder）
+}
+
+// Iterate 见 loop.Pipeline 接口说明：Create → maker/reviewer → 通过 Merge / 否则 Discard。
+func (p *worktreePipeline) Iterate(ctx context.Context, task string) (loop.PipelineResult, error) {
+	ws, err := p.mgr.Create(ctx, p.baseRef)
 	if err != nil {
-		return nil, err
+		return loop.PipelineResult{}, fmt.Errorf("create worktree: %w", err)
 	}
+	r, runErr := p.build(ws.Root).Iterate(ctx, task)
+	if runErr != nil {
+		_ = p.mgr.Discard(ctx, ws)
+		return loop.PipelineResult{}, runErr
+	}
+	if !r.Verdict.Approved {
+		_ = p.mgr.Discard(ctx, ws) // 未通过：物理丢弃，主工作区零残留
+		return loop.PipelineResult{Summary: r.MakerSummary, Approved: false, Feedback: r.Verdict.Feedback}, nil
+	}
+	if err := p.mgr.Merge(ctx, ws, p.baseRef); err != nil {
+		_ = p.mgr.Discard(ctx, ws)
+		if errors.Is(err, worktree.ErrMergeConflict) {
+			return loop.PipelineResult{
+				Summary:  r.MakerSummary,
+				Approved: false,
+				Feedback: "merge conflict while landing approved changes: " + err.Error(),
+			}, nil
+		}
+		return loop.PipelineResult{}, fmt.Errorf("merge worktree: %w", err)
+	}
+	return loop.PipelineResult{Summary: r.MakerSummary, Approved: true}, nil
+}
+
+// buildMakerReviewer 按指定工作根装配 maker/reviewer 双角色：maker（可写池 + Auto）+
+// reviewer（只读池 + Ask）。maker 与 reviewer 可指不同模型（COGENT_REVIEWER_MODEL 覆盖）。
+// discarder 为 nil 时不回滚（worktree 暂存模式由 Manager 负责清理）。
+func buildMakerReviewer(
+	llmc llm.Client,
+	prov observe.Provider,
+	prompter permission.Prompter,
+	workRoot string,
+	discarder agent.Discarder,
+) *agent.MakerReviewer {
 	model := os.Getenv("COGENT_MODEL")
 	makerDeps := engine.Deps{
 		LLM:      llmc,
@@ -72,9 +123,37 @@ func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot
 		Model:    reviewerModel(model),
 		WorkRoot: workRoot,
 	}
+	return agent.NewMakerReviewer(makerDeps, reviewerDeps, discarder)
+}
+
+// buildPipeline 装配 maker/reviewer 双角色流水线（diff 回滚版）：maker 改工作区，
+// reviewer 审，未通过经 git 回滚（向后兼容默认）。
+func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
+	llmc, err := newLLMClient()
+	if err != nil {
+		return nil, err
+	}
 	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false})
-	mr := agent.NewMakerReviewer(makerDeps, reviewerDeps, gitDiscarder{sb: sb})
+	mr := buildMakerReviewer(llmc, prov, prompter, workRoot, gitDiscarder{sb: sb})
 	return pipelineAdapter{mr: mr}, nil
+}
+
+// buildWorktreePipeline 装配 worktree 暂存版双角色流水线（L4-2）：每轮在隔离 worktree 内执行，
+// 通过才 Merge 落盘。maker/reviewer 在 worktree 根上重建，物理隔离主工作区。
+func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
+	llmc, err := newLLMClient()
+	if err != nil {
+		return nil, err
+	}
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false})
+	mgr := worktree.New(sb)
+	return &worktreePipeline{
+		mgr:     mgr,
+		baseRef: "HEAD",
+		build: func(root string) makerReviewerRunner {
+			return buildMakerReviewer(llmc, prov, prompter, root, nil) // worktree 负责清理，无需 discarder
+		},
+	}, nil
 }
 
 // reviewerModel 返回审查者使用的模型：优先 COGENT_REVIEWER_MODEL，否则沿用 maker 模型。
@@ -85,19 +164,23 @@ func reviewerModel(makerModel string) string {
 	return makerModel
 }
 
-// buildOrchestrator 装配目标循环编排器：review=true 走双角色流水线，否则走单 engine 执行体。
-// 返回的 cleanup 用于释放可能持有的 MCP 连接（review 模式不连接 MCP，返回空清理）。
+// buildOrchestrator 装配目标循环编排器：
+//   - review + worktree：worktree 暂存版双角色流水线（通过才 Merge 落盘，物理隔离）；
+//   - review：diff 回滚版双角色流水线（通过才落盘，未通过 git 回滚）；
+//   - 否则：单 engine 执行体（含 MCP 工具）。
+//
+// 返回的 cleanup 用于释放可能持有的 MCP 连接（pipeline 模式不连接 MCP，返回空清理）。
 func buildOrchestrator(
 	ctx context.Context,
 	prov observe.Provider,
 	prompter permission.Prompter,
 	mode engine.Mode,
 	sessionID, workRoot string,
-	review bool,
+	review, useWorktree bool,
 ) (loop.Orchestrator, func(), error) {
 	noop := func() {}
-	if review {
-		pipeline, err := buildPipeline(prov, prompter, workRoot)
+	if review || useWorktree {
+		pipeline, err := pipelineFor(prov, prompter, workRoot, useWorktree)
 		if err != nil {
 			return nil, noop, err
 		}
@@ -122,4 +205,12 @@ func buildOrchestrator(
 		return nil, noop, fmt.Errorf("init loop: %w", err)
 	}
 	return orch, func() { _ = mgr.Close() }, nil
+}
+
+// pipelineFor 按是否启用 worktree 选择双角色流水线的落盘策略。
+func pipelineFor(prov observe.Provider, prompter permission.Prompter, workRoot string, useWorktree bool) (loop.Pipeline, error) {
+	if useWorktree {
+		return buildWorktreePipeline(prov, prompter, workRoot)
+	}
+	return buildPipeline(prov, prompter, workRoot)
 }

@@ -28,6 +28,7 @@ type goalOptions struct {
 	mode         engine.Mode // 运行档位
 	verifyScript string      // 验收脚本路径；为空则无判定器（fail-closed，跑到撞预算）
 	review       bool        // 是否启用 maker/reviewer 双角色执行体
+	worktree     bool        // 是否用 git worktree 暂存落盘（通过才 Merge，物理隔离）
 	budget       loop.Budget // 三重预算护栏
 }
 
@@ -38,6 +39,7 @@ func newGoalCmd() *cobra.Command {
 		mode         string
 		verifyScript string
 		review       bool
+		useWorktree  bool
 		maxIter      int
 		maxCost      float64
 		maxWall      time.Duration
@@ -56,6 +58,7 @@ func newGoalCmd() *cobra.Command {
 				mode:         m,
 				verifyScript: verifyScript,
 				review:       review,
+				worktree:     useWorktree,
 				budget:       loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: maxWall},
 			})
 		},
@@ -63,6 +66,7 @@ func newGoalCmd() *cobra.Command {
 	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
 	cmd.Flags().StringVar(&verifyScript, "verify", "", "验收脚本路径（退出码 0 = 目标达成）")
 	cmd.Flags().BoolVar(&review, "review", false, "启用 maker/reviewer 双角色（实现者改、独立审查者审，通过才落盘）")
+	cmd.Flags().BoolVar(&useWorktree, "worktree", false, "双角色落盘用 git worktree 暂存（通过才 Merge，物理隔离；隐含 --review）")
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限；需成本计量接入）")
 	cmd.Flags().DurationVar(&maxWall, "max-wallclock", 0, "端到端墙钟上限（如 15m，0 = 不限）")
@@ -82,7 +86,7 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 
-	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review)
+	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree)
 	if err != nil {
 		return err
 	}
@@ -94,7 +98,7 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 
 	printGoalBanner(sid, opts)
 	events, err := orch.RunGoal(ctx, loop.Goal{
-		Intent:   opts.intent,
+		Intent:   augmentWithSkills(ctx, wd, opts.intent),
 		WorkRoot: wd,
 		Verifier: buildVerifier(opts.verifyScript, wd),
 		Budget:   opts.budget,
@@ -129,8 +133,12 @@ func printGoalBanner(sid string, opts goalOptions) {
 	} else {
 		fmt.Printf("  verify : %s\n", opts.verifyScript)
 	}
-	if opts.review {
-		fmt.Println("  exec   : maker/reviewer (双角色：实现者改 + 独立审查者审，通过才落盘)")
+	if opts.review || opts.worktree {
+		if opts.worktree {
+			fmt.Println("  exec   : maker/reviewer + worktree 暂存（隔离改 → 审 → 通过才 Merge 落盘）")
+		} else {
+			fmt.Println("  exec   : maker/reviewer (双角色：实现者改 + 独立审查者审，通过才落盘)")
+		}
 	}
 }
 

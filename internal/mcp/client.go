@@ -100,7 +100,10 @@ func (c *client) Connect(ctx context.Context, cfg ServerConfig) error {
 	}
 	c.name = cfg.Name
 	cmd := exec.Command(cfg.Command, cfg.Args...)
-	cmd.Env = mergeEnv(cfg.Env)
+	// 跨进程 trace 续链：把当前 span 的 W3C traceparent 注入子进程环境（无 span 时优雅降级）。
+	env := cloneEnv(cfg.Env)
+	InjectTraceContext(ctx, env)
+	cmd.Env = mergeEnv(env)
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -212,6 +215,15 @@ func mergeEnv(extra map[string]string) []string {
 		env = append(env, k+"="+v)
 	}
 	return env
+}
+
+// cloneEnv 复制配置 env，避免向调用方的 ServerConfig.Env 注入 traceparent 等运行期值。
+func cloneEnv(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src)+2)
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // normalizeArgs 保证 arguments 始终是合法 JSON 对象（空入参补为 {}）。

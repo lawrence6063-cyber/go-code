@@ -27,6 +27,7 @@ type loopOptions struct {
 	verifyScript string        // 验收脚本路径
 	mode         engine.Mode   // 运行档位
 	review       bool          // 是否启用 maker/reviewer 双角色
+	worktree     bool          // 是否用 git worktree 暂存落盘
 	watch        string        // 非空则文件变更触发（监听根目录）
 	interval     time.Duration // 定时触发间隔（watch 为空时生效）
 	budget       loop.Budget   // 三重预算护栏
@@ -37,7 +38,7 @@ type loopOptions struct {
 func newLoopCmd() *cobra.Command {
 	var (
 		mode, verify, goalFile, watch string
-		review                        bool
+		review, useWorktree           bool
 		interval, wall                time.Duration
 		maxIter                       int
 		maxCost                       float64
@@ -56,7 +57,8 @@ func newLoopCmd() *cobra.Command {
 				intent = args[0]
 			}
 			return runLoopCmd(cmd.Context(), loopOptions{
-				intent: intent, goalFile: goalFile, verifyScript: verify, mode: m, review: review,
+				intent: intent, goalFile: goalFile, verifyScript: verify, mode: m,
+				review: review, worktree: useWorktree,
 				watch: watch, interval: interval,
 				budget: loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: wall},
 			})
@@ -66,6 +68,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().StringVar(&goalFile, "goal-file", "", "目标文件路径（内容作为目标意图，覆盖位置参数）")
 	cmd.Flags().StringVar(&verify, "verify", "", "验收脚本路径（退出码 0 = 目标达成）")
 	cmd.Flags().BoolVar(&review, "review", false, "启用 maker/reviewer 双角色")
+	cmd.Flags().BoolVar(&useWorktree, "worktree", false, "双角色落盘用 git worktree 暂存（通过才 Merge，物理隔离；隐含 --review）")
 	cmd.Flags().StringVar(&watch, "watch", "", "监听该目录的文件变更触发（留空则用 --interval 定时触发）")
 	cmd.Flags().DurationVar(&interval, "interval", defaultLoopInterval, "定时触发间隔（如 10m）")
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
@@ -91,7 +94,7 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 
-	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review)
+	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree)
 	if err != nil {
 		return err
 	}
@@ -106,7 +109,7 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	printLoopBanner(intent, opts)
 	runErr := daemon.Run(ctx, func(loop.TriggerSignal) loop.Goal {
 		return loop.Goal{
-			Intent:   intent,
+			Intent:   augmentWithSkills(ctx, wd, intent),
 			WorkRoot: wd,
 			Verifier: buildVerifier(opts.verifyScript, wd),
 			Budget:   opts.budget,
