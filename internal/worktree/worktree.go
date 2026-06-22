@@ -23,6 +23,9 @@ import (
 // ErrMergeConflict 表示合并时发生冲突，应由上层映射为 progress 看板的 Blocked 状态交人介入。
 var ErrMergeConflict = errors.New("merge conflict")
 
+// ErrDirtyWorktree 表示主仓库工作树存在未提交或未跟踪改动，不满足 worktree 隔离循环的前置条件。
+var ErrDirtyWorktree = errors.New("dirty worktree")
+
 // branchPrefix 是 cogent 创建的临时 worktree 分支前缀，便于识别与清理。
 const branchPrefix = "cogent/wt-"
 
@@ -57,6 +60,35 @@ type gitManager struct {
 // sb 应绑定主仓库根目录（与 cmd 层 gitDiscarder 同构：Enabled=false 继承宿主 PATH 跑 git）。
 func New(sb sandbox.Sandbox) Manager {
 	return &gitManager{sb: sb, baseDir: os.TempDir()}
+}
+
+// EnsureClean 校验主仓库工作树是否干净（无未提交改动与未跟踪文件），作为 worktree 隔离循环的前置条件。
+// 自治循环约定「主仓库已处于 baseRef 的干净检出」（见包注释与 Merge 说明）：工作树脏会使
+// git merge --no-ff 因 "local/untracked changes would be overwritten" 失败或落盘不干净。
+// sb 应绑定主仓库根目录（与 New 注入同构：Enabled=false 继承宿主 PATH 跑 git）。
+func EnsureClean(ctx context.Context, sb sandbox.Sandbox) error {
+	res, err := sb.Exec(ctx, "git status --porcelain")
+	if err != nil {
+		return fmt.Errorf("check worktree status: %w", err)
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("check worktree status: git exit %d: %s", res.ExitCode, oneLine(res.Stderr))
+	}
+	if strings.TrimSpace(res.Stdout) != "" {
+		return fmt.Errorf("%w: %d uncommitted/untracked path(s)", ErrDirtyWorktree, countStatusLines(res.Stdout))
+	}
+	return nil
+}
+
+// countStatusLines 统计 git status --porcelain 输出中的非空行数（待处理路径数）。
+func countStatusLines(out string) int {
+	var n int
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // NewWithBaseDir 构造管理器并指定 worktree 目录存放根（便于测试隔离到 t.TempDir()）。

@@ -17,6 +17,7 @@ import (
 	"github.com/alaindong/cogent/internal/session"
 	"github.com/alaindong/cogent/internal/types"
 	"github.com/alaindong/cogent/internal/verify"
+	"github.com/alaindong/cogent/internal/worktree"
 )
 
 // verifyTimeout 是验收脚本单次执行的超时上限（经 sandbox 传到 os/exec）。
@@ -29,6 +30,7 @@ type goalOptions struct {
 	verifyScript string      // 验收脚本路径；为空则无判定器（fail-closed，跑到撞预算）
 	review       bool        // 是否启用 maker/reviewer 双角色执行体
 	worktree     bool        // 是否用 git worktree 暂存落盘（通过才 Merge，物理隔离）
+	allowDirty   bool        // 是否跳过 --worktree 的脏工作树前置校验（风险自负）
 	budget       loop.Budget // 三重预算护栏
 }
 
@@ -40,6 +42,7 @@ func newGoalCmd() *cobra.Command {
 		verifyScript string
 		review       bool
 		useWorktree  bool
+		allowDirty   bool
 		maxIter      int
 		maxCost      float64
 		maxWall      time.Duration
@@ -59,6 +62,7 @@ func newGoalCmd() *cobra.Command {
 				verifyScript: verifyScript,
 				review:       review,
 				worktree:     useWorktree,
+				allowDirty:   allowDirty,
 				budget:       loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: maxWall},
 			})
 		},
@@ -67,6 +71,7 @@ func newGoalCmd() *cobra.Command {
 	cmd.Flags().StringVar(&verifyScript, "verify", "", "验收脚本路径（退出码 0 = 目标达成）")
 	cmd.Flags().BoolVar(&review, "review", false, "启用 maker/reviewer 双角色（实现者改、独立审查者审，通过才落盘）")
 	cmd.Flags().BoolVar(&useWorktree, "worktree", false, "双角色落盘用 git worktree 暂存（通过才 Merge，物理隔离；隐含 --review）")
+	cmd.Flags().BoolVar(&allowDirty, "allow-dirty", false, "跳过 --worktree 的脏工作树前置校验（风险自负，merge 落盘可能失败）")
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限；需成本计量接入）")
 	cmd.Flags().DurationVar(&maxWall, "max-wallclock", 0, "端到端墙钟上限（如 15m，0 = 不限）")
@@ -85,6 +90,12 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	prompter := newPrompter(in)
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
+
+	if opts.worktree && !opts.allowDirty {
+		if err := ensureCleanWorktree(ctx, wd); err != nil {
+			return err
+		}
+	}
 
 	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree)
 	if err != nil {
@@ -114,6 +125,21 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 		return nil
 	}
 	return runErr
+}
+
+// ensureCleanWorktree 在启用 --worktree 时前置校验主仓库工作树是否干净。
+// 脏工作树（未提交改动或未跟踪文件）会使隔离循环的 git merge --no-ff 落盘失败，
+// 故 fail-closed 拦截并给出可操作指引；确需带脏运行可加 --allow-dirty（风险自负）。
+func ensureCleanWorktree(ctx context.Context, workRoot string) error {
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false})
+	err := worktree.EnsureClean(ctx, sb)
+	if errors.Is(err, worktree.ErrDirtyWorktree) {
+		return fmt.Errorf("%w\n"+
+			"  --worktree 隔离循环要求主仓库工作树干净（否则 merge 落盘会失败）。\n"+
+			"  请先提交或暂存改动（git stash -u 或 git commit -am wip），或在干净 clone 上运行；\n"+
+			"  确需带脏运行可加 --allow-dirty（风险自负）", err)
+	}
+	return err
 }
 
 // buildVerifier 构造独立判定器：脚本为空时返回 nil（fail-closed，跑到撞预算）。

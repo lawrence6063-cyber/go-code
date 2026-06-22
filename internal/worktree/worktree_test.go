@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -132,6 +133,47 @@ func TestDiscard_RemovesWorktreeAndBranch(t *testing.T) {
 	}
 	if _, ok := fs.findCmd("git branch -D 'cogent/wt-z'"); !ok {
 		t.Errorf("no branch delete recorded: %v", fs.cmds)
+	}
+}
+
+func TestEnsureClean_PassesOnEmptyStatus(t *testing.T) {
+	fs := &fakeSandbox{resultFn: func(string) (sandbox.ExecResult, error) {
+		return sandbox.ExecResult{Stdout: "", ExitCode: 0}, nil
+	}}
+	if err := EnsureClean(context.Background(), fs); err != nil {
+		t.Fatalf("EnsureClean on clean tree: %v", err)
+	}
+	if _, ok := fs.findCmd("git status --porcelain"); !ok {
+		t.Errorf("expected git status --porcelain probe, got: %v", fs.cmds)
+	}
+}
+
+func TestEnsureClean_RejectsDirtyTree(t *testing.T) {
+	fs := &fakeSandbox{resultFn: func(string) (sandbox.ExecResult, error) {
+		return sandbox.ExecResult{Stdout: " M cost.go\n?? findfiles.go\n", ExitCode: 0}, nil
+	}}
+	err := EnsureClean(context.Background(), fs)
+	if err == nil {
+		t.Fatal("EnsureClean should reject dirty tree")
+	}
+	if !errors.Is(err, ErrDirtyWorktree) {
+		t.Errorf("err = %v, want wraps ErrDirtyWorktree", err)
+	}
+	if !strings.Contains(err.Error(), "2 ") {
+		t.Errorf("err = %v, want report 2 dirty paths", err)
+	}
+}
+
+func TestEnsureClean_PropagatesGitError(t *testing.T) {
+	fs := &fakeSandbox{resultFn: func(string) (sandbox.ExecResult, error) {
+		return sandbox.ExecResult{ExitCode: 128, Stderr: "fatal: not a git repository"}, nil
+	}}
+	err := EnsureClean(context.Background(), fs)
+	if err == nil {
+		t.Fatal("EnsureClean should fail when git status exits non-zero")
+	}
+	if errors.Is(err, ErrDirtyWorktree) {
+		t.Errorf("non-zero git exit should not be reported as dirty: %v", err)
 	}
 }
 

@@ -1,4 +1,4 @@
-// 本文件在纯函数防线之上补全命令执行的纵深防御：命令路由（ShouldSandbox）+ 危险命令确定性拦截
+// Package sandbox 本文件在纯函数防线之上补全命令执行的纵深防御：命令路由（ShouldSandbox）+ 危险命令确定性拦截
 // + 受限环境执行 + 工作目录约束 + 超时 + 执行后清理。包级文档见 doc.go。
 package sandbox
 

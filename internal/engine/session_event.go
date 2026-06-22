@@ -59,12 +59,33 @@ func eventType(role types.Role) string {
 }
 
 // rebuildMessages 把已加载的事件列表重建为消息列表（跳过 system，由内核重新注入；
-// summary/meta 等非消息事件忽略）。返回的消息尚未做配对修复。
+// summary/meta 等非消息事件忽略）。遇到 undo 事件时回退到其标记的截断点。
+// 返回的消息尚未做配对修复。
 func rebuildMessages(events []session.Event) ([]types.Message, string) {
-	msgs := make([]types.Message, 0, len(events))
+	type msgEntry struct {
+		msg  types.Message
+		uuid string
+	}
+	entries := make([]msgEntry, 0, len(events))
+	uuidIndex := make(map[string]int) // UUID → entries 中该事件之后的位置
 	lastUUID := ""
+
 	for _, ev := range events {
 		lastUUID = ev.UUID
+		if ev.Type == "undo" {
+			var payload undoPayload
+			if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+				slog.Warn("unmarshal undo event", "uuid", ev.UUID, "err", err)
+				continue
+			}
+			if len(payload.RevokedUUIDs) > 0 {
+				cutUUID := payload.RevokedUUIDs[0]
+				if idx, ok := uuidIndex[cutUUID]; ok {
+					entries = entries[:idx]
+				}
+			}
+			continue
+		}
 		if ev.Type != "user" && ev.Type != "assistant" && ev.Type != "tool_result" {
 			continue
 		}
@@ -76,7 +97,13 @@ func rebuildMessages(events []session.Event) ([]types.Message, string) {
 		if msg.Role == types.RoleSystem {
 			continue
 		}
-		msgs = append(msgs, msg)
+		uuidIndex[ev.UUID] = len(entries) + 1
+		entries = append(entries, msgEntry{msg: msg, uuid: ev.UUID})
+	}
+
+	msgs := make([]types.Message, 0, len(entries))
+	for _, e := range entries {
+		msgs = append(msgs, e.msg)
 	}
 	return msgs, lastUUID
 }

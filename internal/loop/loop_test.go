@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/alaindong/cogent/internal/engine"
 	"github.com/alaindong/cogent/internal/types"
 	"github.com/alaindong/cogent/internal/verify"
 )
@@ -64,6 +65,10 @@ func (f *fakeEngine) Run(ctx context.Context, task string) (<-chan types.StreamE
 
 func (f *fakeEngine) Resume(context.Context, string) (<-chan types.StreamEvent, error) {
 	return nil, errors.New("resume not supported in fake")
+}
+
+func (f *fakeEngine) Undo(context.Context) (*engine.UndoResult, error) {
+	return nil, engine.ErrNothingToUndo
 }
 
 func (f *fakeEngine) tasks() []string {

@@ -252,6 +252,7 @@ func runREPL(ctx context.Context, opts replOptions) error {
 	slog.Info("repl started", "mode", opts.mode, "session", sid)
 	fmt.Printf("cogent — session %s — type 'exit' or 'quit' (or Ctrl-C) to leave.\n", sid)
 	fmt.Printf("  (resume later with: cogent resume %s)\n", sid)
+	fmt.Println("  (type '/undo' to undo last turn)")
 	runErr = driveREPL(ctx, eng, in, opts)
 	if errors.Is(runErr, context.Canceled) {
 		return nil
@@ -343,6 +344,7 @@ func buildEngine(
 		Session:      session.NewStore(filepath.Join(workRoot, dataDirName)),
 		SessionID:    sessionID,
 		Observe:      prov,
+		Snapshotter:  engine.NewGitSnapshotter(workRoot),
 		Mode:         mode,
 		Model:        os.Getenv("COGENT_MODEL"),
 		WorkRoot:     workRoot,
@@ -450,9 +452,33 @@ func inputLoop(ctx context.Context, eng engine.Engine, in *inputReader) error {
 		if line == "exit" || line == "quit" {
 			return nil
 		}
+		if line == "/undo" {
+			handleUndo(ctx, eng)
+			continue
+		}
 		if err := runTurn(ctx, eng, line); err != nil {
 			return err
 		}
+	}
+}
+
+// handleUndo 处理 /undo 命令：调用 engine.Undo 并打印撤销摘要。
+func handleUndo(ctx context.Context, eng engine.Engine) {
+	result, err := eng.Undo(ctx)
+	if err != nil {
+		if errors.Is(err, engine.ErrNothingToUndo) {
+			fmt.Println("cogent> 没有可撤销的轮次")
+		} else {
+			fmt.Fprintf(os.Stderr, "cogent: undo error: %v\n", err)
+		}
+		return
+	}
+	if result.HasFileChanges {
+		fmt.Printf("cogent> 已撤销上一轮：%s（工作区已恢复，移除 %d 条消息）\n",
+			result.Summary, result.RemovedCount)
+	} else {
+		fmt.Printf("cogent> 已撤销对话历史：%s（本轮无文件改动，移除 %d 条消息）\n",
+			result.Summary, result.RemovedCount)
 	}
 }
 

@@ -22,6 +22,9 @@ import (
 // ErrMaxStepsExceeded 表示 ReAct 主循环触达最大轮数护栏。
 var ErrMaxStepsExceeded = errors.New("max react steps exceeded")
 
+// ErrNothingToUndo 表示没有可撤销的轮次（已回退到底或刚启动）。
+var ErrNothingToUndo = errors.New("nothing to undo")
+
 // 内核默认参数。
 const (
 	defaultMaxSteps       = 16                // ReAct 最大轮数，防失控空转
@@ -39,6 +42,33 @@ type Engine interface {
 	Run(ctx context.Context, task string) (<-chan types.StreamEvent, error)
 	// Resume 加载已有会话并从中断处继续（Phase 5 实现）。
 	Resume(ctx context.Context, sessionID string) (<-chan types.StreamEvent, error)
+	// Undo 撤销最近一轮对话：回退消息历史并恢复工作区快照（若有）。
+	// 无可撤销轮次时返回 ErrNothingToUndo。
+	Undo(ctx context.Context) (*UndoResult, error)
+}
+
+// UndoResult 描述一次 Undo 操作的结果摘要。
+type UndoResult struct {
+	Summary        string // 被撤销轮次的摘要（user 消息前 50 字符）
+	HasFileChanges bool   // 是否恢复了工作区文件改动
+	RemovedCount   int    // 被移除的消息数量
+}
+
+// Snapshotter 抽象工作区快照的创建与恢复，用于 Undo 时精确回退文件改动。
+type Snapshotter interface {
+	// Take 记录当前工作区状态快照，返回快照标识（如 git stash SHA）；工作区无改动时返回空字符串。
+	Take(ctx context.Context) (string, error)
+	// Restore 恢复到指定快照标识的工作区状态。id 为空时执行 git checkout -- . && git clean -fd。
+	Restore(ctx context.Context, id string) error
+	// IsGitRepo 检测当前工作目录是否为 git 仓库。
+	IsGitRepo() bool
+}
+
+// turnSnapshot 记录每轮对话开始前的引擎状态，用于 Undo 回退。
+type turnSnapshot struct {
+	msgIndex int    // 该轮开始前 e.msgs 的长度
+	stashID  string // 该轮开始前的工作区快照标识（Snapshotter.Take 返回值）
+	lastUUID string // 该轮开始前的 session 事件链尾 UUID
 }
 
 // Mode 是 Engine 的运行档位，决定自主程度与可用工具面。
@@ -73,6 +103,7 @@ type Deps struct {
 	Session      session.Store       // 会话事件落盘与 resume；为 nil 时不持久化（纯对话/测试）
 	SessionID    string              // 当前会话 ID；Session 非 nil 时用于定位 transcript
 	Observe      observe.Provider    // 可观测（trace/指标）；可传 no-op 关闭
+	Snapshotter  Snapshotter         // 工作区快照管理；为 nil 时 Undo 不恢复文件（仅回退消息）
 	Mode         Mode                // 运行档位；默认 ModeAuto
 	Model        string              // 模型名，用于窗口计算与请求
 	WorkRoot     string              // 工作根目录，路径校验与 memory 加载基准
@@ -89,18 +120,19 @@ func New(deps Deps) (Engine, error) {
 		return nil, errors.New("nil observe provider")
 	}
 	e := &engine{
-		llm:        deps.LLM,
-		tools:      deps.Tools,
-		ctxmgr:     deps.Context,
-		session:    deps.Session,
-		sessionID:  deps.SessionID,
-		tracer:     deps.Observe.Tracer(),
-		meter:      deps.Observe.Meter(),
-		mode:       deps.Mode,
-		model:      deps.Model,
-		workRoot:   deps.WorkRoot,
-		maxSteps:   deps.MaxSteps,
-		llmTimeout: deps.LLMTimeout,
+		llm:         deps.LLM,
+		tools:       deps.Tools,
+		ctxmgr:      deps.Context,
+		session:     deps.Session,
+		snapshotter: deps.Snapshotter,
+		sessionID:   deps.SessionID,
+		tracer:      deps.Observe.Tracer(),
+		meter:       deps.Observe.Meter(),
+		mode:        deps.Mode,
+		model:       deps.Model,
+		workRoot:    deps.WorkRoot,
+		maxSteps:    deps.MaxSteps,
+		llmTimeout:  deps.LLMTimeout,
 	}
 	if e.maxSteps <= 0 {
 		e.maxSteps = defaultMaxSteps
@@ -138,21 +170,23 @@ func buildSystemPrompt(mem memory.Loader, workRoot string) string {
 
 // engine 是 Engine 的具体实现，持有跨轮的消息历史作为单一真相源。
 type engine struct {
-	llm        llm.Client
-	tools      tool.Pool
-	ctxmgr     *contextmgr.Manager
-	session    session.Store
-	tracer     observe.Tracer
-	meter      observe.Meter
-	mode       Mode
-	model      string
-	workRoot   string
-	sessionID  string
-	lastUUID   string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
-	maxSteps   int
-	llmTimeout time.Duration // 单次 LLM 调用超时上限
-	used       int           // 最近一次调用的上下文 token 估计，用于压缩判定
-	msgs       []types.Message
+	llm           llm.Client
+	tools         tool.Pool
+	ctxmgr        *contextmgr.Manager
+	session       session.Store
+	snapshotter   Snapshotter
+	tracer        observe.Tracer
+	meter         observe.Meter
+	mode          Mode
+	model         string
+	workRoot      string
+	sessionID     string
+	lastUUID      string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
+	maxSteps      int
+	llmTimeout    time.Duration // 单次 LLM 调用超时上限
+	used          int           // 最近一次调用的上下文 token 估计，用于压缩判定
+	msgs          []types.Message
+	turnSnapshots []turnSnapshot // 每轮对话开始前的快照栈，支持连续 Undo
 }
 
 // Run 见 Engine 接口说明。
@@ -164,6 +198,7 @@ func (e *engine) Run(ctx context.Context, task string) (<-chan types.StreamEvent
 	go func() {
 		defer close(out)
 		safeGo(e.onPanic(ctx, out), func() {
+			e.takeTurnSnapshot(ctx)
 			userMsg := types.Message{Role: types.RoleUser, Text: task}
 			e.msgs = append(e.msgs, userMsg)
 			e.record(ctx, userMsg)
@@ -206,6 +241,7 @@ func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.Str
 	go func() {
 		defer close(out)
 		safeGo(e.onPanic(ctx, out), func() {
+			e.takeTurnSnapshot(ctx)
 			cont := types.Message{Role: types.RoleUser, Text: continuePrompt}
 			e.msgs = append(e.msgs, cont)
 			e.record(ctx, cont)
