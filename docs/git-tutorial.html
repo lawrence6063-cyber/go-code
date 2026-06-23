@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Git 完整教学手册</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --card: #0f3460;
+    --accent: #e94560;
+    --accent2: #0ea5e9;
+    --accent3: #10b981;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #334155;
+    --code-bg: #0d1117;
+    --yellow: #fbbf24;
+    --purple: #a78bfa;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 2.2rem; text-align: center; margin-bottom: .3rem; color: var(--accent); }
+  .subtitle { text-align: center; color: var(--muted); margin-bottom: 2.5rem; font-size: .95rem; }
+  h2 { font-size: 1.5rem; margin: 2.5rem 0 1rem; padding-bottom: .4rem; border-bottom: 2px solid var(--accent); color: var(--accent2); }
+  h3 { font-size: 1.15rem; margin: 1.5rem 0 .6rem; color: var(--accent3); }
+  p, li { margin-bottom: .5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: .88rem;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    margin: .8rem 0 1.2rem;
+    font-size: .85rem;
+    line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    margin: 1rem 0;
+  }
+  .note {
+    background: #1e293b;
+    border-left: 4px solid var(--yellow);
+    padding: .8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+    font-size: .9rem;
+  }
+  .note::before { content: "💡 "; }
+  .warn {
+    background: #2d1b1b;
+    border-left: 4px solid var(--accent);
+    padding: .8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+    font-size: .9rem;
+  }
+  .warn::before { content: "⚠️ "; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: .88rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .5rem .7rem;
+    text-align: left;
+  }
+  th { background: var(--card); color: var(--accent2); }
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin: 1.2rem 0;
+  }
+  .flow .box {
+    background: var(--card);
+    border: 2px solid var(--accent2);
+    border-radius: 8px;
+    padding: .6rem 1.2rem;
+    text-align: center;
+    min-width: 120px;
+  }
+  .flow .arrow { font-size: 1.4rem; color: var(--yellow); }
+  .toc { background: var(--surface); border-radius: 10px; padding: 1.2rem 1.5rem; margin-bottom: 2rem; }
+  .toc h3 { margin-top: 0; }
+  .toc ol { counter-reset: toc; list-style: none; padding-left: 0; }
+  .toc li { counter-increment: toc; margin: .3rem 0; }
+  .toc li::before { content: counter(toc) ". "; color: var(--accent); font-weight: bold; }
+  .toc a { color: var(--accent2); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Git 完整教学手册</h1>
+<p class="subtitle">从零开始系统学习 Git — 基础概念 → 日常操作 → 分支策略 → 高级技巧</p>
+
+<!-- 目录 -->
+<div class="toc">
+  <h3>📑 目录</h3>
+  <ol>
+    <li><a href="#s1">Git 是什么 & 为什么用 Git</a></li>
+    <li><a href="#s2">安装与初始配置</a></li>
+    <li><a href="#s3">核心概念：三区模型</a></li>
+    <li><a href="#s4">基础操作：init / clone / add / commit / status / log</a></li>
+    <li><a href="#s5">撤销与回退：checkout / restore / reset / revert</a></li>
+    <li><a href="#s6">分支管理：branch / switch / merge / rebase</a></li>
+    <li><a href="#s7">远程协作：remote / fetch / pull / push</a></li>
+    <li><a href="#s8">暂存工作：stash</a></li>
+    <li><a href="#s9">标签管理：tag</a></li>
+    <li><a href="#s10">查看与比较：diff / show / blame</a></li>
+    <li><a href="#s11">高级技巧：cherry-pick / rebase -i / reflog / bisect</a></li>
+    <li><a href="#s12">Git 工作流（Git Flow / GitHub Flow / Trunk Based）</a></li>
+    <li><a href="#s13">.gitignore 与 .gitattributes</a></li>
+    <li><a href="#s14">常见问题与避坑指南</a></li>
+    <li><a href="#s15">速查表</a></li>
+  </ol>
+</div>
+
+<!-- 1. Git 是什么 -->
+<h2 id="s1">1. Git 是什么 & 为什么用 Git</h2>
+<div class="card">
+  <p><strong>Git</strong> 是一个<em>分布式版本控制系统</em>（DVCS），由 Linus Torvalds 于 2005 年创建，用于管理 Linux 内核源代码。</p>
+  <h3>核心优势</h3>
+  <ul>
+    <li><strong>分布式</strong>：每个开发者本地都有完整仓库历史，无需联网也能工作</li>
+    <li><strong>快速</strong>：几乎所有操作都在本地完成，毫秒级响应</li>
+    <li><strong>分支廉价</strong>：创建/切换分支几乎零成本，鼓励频繁分支</li>
+    <li><strong>数据完整性</strong>：使用 SHA-1 哈希校验，任何篡改都能被检测</li>
+    <li><strong>暂存区</strong>：精确控制每次提交的内容粒度</li>
+  </ul>
+</div>
+
+<div class="note">Git 与 SVN 最大区别：SVN 是集中式（中央服务器），Git 是分布式（每人都是完整仓库）。</div>
+
+<!-- 2. 安装与配置 -->
+<h2 id="s2">2. 安装与初始配置</h2>
+<h3>安装</h3>
+<pre><code># macOS (Homebrew)
+brew install git
+
+# Ubuntu / Debian
+sudo apt-get install git
+
+# Windows — 下载安装包
+# https://git-scm.com/download/win</code></pre>
+
+<h3>首次配置（全局）</h3>
+<pre><code># 设置用户名和邮箱（每次提交都会记录）
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+
+# 设置默认编辑器
+git config --global core.editor "vim"
+
+# 设置默认分支名
+git config --global init.defaultBranch main
+
+# 查看当前配置
+git config --list</code></pre>
+
+<div class="note">配置存放位置：<code>~/.gitconfig</code>（全局）、<code>.git/config</code>（项目级）。项目级优先级更高。</div>
+
+<!-- 3. 三区模型 -->
+<h2 id="s3">3. 核心概念：三区模型</h2>
+<p>Git 管理文件有三个关键区域：</p>
+
+<div class="flow">
+  <div class="box" style="border-color: var(--accent3);">
+    <strong>工作区</strong><br><small>Working Directory</small><br>你编辑文件的地方
+  </div>
+  <div class="arrow">→<br><code>git add</code></div>
+  <div class="box" style="border-color: var(--yellow);">
+    <strong>暂存区</strong><br><small>Staging Area / Index</small><br>下次提交的快照
+  </div>
+  <div class="arrow">→<br><code>git commit</code></div>
+  <div class="box" style="border-color: var(--accent);">
+    <strong>本地仓库</strong><br><small>Repository (.git)</small><br>永久历史记录
+  </div>
+</div>
+
+<div class="card">
+  <h3>理解类比</h3>
+  <ul>
+    <li><strong>工作区</strong> = 你的桌面，当前正在修改的文件</li>
+    <li><strong>暂存区</strong> = 购物车，挑选好要提交的变更</li>
+    <li><strong>本地仓库</strong> = 仓库货架，结账后商品入库，形成一次记录</li>
+  </ul>
+</div>
+
+<h3>文件状态生命周期</h3>
+<pre><code>Untracked ──git add──→ Staged ──git commit──→ Committed
+     ↑                    ↑                        │
+     │                    └──── git add ←──────────┘ (修改后重新暂存)
+     └─── 新建文件</code></pre>
+
+<!-- 4. 基础操作 -->
+<h2 id="s4">4. 基础操作</h2>
+
+<h3>创建仓库</h3>
+<pre><code># 从零初始化
+mkdir my-project && cd my-project
+git init
+
+# 克隆远程仓库
+git clone https://github.com/user/repo.git
+git clone git@github.com:user/repo.git  # SSH方式</code></pre>
+
+<h3>日常工作流</h3>
+<pre><code># 1. 查看状态（最常用的命令）
+git status
+
+# 2. 添加文件到暂存区
+git add file.txt          # 单个文件
+git add .                 # 所有变更
+git add -p                # 交互式选择部分变更（推荐！）
+
+# 3. 提交
+git commit -m "feat: add user login"
+git commit                # 打开编辑器写详细信息
+git commit -am "fix: typo"  # add + commit（仅限已跟踪文件）
+
+# 4. 查看日志
+git log                   # 完整日志
+git log --oneline         # 单行简洁模式
+git log --graph --oneline --all  # 图形化分支历史
+git log -5                # 最近5条
+git log --author="Name"   # 按作者筛选
+git log -- path/to/file   # 某文件的变更历史</code></pre>
+
+<div class="note">养成好习惯：每次 commit 前先 <code>git status</code> 和 <code>git diff --staged</code> 确认要提交的内容。</div>
+
+<h3>Commit Message 规范（推荐 Conventional Commits）</h3>
+<pre><code>类型(范围): 简短描述
+
+feat:     新功能
+fix:      修复 bug
+docs:     文档变更
+style:    代码格式（不影响逻辑）
+refactor: 重构（既非新功能也非修复）
+test:     测试相关
+chore:    构建/工具/依赖变更
+
+示例：
+feat(auth): add OAuth2 login support
+fix(api): handle nil pointer in user handler
+docs: update README installation steps</code></pre>
+
+<!-- 5. 撤销与回退 -->
+<h2 id="s5">5. 撤销与回退</h2>
+
+<table>
+  <tr><th>场景</th><th>命令</th><th>效果</th></tr>
+  <tr><td>撤销工作区修改（未 add）</td><td><code>git restore file.txt</code></td><td>文件恢复到上次提交状态</td></tr>
+  <tr><td>撤销暂存（已 add，未 commit）</td><td><code>git restore --staged file.txt</code></td><td>从暂存区移除，工作区保留</td></tr>
+  <tr><td>修改最后一次提交</td><td><code>git commit --amend</code></td><td>替换上次提交（可改消息/加文件）</td></tr>
+  <tr><td>回退到某次提交（保留工作区）</td><td><code>git reset --soft HEAD~1</code></td><td>撤销 commit，变更留在暂存区</td></tr>
+  <tr><td>回退到某次提交（清空暂存区）</td><td><code>git reset --mixed HEAD~1</code></td><td>撤销 commit + add，变更留在工作区</td></tr>
+  <tr><td>回退到某次提交（全部丢弃）</td><td><code>git reset --hard HEAD~1</code></td><td>⚠️ 危险！丢弃所有未提交变更</td></tr>
+  <tr><td>创建一个"反向提交"</td><td><code>git revert &lt;commit&gt;</code></td><td>安全！不改历史，新增一个撤销提交</td></tr>
+</table>
+
+<div class="warn">
+  <code>git reset --hard</code> 会<strong>永久丢失</strong>工作区和暂存区的未提交内容！操作前请确认。
+  如果误操作，可尝试 <code>git reflog</code> 找回。
+</div>
+
+<h3>reset 三种模式图解</h3>
+<pre><code>              HEAD~1          HEAD (当前)
+                │               │
+  ──────────────●───────────────●
+                          
+  --soft:   commit 撤销 → 变更留在 暂存区
+  --mixed:  commit 撤销 → 变更留在 工作区 (默认)
+  --hard:   commit 撤销 → 变更 全部丢弃 ⚠️</code></pre>
+
+<!-- 6. 分支 -->
+<h2 id="s6">6. 分支管理</h2>
+
+<h3>为什么要用分支？</h3>
+<p>分支让你可以在不影响主线代码的情况下开发新功能、修复 Bug、做实验。Git 的分支只是一个指向某次 commit 的指针，创建成本极低。</p>
+
+<h3>基础操作</h3>
+<pre><code># 查看分支
+git branch            # 本地分支
+git branch -a         # 所有分支（含远程）
+
+# 创建 & 切换
+git branch feature/login       # 创建
+git switch feature/login       # 切换（推荐）
+git switch -c feature/login    # 创建并切换
+
+# 删除
+git branch -d feature/login    # 已合并的分支
+git branch -D feature/login    # 强制删除（未合并）
+
+# 重命名
+git branch -m old-name new-name</code></pre>
+
+<h3>合并（Merge）</h3>
+<pre><code># 将 feature 合入 main
+git switch main
+git merge feature/login
+
+# 快进合并 (Fast-Forward)：如果 main 没有新提交
+# main ───●───●───● (feature)  →  main 直接指向 feature 最新提交
+
+# 三方合并 (3-way merge)：如果两边都有新提交，产生合并提交
+#       ●───●  (main)
+#      /       \
+# ●───●         ●  (merge commit)
+#      \       /
+#       ●───●  (feature)</code></pre>
+
+<h3>变基（Rebase）</h3>
+<pre><code># 将 feature 的提交"移植"到 main 最新位置
+git switch feature/login
+git rebase main
+
+# 变基前：
+# main:    A─B─C
+# feature:   B─D─E
+
+# 变基后（D、E 被重新应用到 C 之后）：
+# main:    A─B─C
+# feature:       C─D'─E'</code></pre>
+
+<div class="card">
+  <h3>Merge vs Rebase 对比</h3>
+  <table>
+    <tr><th></th><th>Merge</th><th>Rebase</th></tr>
+    <tr><td>历史</td><td>保留真实分支历史，有合并提交</td><td>线性历史，更整洁</td></tr>
+    <tr><td>安全性</td><td>安全，不修改已有提交</td><td>重写提交历史（SHA 变了）</td></tr>
+    <tr><td>适用</td><td>公共分支合并</td><td>个人分支整理</td></tr>
+    <tr><td>冲突</td><td>一次性解决</td><td>可能每个提交都要解决</td></tr>
+  </table>
+</div>
+
+<div class="warn">黄金法则：<strong>永远不要对已经推送到公共仓库的提交做 rebase！</strong></div>
+
+<h3>解决冲突</h3>
+<pre><code># 冲突发生时，文件中会出现标记：
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+你的修改
+=======
+他人的修改
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature/login
+
+# 解决步骤：
+# 1. 手动编辑文件，删除标记，保留正确内容
+# 2. git add 已解决的文件
+# 3. git commit（merge）或 git rebase --continue（rebase）
+
+# 放弃操作
+git merge --abort
+git rebase --abort</code></pre>
+
+<!-- 7. 远程协作 -->
+<h2 id="s7">7. 远程协作</h2>
+
+<h3>远程仓库管理</h3>
+<pre><code># 查看远程仓库
+git remote -v
+
+# 添加远程仓库
+git remote add origin https://github.com/user/repo.git
+
+# 修改远程 URL
+git remote set-url origin git@github.com:user/repo.git
+
+# 删除远程
+git remote remove origin</code></pre>
+
+<h3>拉取与推送</h3>
+<pre><code># fetch：下载远程变更，不合并
+git fetch origin
+git fetch --all          # 所有远程
+
+# pull = fetch + merge
+git pull origin main
+git pull --rebase        # fetch + rebase（推荐，保持线性历史）
+
+# push：推送本地提交到远程
+git push origin main
+git push -u origin main  # 设置上游，之后直接 git push
+git push origin feature/login
+
+# 删除远程分支
+git push origin --delete feature/login</code></pre>
+
+<div class="flow">
+  <div class="box" style="border-color: var(--accent3);">本地仓库</div>
+  <div class="arrow">← <code>fetch</code></div>
+  <div class="box" style="border-color: var(--purple); border-width:2px;">远程仓库<br><small>(GitHub/GitLab)</small></div>
+  <div class="arrow" style="margin-left:-8rem;">→ <code>push</code></div>
+</div>
+
+<h3>协作工作流示例</h3>
+<pre><code># 1. 从主分支创建功能分支
+git switch main
+git pull
+git switch -c feature/new-api
+
+# 2. 开发 & 提交
+git add .
+git commit -m "feat(api): implement user endpoint"
+
+# 3. 推送到远程
+git push -u origin feature/new-api
+
+# 4. 创建 Pull Request / Merge Request（在平台上操作）
+
+# 5. 代码审查通过后合并
+
+# 6. 清理
+git switch main
+git pull
+git branch -d feature/new-api</code></pre>
+
+<!-- 8. Stash -->
+<h2 id="s8">8. 暂存工作：stash</h2>
+<p>当你正在工作但需要临时切换分支时，<code>git stash</code> 可以"藏起"当前的未提交修改。</p>
+
+<pre><code># 保存当前工作
+git stash                    # 默认保存已跟踪文件的修改
+git stash -u                 # 含未跟踪文件
+git stash push -m "WIP: login page"  # 带描述信息
+
+# 查看存储列表
+git stash list
+# stash@{0}: On feature: WIP: login page
+# stash@{1}: On main: debugging api
+
+# 恢复工作
+git stash pop               # 恢复最近一次，并从列表删除
+git stash apply             # 恢复但不删除（可反复使用）
+git stash apply stash@{1}   # 恢复指定条目
+
+# 删除
+git stash drop stash@{0}    # 删除指定
+git stash clear              # 清空所有</code></pre>
+
+<div class="note">stash 是一个栈结构（LIFO），最后存入的最先取出。</div>
+
+<!-- 9. Tag -->
+<h2 id="s9">9. 标签管理：tag</h2>
+<pre><code># 创建轻量标签
+git tag v1.0.0
+
+# 创建附注标签（推荐，含作者/日期/消息）
+git tag -a v1.0.0 -m "Release version 1.0.0"
+
+# 给历史提交打标签
+git tag -a v0.9.0 abc1234
+
+# 查看标签
+git tag
+git show v1.0.0
+
+# 推送标签到远程
+git push origin v1.0.0      # 单个
+git push origin --tags       # 所有
+
+# 删除标签
+git tag -d v1.0.0                    # 本地
+git push origin --delete v1.0.0      # 远程</code></pre>
+
+<!-- 10. Diff / Show / Blame -->
+<h2 id="s10">10. 查看与比较</h2>
+
+<pre><code># diff：比较差异
+git diff                    # 工作区 vs 暂存区
+git diff --staged           # 暂存区 vs 最后一次提交
+git diff HEAD               # 工作区 vs 最后一次提交
+git diff main..feature      # 两个分支差异
+git diff abc123..def456     # 两个提交差异
+git diff --stat             # 仅显示统计信息
+
+# show：查看某次提交详情
+git show abc1234
+git show HEAD~2             # 倒数第3次提交
+git show v1.0.0:path/file   # 某个标签时的文件内容
+
+# blame：查看每一行的最后修改者
+git blame file.txt
+git blame -L 10,20 file.txt  # 仅看第10-20行</code></pre>
+
+<!-- 11. 高级技巧 -->
+<h2 id="s11">11. 高级技巧</h2>
+
+<h3>cherry-pick：摘取特定提交</h3>
+<pre><code># 将某个提交应用到当前分支
+git cherry-pick abc1234
+
+# 摘取多个
+git cherry-pick abc1234 def5678
+
+# 只暂存不提交
+git cherry-pick --no-commit abc1234</code></pre>
+
+<h3>rebase -i：交互式变基（整理提交历史）</h3>
+<pre><code># 整理最近3次提交
+git rebase -i HEAD~3
+
+# 编辑器中可选操作：
+# pick   = 保留该提交
+# reword = 保留但修改提交信息
+# edit   = 保留但暂停让你修改
+# squash = 合并到上一个提交（保留信息）
+# fixup  = 合并到上一个提交（丢弃信息）
+# drop   = 删除该提交</code></pre>
+
+<div class="note">交互式 rebase 是整理提交历史的利器。在 push 前用它把零碎提交合并成有意义的单元。</div>
+
+<h3>reflog：Git 的"后悔药"</h3>
+<pre><code># 查看 HEAD 的所有历史移动记录
+git reflog
+
+# 输出示例：
+# abc1234 HEAD@{0}: reset: moving to HEAD~1
+# def5678 HEAD@{1}: commit: feat: add feature
+# 789abcd HEAD@{2}: checkout: moving from main to feature
+
+# 恢复误删的提交
+git reset --hard def5678</code></pre>
+
+<div class="card">
+  <p><strong>reflog 记录了你在本地仓库的每一次 HEAD 变更</strong>，即使 commit 被 reset 掉了，90 天内都能通过 reflog 找回。它是你的安全网！</p>
+</div>
+
+<h3>bisect：二分查找 Bug</h3>
+<pre><code># 启动二分查找
+git bisect start
+git bisect bad              # 当前版本有 bug
+git bisect good v1.0.0      # 这个版本没有 bug
+
+# Git 会自动 checkout 中间提交，你测试后标记：
+git bisect good             # 这个版本没问题
+git bisect bad              # 这个版本有问题
+
+# 找到引入 bug 的提交后：
+git bisect reset            # 结束，回到原来的分支</code></pre>
+
+<!-- 12. 工作流 -->
+<h2 id="s12">12. Git 工作流</h2>
+
+<div class="cols">
+  <div class="card">
+    <h3>Git Flow</h3>
+    <ul>
+      <li><code>main</code> — 生产环境代码</li>
+      <li><code>develop</code> — 开发集成分支</li>
+      <li><code>feature/*</code> — 功能开发</li>
+      <li><code>release/*</code> — 发布准备</li>
+      <li><code>hotfix/*</code> — 紧急修复</li>
+    </ul>
+    <p><small>适合：版本发布周期明确的项目</small></p>
+  </div>
+  <div class="card">
+    <h3>GitHub Flow</h3>
+    <ul>
+      <li><code>main</code> — 始终可部署</li>
+      <li><code>feature/*</code> — 从 main 创建</li>
+      <li>通过 PR 合并回 main</li>
+      <li>合并后立即部署</li>
+    </ul>
+    <p><small>适合：持续部署的 Web 项目</small></p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Trunk-Based Development</h3>
+  <ul>
+    <li>所有人直接在 <code>main</code>（trunk）上工作</li>
+    <li>使用短生命周期的功能分支（1-2天）</li>
+    <li>依赖 Feature Flag 控制未完成功能</li>
+    <li>适合高频发布、成熟 CI/CD 的团队</li>
+  </ul>
+</div>
+
+<!-- 13. gitignore -->
+<h2 id="s13">13. .gitignore 与 .gitattributes</h2>
+
+<h3>.gitignore</h3>
+<pre><code># 编译输出
+/bin/
+/build/
+*.exe
+*.o
+
+# 依赖
+/node_modules/
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境变量（含密钥，绝不提交！）
+.env
+.env.local
+
+# 日志
+*.log</code></pre>
+
+<div class="note">
+  已被跟踪的文件加入 .gitignore 不会自动取消跟踪。需要：<br>
+  <code>git rm --cached file.txt</code> 然后提交。
+</div>
+
+<h3>.gitattributes</h3>
+<pre><code># 统一换行符
+* text=auto
+*.go text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# 二进制文件标记
+*.png binary
+*.jpg binary
+*.pdf binary</code></pre>
+
+<!-- 14. 避坑 -->
+<h2 id="s14">14. 常见问题与避坑指南</h2>
+
+<table>
+  <tr><th>问题</th><th>解决方案</th></tr>
+  <tr><td>提交了不该提交的大文件</td><td><code>git filter-branch</code> 或 <code>git-filter-repo</code> 重写历史</td></tr>
+  <tr><td>commit message 写错了</td><td><code>git commit --amend</code>（仅限未 push）</td></tr>
+  <tr><td>merge 搞砸了想撤销</td><td><code>git merge --abort</code>（冲突中）或 <code>git reset --hard ORIG_HEAD</code></td></tr>
+  <tr><td>不小心在 main 上开发了</td><td><code>git stash</code> → 切到新分支 → <code>git stash pop</code></td></tr>
+  <tr><td>pull 有冲突不想处理</td><td><code>git pull --rebase</code> 或 <code>git merge --abort</code></td></tr>
+  <tr><td>想撤销已 push 的提交</td><td><code>git revert &lt;commit&gt;</code>（安全方式，不重写历史）</td></tr>
+  <tr><td>误删分支想恢复</td><td><code>git reflog</code> 找到 SHA → <code>git branch recovered &lt;sha&gt;</code></td></tr>
+  <tr><td>detached HEAD 状态</td><td><code>git switch main</code> 回到分支，或 <code>git switch -c new-branch</code> 保存当前工作</td></tr>
+</table>
+
+<div class="warn">
+  <strong>三大高危命令：</strong>
+  <code>git reset --hard</code>、<code>git push --force</code>、<code>git clean -fd</code><br>
+  操作前务必确认！<code>--force</code> 推送会覆盖他人工作，团队协作中应使用 <code>--force-with-lease</code>。
+</div>
+
+<!-- 15. 速查表 -->
+<h2 id="s15">15. 速查表</h2>
+
+<div class="cols">
+  <div class="card">
+    <h3>📦 仓库操作</h3>
+    <pre><code>git init
+git clone &lt;url&gt;
+git remote add origin &lt;url&gt;</code></pre>
+  </div>
+  <div class="card">
+    <h3>📝 日常提交</h3>
+    <pre><code>git status
+git add .
+git commit -m "msg"
+git push</code></pre>
+  </div>
+  <div class="card">
+    <h3>🌿 分支操作</h3>
+    <pre><code>git branch &lt;name&gt;
+git switch &lt;name&gt;
+git merge &lt;branch&gt;
+git branch -d &lt;name&gt;</code></pre>
+  </div>
+  <div class="card">
+    <h3>⏪ 撤销操作</h3>
+    <pre><code>git restore &lt;file&gt;
+git restore --staged &lt;file&gt;
+git reset --soft HEAD~1
+git revert &lt;commit&gt;</code></pre>
+  </div>
+  <div class="card">
+    <h3>🔍 查看历史</h3>
+    <pre><code>git log --oneline --graph
+git diff
+git show &lt;commit&gt;
+git blame &lt;file&gt;</code></pre>
+  </div>
+  <div class="card">
+    <h3>🌐 远程协作</h3>
+    <pre><code>git fetch
+git pull --rebase
+git push -u origin &lt;branch&gt;
+git push origin --delete &lt;branch&gt;</code></pre>
+  </div>
+  <div class="card">
+    <h3>📦 暂存 & 标签</h3>
+    <pre><code>git stash push -m "msg"
+git stash pop
+git tag -a v1.0 -m "msg"
+git push --tags</code></pre>
+  </div>
+  <div class="card">
+    <h3>🔧 高级技巧</h3>
+    <pre><code>git cherry-pick &lt;sha&gt;
+git rebase -i HEAD~3
+git reflog
+git bisect start</code></pre>
+  </div>
+</div>
+
+<div style="text-align:center; margin-top:3rem; color:var(--muted); font-size:.85rem;">
+  <p>— Git 完整教学手册 —</p>
+  <p>Happy Coding! 🚀</p>
+</div>
+
+</body>
+</html>

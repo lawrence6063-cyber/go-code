@@ -27,7 +27,7 @@ var ErrNothingToUndo = errors.New("nothing to undo")
 
 // 内核默认参数。
 const (
-	defaultMaxSteps       = 16                // ReAct 最大轮数，防失控空转
+	DefaultMaxSteps       = 50                // ReAct 最大轮数，防失控空转（导出供 cmd 层引用）
 	defaultModel          = "deepseek-chat"   // 默认模型名
 	defaultLLMCallTimeout = 120 * time.Second // 单次 LLM 调用的独立超时上限（防首 token 长挂起，OPTIMIZE_SPEC R4）
 )
@@ -135,7 +135,7 @@ func New(deps Deps) (Engine, error) {
 		llmTimeout:  deps.LLMTimeout,
 	}
 	if e.maxSteps <= 0 {
-		e.maxSteps = defaultMaxSteps
+		e.maxSteps = DefaultMaxSteps
 	}
 	if e.llmTimeout <= 0 {
 		e.llmTimeout = defaultLLMCallTimeout

@@ -86,6 +86,14 @@ func envInt(key string, def int) int {
 	return def
 }
 
+// resolveMaxSteps 按优先级解析 ReAct 最大轮数：--max-steps flag (>0) > COGENT_MAX_REACT_STEPS env > 默认 50。
+func resolveMaxSteps(flagVal int) int {
+	if flagVal > 0 {
+		return flagVal
+	}
+	return envInt("COGENT_MAX_REACT_STEPS", engine.DefaultMaxSteps)
+}
+
 // sessionOutcome 把会话终止错误归一为 cogent.session 根 span 的 outcome 属性：
 // 取消→cancelled、其他错误→error、无错→done。
 func sessionOutcome(err error) string {
@@ -115,6 +123,7 @@ func newRootCmd() *cobra.Command {
 // 可选地把首个参数作为第一轮输入；--mode 选择运行档位（auto/plan/ask）。
 func newRunCmd() *cobra.Command {
 	var mode string
+	var maxSteps int
 	cmd := &cobra.Command{
 		Use:   "run [task]",
 		Short: "进入交互式对话，与 cogent 流式多轮对话（exit/quit 或 Ctrl-C 退出）",
@@ -128,10 +137,11 @@ func newRunCmd() *cobra.Command {
 			if len(args) == 1 {
 				first = args[0]
 			}
-			return runREPL(cmd.Context(), replOptions{first: first, mode: m})
+			return runREPL(cmd.Context(), replOptions{first: first, mode: m, maxSteps: maxSteps})
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
+	cmd.Flags().IntVar(&maxSteps, "max-steps", 0, "ReAct 最大轮数（0 = 走 COGENT_MAX_REACT_STEPS env 或默认 50）")
 	return cmd
 }
 
@@ -152,6 +162,7 @@ func parseMode(s string) (engine.Mode, error) {
 // newResumeCmd 构造 resume 子命令：从已有会话 transcript 重建上下文并续跑。
 func newResumeCmd() *cobra.Command {
 	var mode string
+	var maxSteps int
 	cmd := &cobra.Command{
 		Use:   "resume <session-id>",
 		Short: "从中断处恢复一个已有会话并继续对话（无损接续）",
@@ -161,10 +172,11 @@ func newResumeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runREPL(cmd.Context(), replOptions{mode: m, resumeID: args[0]})
+			return runREPL(cmd.Context(), replOptions{mode: m, resumeID: args[0], maxSteps: maxSteps})
 		},
 	}
 	cmd.Flags().StringVar(&mode, "mode", "auto", "run mode: auto | plan | ask")
+	cmd.Flags().IntVar(&maxSteps, "max-steps", 0, "ReAct 最大轮数（0 = 走 COGENT_MAX_REACT_STEPS env 或默认 50）")
 	return cmd
 }
 
@@ -214,6 +226,7 @@ type replOptions struct {
 	first    string      // 非空时作为第一轮输入
 	mode     engine.Mode // 运行档位
 	resumeID string      // 非空时从该会话恢复
+	maxSteps int         // --max-steps（0 = 走 env/默认）
 }
 
 // runREPL 装配依赖并进入交互式对话循环；按 opts 决定新建会话或从 resumeID 恢复。
@@ -237,7 +250,7 @@ func runREPL(ctx context.Context, opts replOptions) error {
 	}
 	defer func() { _ = mgr.Close() }()
 
-	eng, err := buildEngine(prov, prompter, opts.mode, sid, wd, mgr.Tools())
+	eng, err := buildEngine(prov, prompter, opts.mode, sid, wd, mgr.Tools(), opts.maxSteps)
 	if err != nil {
 		return err
 	}
@@ -329,6 +342,7 @@ func buildEngine(
 	sessionID string,
 	workRoot string,
 	mcpTools []tool.Tool,
+	maxSteps int,
 ) (engine.Engine, error) {
 	llmc, err := newLLMClient()
 	if err != nil {
@@ -348,6 +362,7 @@ func buildEngine(
 		Mode:         mode,
 		Model:        os.Getenv("COGENT_MODEL"),
 		WorkRoot:     workRoot,
+		MaxSteps:     resolveMaxSteps(maxSteps),
 		LLMTimeout:   time.Duration(envInt("COGENT_LLM_TIMEOUT_SEC", 120)) * time.Second,
 	})
 	if err != nil {
@@ -371,6 +386,7 @@ func buildSpawner(llmc llm.Client, prov observe.Provider, workRoot string) tool.
 		Observe:  prov,
 		Model:    os.Getenv("COGENT_MODEL"),
 		WorkRoot: workRoot,
+		MaxSteps: envInt("COGENT_MAX_STEPS_SUBAGENT", 0), // 0 → agent.New 回退默认 16
 	})
 }
 

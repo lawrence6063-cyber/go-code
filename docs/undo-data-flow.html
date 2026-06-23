@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cogent Undo 功能 — 数据流说明文档</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --pink: #f472b6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size:2rem; margin-bottom:.5rem; color:var(--accent); }
+  h1 span { font-size:1rem; color:var(--text-dim); font-weight:400; margin-left:.5rem; }
+  h2 { font-size:1.4rem; margin:2.5rem 0 1rem; color:var(--accent2); border-bottom:1px solid var(--border); padding-bottom:.4rem; }
+  h3 { font-size:1.15rem; margin:1.5rem 0 .6rem; color:var(--green); }
+  p { margin-bottom:.8rem; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:.9em; color:var(--amber); }
+  pre { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; overflow-x:auto; margin:1rem 0; font-size:.85rem; line-height:1.6; }
+  pre code { background:none; border:none; padding:0; color:inherit; }
+
+  /* Architecture diagram */
+  .diagram { margin:1.5rem 0; overflow-x:auto; }
+  .diagram svg text { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; }
+
+  /* Flow steps */
+  .flow { display:flex; flex-direction:column; gap:0; margin:1.5rem 0; }
+  .flow-step {
+    display:flex; align-items:flex-start; gap:1rem; padding:1rem 1.2rem;
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    position:relative;
+  }
+  .flow-step + .flow-step { margin-top:-1px; border-top-left-radius:0; border-top-right-radius:0; }
+  .flow-step + .flow-step::before {
+    content:''; position:absolute; top:-12px; left:28px;
+    width:2px; height:12px; background:var(--accent);
+  }
+  .flow-num {
+    flex-shrink:0; width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.9rem;
+  }
+  .flow-num.cli { background:var(--accent); color:var(--bg); }
+  .flow-num.eng { background:var(--accent2); color:var(--bg); }
+  .flow-num.snap { background:var(--green); color:var(--bg); }
+  .flow-num.sess { background:var(--amber); color:var(--bg); }
+  .flow-body h4 { font-size:1rem; margin-bottom:.3rem; }
+  .flow-body p { font-size:.9rem; color:var(--text-dim); margin:0; }
+  .flow-body code { font-size:.8rem; }
+
+  /* Data table */
+  table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.9rem; }
+  th,td { text-align:left; padding:.6rem .8rem; border:1px solid var(--border); }
+  th { background:var(--surface); color:var(--accent); font-weight:600; }
+  td code { font-size:.8rem; }
+
+  /* Component card */
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1rem; margin:1rem 0; }
+  .card {
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:1.2rem; transition:border-color .2s;
+  }
+  .card:hover { border-color:var(--accent); }
+  .card h4 { font-size:1rem; margin-bottom:.5rem; }
+  .card h4 .tag { font-size:.7rem; padding:2px 6px; border-radius:4px; margin-left:.5rem; vertical-align:middle; }
+  .card p { font-size:.85rem; color:var(--text-dim); margin-bottom:.5rem; }
+  .card ul { font-size:.85rem; color:var(--text-dim); padding-left:1.2rem; }
+  .card li { margin-bottom:.2rem; }
+
+  .tag-cli { background:var(--accent); color:var(--bg); }
+  .tag-eng { background:var(--accent2); color:var(--bg); }
+  .tag-snap { background:var(--green); color:var(--bg); }
+  .tag-sess { background:var(--amber); color:var(--bg); }
+  .tag-type { background:var(--pink); color:var(--bg); }
+
+  /* Sequence diagram area */
+  .seq { margin:1.5rem 0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; overflow-x:auto; }
+  .seq pre { background:none; border:none; padding:0; margin:0; }
+
+  /* Legend */
+  .legend { display:flex; gap:1rem; flex-wrap:wrap; margin:1rem 0; font-size:.85rem; }
+  .legend-item { display:flex; align-items:center; gap:.4rem; }
+  .legend-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+
+  .note {
+    background:rgba(251,191,36,.08); border-left:3px solid var(--amber);
+    padding:.8rem 1rem; border-radius:0 8px 8px 0; margin:1rem 0;
+    font-size:.9rem; color:var(--text-dim);
+  }
+
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--border); color:var(--text-dim); font-size:.8rem; }
+</style>
+</head>
+<body>
+
+<h1>Cogent Undo 功能 <span>数据流说明文档</span></h1>
+<p>基于 <code>243a1b4</code> 提交（add undo），梳理 <code>/undo</code> 一键回退功能的完整数据流。</p>
+
+<!-- ============================================================ -->
+<h2>1. 功能概览</h2>
+
+<p>Undo 为 REPL 模式提供了「一键撤销上一轮」能力，覆盖三个层面的状态回退：</p>
+
+<div class="cards">
+  <div class="card">
+    <h4>工作区回退 <span class="tag tag-snap">snapshot</span></h4>
+    <p>基于 <code>git stash create/apply</code>，精确恢复到上一轮 agent 执行前的文件状态。</p>
+    <ul>
+      <li>每轮开始前拍摄工作区快照（stash SHA）</li>
+      <li>undo 时先 <code>git checkout -- . &amp;&amp; git clean -fd</code>，再 <code>git stash apply</code></li>
+      <li>非 git 仓库时跳过文件恢复，仅回退消息</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>消息历史回退 <span class="tag tag-eng">engine</span></h4>
+    <p>从 <code>engine.msgs</code> 中截断上一轮追加的所有消息，使 LLM 不再"记得"已撤销的改动。</p>
+    <ul>
+      <li>每轮开始前记录 <code>len(e.msgs)</code> 作为截断点</li>
+      <li>undo 时 <code>e.msgs = e.msgs[:snap.msgIndex]</code></li>
+      <li>连续 undo 支持逐轮回退（栈式快照）</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>会话持久化 <span class="tag tag-sess">session</span></h4>
+    <p>向 transcript 追加 <code>"undo"</code> 事件，使 <code>cogent resume</code> 能正确重建回退后的状态。</p>
+    <ul>
+      <li>undo 事件 payload 含 <code>RevokedUUIDs</code></li>
+      <li>resume 重建时遇 undo 事件，截断对应 UUID 之后的消息</li>
+      <li>落盘失败仅告警，不阻断 undo</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>2. 核心数据结构</h2>
+
+<h3>2.1 turnSnapshot — 快照栈帧</h3>
+<p>每轮对话开始前压入 <code>engine.turnSnapshots</code> 栈，undo 时弹出并据此回退。</p>
+
+<pre><code>// internal/engine/engine.go
+type turnSnapshot struct {
+    msgIndex int    // 该轮开始前 e.msgs 的长度（截断点）
+    stashID  string // 该轮开始前的工作区快照标识（git stash SHA，可空）
+    lastUUID string // 该轮开始前的 session 事件链尾 UUID
+}</code></pre>
+
+<table>
+  <thead><tr><th>字段</th><th>类型</th><th>说明</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td><code>msgIndex</code></td><td>int</td><td>消息切片截断下标</td><td><code>len(e.msgs)</code></td></tr>
+    <tr><td><code>stashID</code></td><td>string</td><td>git stash create 返回的 SHA；无改动时为空</td><td><code>Snapshotter.Take()</code></td></tr>
+    <tr><td><code>lastUUID</code></td><td>string</td><td>session 事件链尾 UUID，用于 undo 事件定位截断点</td><td><code>e.lastUUID</code></td></tr>
+  </tbody>
+</table>
+
+<h3>2.2 undoPayload — 持久化事件载荷</h3>
+
+<pre><code>// internal/engine/undo.go
+type undoPayload struct {
+    RevokedUUIDs []string `json:"revoked_uuids"` // 被撤销的事件 UUID 列表
+}</code></pre>
+
+<h3>2.3 UndoResult — 返回给 CLI 的结果</h3>
+
+<pre><code>// internal/engine/engine.go
+type UndoResult struct {
+    Summary        string // 被撤销轮次的摘要（user 消息前 50 字符）
+    HasFileChanges bool   // 是否恢复了工作区文件改动
+    RemovedCount   int    // 被移除的消息数量
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2>3. 正向数据流：每轮对话前的快照采集</h2>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> CLI 层</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div> Engine 层</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Snapshotter</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Session Store</div>
+</div>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="flow-num cli">1</div>
+    <div class="flow-body">
+      <h4>用户输入 → <code>inputLoop</code></h4>
+      <p>用户在 REPL 输入任务文本，<code>commands.go:inputLoop</code> 调用 <code>runTurn(ctx, eng, line)</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">2</div>
+    <div class="flow-body">
+      <h4><code>engine.Run</code> 调用 <code>takeTurnSnapshot</code></h4>
+      <p>在追加 user 消息<strong>之前</strong>，记录当前状态到 <code>turnSnapshots</code> 栈：<code>msgIndex = len(e.msgs)</code>、<code>lastUUID = e.lastUUID</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num snap">3</div>
+    <div class="flow-body">
+      <h4><code>Snapshotter.Take</code> 创建工作区快照</h4>
+      <p>若 <code>e.snapshotter != nil &amp;&amp; IsGitRepo()</code>，执行 <code>git add -A → git stash create → git reset</code>，返回 stash SHA 存入 <code>snap.stashID</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">4</div>
+    <div class="flow-body">
+      <h4>快照压栈</h4>
+      <p><code>e.turnSnapshots = append(e.turnSnapshots, snap)</code> — 支持连续 undo 的栈式结构</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">5</div>
+    <div class="flow-body">
+      <h4>执行 ReAct 主循环</h4>
+      <p>追加 user 消息 → 流式调 LLM → 执行工具 → 追加 assistant/tool_result 消息，每条消息经 <code>e.record()</code> 写入 session</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num sess">6</div>
+    <div class="flow-body">
+      <h4><code>session.Append</code> 持久化事件链</h4>
+      <p>每条消息被序列化为 <code>session.Event</code>（含 UUID + ParentUUID），append-only 写入 transcript</p>
+    </div>
+  </div>
+</div>
+
+<pre><code>// engine.Run 中的关键调用顺序
+func (e *engine) Run(ctx context.Context, task string) (&lt;-chan types.StreamEvent, error) {
+    // ...
+    go func() {
+        defer close(out)
+        safeGo(e.onPanic(ctx, out), func() {
+            e.takeTurnSnapshot(ctx)       // ← 步骤 2-4：采集快照
+            userMsg := types.Message{Role: types.RoleUser, Text: task}
+            e.msgs = append(e.msgs, userMsg)
+            e.record(ctx, userMsg)        // ← 步骤 6：持久化
+            e.step(ctx, out)              // ← 步骤 5：ReAct 循环
+        })
+    }()
+    return out, nil
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2>4. 回退数据流：<code>/undo</code> 执行路径</h2>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="flow-num cli">1</div>
+    <div class="flow-body">
+      <h4>用户输入 <code>/undo</code> → <code>handleUndo</code></h4>
+      <p><code>inputLoop</code> 检测到 <code>"/undo"</code>，调用 <code>handleUndo(ctx, eng)</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">2</div>
+    <div class="flow-body">
+      <h4><code>engine.Undo</code> 弹出快照栈顶</h4>
+      <p><code>snap := e.turnSnapshots[len-1]</code>，然后 <code>e.turnSnapshots = e.turnSnapshots[:len-1]</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">3</div>
+    <div class="flow-body">
+      <h4>截断消息历史</h4>
+      <p><code>e.msgs = e.msgs[:snap.msgIndex]</code> — 移除本轮所有 user/assistant/tool_result 消息</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">4</div>
+    <div class="flow-body">
+      <h4>回退 session 事件链指针</h4>
+      <p><code>e.lastUUID = snap.lastUUID</code> — 使后续新事件接在 undo 截断点之后</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num snap">5</div>
+    <div class="flow-body">
+      <h4><code>Snapshotter.Restore</code> 恢复工作区</h4>
+      <p>若 <code>snapshotter != nil &amp;&amp; IsGitRepo()</code>，执行 <code>discardAll</code>（checkout + clean）再 <code>git stash apply snap.stashID</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num sess">6</div>
+    <div class="flow-body">
+      <h4><code>recordUndoEvent</code> 追加 undo 事件</h4>
+      <p>向 session transcript 追加 <code>{Type:"undo", Payload:{RevokedUUIDs:[snap.lastUUID]}}</code>，ParentUUID 指向当前 <code>e.lastUUID</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num cli">7</div>
+    <div class="flow-body">
+      <h4>CLI 打印撤销摘要</h4>
+      <p><code>handleUndo</code> 根据 <code>UndoResult</code> 打印：摘要文本 + 是否恢复文件 + 移除消息数</p>
+    </div>
+  </div>
+</div>
+
+<pre><code>// engine.Undo 核心逻辑
+func (e *engine) Undo(ctx context.Context) (*UndoResult, error) {
+    if len(e.turnSnapshots) == 0 {
+        return nil, ErrNothingToUndo
+    }
+    snap := e.turnSnapshots[len(e.turnSnapshots)-1]
+    e.turnSnapshots = e.turnSnapshots[:len(e.turnSnapshots)-1]
+
+    removed := e.msgs[snap.msgIndex:]
+    summary := buildUndoSummary(removed)     // 第一条 user 消息前 50 字符
+    e.msgs = e.msgs[:snap.msgIndex]          // 截断消息
+    e.lastUUID = snap.lastUUID               // 回退事件链指针
+
+    hasFileChanges := false
+    if e.snapshotter != nil &amp;&amp; e.snapshotter.IsGitRepo() {
+        if err := e.snapshotter.Restore(ctx, snap.stashID); err != nil {
+            slog.Warn("undo: workspace restore failed", "err", err)  // 解耦：仅告警
+        } else {
+            hasFileChanges = true
+        }
+    }
+    e.recordUndoEvent(ctx, snap)             // 持久化 undo 事件
+
+    return &amp;UndoResult{Summary: summary, HasFileChanges: hasFileChanges, RemovedCount: len(removed)}, nil
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2>5. Resume 重建数据流</h2>
+
+<p>当用户执行 <code>cogent resume &lt;session-id&gt;</code> 时，undo 事件在消息重建中被正确处理：</p>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="flow-num sess">1</div>
+    <div class="flow-body">
+      <h4><code>session.Load</code> 加载全部事件</h4>
+      <p>从 transcript 文件读取全部 <code>session.Event</code>，包含 user/assistant/tool_result 和 <strong>undo</strong> 事件</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">2</div>
+    <div class="flow-body">
+      <h4><code>rebuildMessages</code> 逐事件重建</h4>
+      <p>维护 <code>uuidIndex map[string]int</code>，将每个消息事件追加到 <code>entries</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">3</div>
+    <div class="flow-body">
+      <h4>遇到 undo 事件 → 截断</h4>
+      <p>解析 <code>undoPayload.RevokedUUIDs[0]</code>，在 <code>uuidIndex</code> 中找到截断位置，<code>entries = entries[:idx]</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">4</div>
+    <div class="flow-body">
+      <h4><code>filterUnresolvedToolUses</code> 修复配对</h4>
+      <p>截断可能破坏 tool_use/tool_result 配对，剥离无结果的 tool_use 和孤立的 tool_result</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num eng">5</div>
+    <div class="flow-body">
+      <h4>注入 system prompt + continue</h4>
+      <p>重建的消息列表接在 system prompt 之后，再注入 <code>"Continue from where you left off."</code> 续跑</p>
+    </div>
+  </div>
+</div>
+
+<pre><code>// rebuildMessages 中 undo 事件处理核心
+for _, ev := range events {
+    lastUUID = ev.UUID
+    if ev.Type == "undo" {
+        var payload undoPayload
+        json.Unmarshal(ev.Payload, &amp;payload)
+        if len(payload.RevokedUUIDs) > 0 {
+            cutUUID := payload.RevokedUUIDs[0]
+            if idx, ok := uuidIndex[cutUUID]; ok {
+                entries = entries[:idx]  // 截断到被撤销 UUID 之前
+            }
+        }
+        continue
+    }
+    // 正常消息事件 ...
+    uuidIndex[ev.UUID] = len(entries) + 1
+    entries = append(entries, msgEntry{msg: msg, uuid: ev.UUID})
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2>6. 组件依赖关系</h2>
+
+<div class="seq">
+<pre>
+┌─────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────────┐
+│   CLI   │────▶│  Engine  │────▶│ Snapshotter │────▶│   git CLI    │
+│commands │     │ engine.go│     │ snapshot.go │     │(stash/apply) │
+│  .go    │     │ undo.go  │     └─────────────┘     └──────────────┘
+│         │     │          │
+│         │     │          │────▶┌─────────────┐     ┌──────────────┐
+│         │     │          │     │   Session    │────▶│  transcript  │
+│         │     │          │     │ session_event│     │   JSON 文件   │
+│         │◀────│          │◀────│    .go       │     └──────────────┘
+└─────────┘     └──────────┘     └─────────────┘
+     │                │
+     │  UndoResult    │  turnSnapshot (内存栈)
+     │                │
+     ▼                ▼
+   用户反馈       状态回退
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2>7. 关键文件清单</h2>
+
+<table>
+  <thead><tr><th>文件</th><th>职责</th><th>新增/修改</th></tr></thead>
+  <tbody>
+    <tr><td><code>internal/engine/undo.go</code></td><td>Undo 核心逻辑 + recordUndoEvent + buildUndoSummary</td><td>新增</td></tr>
+    <tr><td><code>internal/engine/snapshot.go</code></td><td>gitSnapshotter 实现（Take/Restore/IsGitRepo）</td><td>新增</td></tr>
+    <tr><td><code>internal/engine/engine.go</code></td><td>Engine 接口新增 Undo + turnSnapshot 定义 + takeTurnSnapshot</td><td>修改</td></tr>
+    <tr><td><code>internal/engine/session_event.go</code></td><td>rebuildMessages 处理 undo 事件截断</td><td>修改</td></tr>
+    <tr><td><code>cmd/cogent/commands.go</code></td><td>inputLoop /handleUndo /buildEngine 装配 Snapshotter</td><td>修改</td></tr>
+    <tr><td><code>cmd/cogent/goal.go</code></td><td>ensureCleanWorktree 使用 worktree.EnsureClean</td><td>修改</td></tr>
+    <tr><td><code>internal/worktree/worktree.go</code></td><td>新增 EnsureClean + ErrDirtyWorktree</td><td>修改</td></tr>
+    <tr><td><code>internal/engine/undo_test.go</code></td><td>Undo 逻辑单元测试</td><td>新增</td></tr>
+    <tr><td><code>internal/engine/snapshot_test.go</code></td><td>gitSnapshotter 单元测试</td><td>新增</td></tr>
+    <tr><td><code>internal/engine/session_event_test.go</code></td><td>rebuildMessages undo 截断测试</td><td>修改</td></tr>
+    <tr><td><code>internal/worktree/worktree_test.go</code></td><td>EnsureClean 单元测试</td><td>修改</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2>8. 完整时序图</h2>
+
+<div class="seq">
+<pre>
+用户            CLI              Engine            Snapshotter         Session Store
+ │               │                 │                    │                   │
+ │  输入任务      │                 │                    │                   │
+ │──────────────▶│                 │                    │                   │
+ │               │  Run(task)      │                    │                   │
+ │               │────────────────▶│                    │                   │
+ │               │                 │  takeTurnSnapshot  │                   │
+ │               │                 │───────────────────▶│                   │
+ │               │                 │                    │  git add -A       │
+ │               │                 │                    │  git stash create │
+ │               │                 │                    │  git reset        │
+ │               │                 │◀───────────────────│                   │
+ │               │                 │  snap.stashID=SHA  │                   │
+ │               │                 │  压栈 turnSnapshots│                   │
+ │               │                 │                    │                   │
+ │               │                 │  追加 user 消息     │                   │
+ │               │                 │  record(user)─────────────────────────▶│
+ │               │                 │  step(ReAct 循环)   │                   │
+ │               │                 │  ...record(assistant/tool_result)────▶│
+ │               │                 │                    │                   │
+ │  流式回复      │                 │                    │                   │
+ │◀──────────────│◀────────────────│                    │                   │
+ │               │                 │                    │                   │
+ ══════════════════════════════════════════════════════════════════════════
+ │               │                 │                    │                   │
+ │  /undo        │                 │                    │                   │
+ │──────────────▶│                 │                    │                   │
+ │               │  Undo()         │                    │                   │
+ │               │────────────────▶│                    │                   │
+ │               │                 │  弹出 turnSnapshot │                   │
+ │               │                 │  截断 msgs         │                   │
+ │               │                 │  e.lastUUID 回退    │                   │
+ │               │                 │                    │                   │
+ │               │                 │  Restore(stashID)  │                   │
+ │               │                 │───────────────────▶│                   │
+ │               │                 │                    │  checkout -- .    │
+ │               │                 │                    │  clean -fd        │
+ │               │                 │                    │  stash apply SHA  │
+ │               │                 │◀───────────────────│                   │
+ │               │                 │                    │                   │
+ │               │                 │  recordUndoEvent──────────────────────▶│
+ │               │                 │  (type:"undo",     │                   │
+ │               │                 │   revokedUUIDs)    │                   │
+ │               │                 │                    │                   │
+ │               │  UndoResult     │                    │                   │
+ │               │◀────────────────│                    │                   │
+ │  打印摘要      │                 │                    │                   │
+ │◀──────────────│                 │                    │                   │
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2>9. 边界与容错策略</h2>
+
+<div class="cards">
+  <div class="card">
+    <h4>无快照可撤 <span class="tag tag-eng">ErrNothingToUndo</span></h4>
+    <p><code>turnSnapshots</code> 为空时（刚启动 / 已全部撤销），返回 <code>ErrNothingToUndo</code>，CLI 打印"没有可撤销的轮次"。</p>
+  </div>
+  <div class="card">
+    <h4>非 Git 仓库</h4>
+    <p><code>Snapshotter.IsGitRepo()</code> 返回 false 时跳过文件恢复，仅回退消息历史。CLI 提示"本轮无文件改动"。</p>
+  </div>
+  <div class="card">
+    <h4>工作区恢复失败</h4>
+    <p><code>Snapshotter.Restore</code> 出错时仅 <code>slog.Warn</code> 告警，消息历史仍正常回退。消息回退与文件回退<strong>解耦</strong>，避免状态不一致扩大。</p>
+  </div>
+  <div class="card">
+    <h4>Session 落盘失败</h4>
+    <p><code>recordUndoEvent</code> 中 <code>session.Append</code> 失败仅告警，不阻断 undo 操作本身（与现有 session 容错策略一致）。</p>
+  </div>
+  <div class="card">
+    <h4>Resume 遇损坏 undo 事件</h4>
+    <p><code>rebuildMessages</code> 解析 undo payload 失败时 <code>slog.Warn</code> 并 <code>continue</code>，不影响后续事件重建。</p>
+  </div>
+</div>
+
+<div class="note">
+  <strong>设计原则：</strong>三层回退（消息、文件、持久化）互相解耦，任何一层失败不影响其他层完成。核心不变量是 <code>e.msgs</code> 截断必须成功（内存操作），文件和持久化均为增强而非正确性前提。
+</div>
+
+<!-- ============================================================ -->
+<h2>10. 数据流图总结</h2>
+
+<div class="seq">
+<pre>
+                    ┌─────────────────────────────────────────────┐
+                    │              engine (内存)                    │
+                    │                                              │
+   takeTurnSnapshot │  ┌──────────────┐    ┌──────────────────┐   │
+   ─────────────────▶  │turnSnapshots │    │     msgs[]       │   │
+                    │  │  (栈式快照)   │    │  (消息历史)       │   │
+                    │  │              │    │                  │   │
+                    │  │ snap{        │    │ [0] system       │   │
+                    │  │   msgIndex ──┼───▶│ [1] user ──┐     │   │
+                    │  │   stashID    │    │ [2] asst   │undo │   │
+                    │  │   lastUUID   │    │ [3] tool   │截断  │   │
+                    │  │ }            │    │     ↑───────┘     │   │
+                    │  └──────────────┘    └──────────────────┘   │
+                    │         │                    ▲               │
+                    └─────────┼────────────────────┼───────────────┘
+                              │                    │
+                   ┌──────────┘                    │
+                   ▼                               │
+          ┌────────────────┐              ┌────────┴─────────┐
+          │  gitSnapshotter│              │  session.Store   │
+          │                │              │                  │
+          │ Take() ────────┼── git CLI    │ Append(undo) ────│── transcript JSON
+          │ Restore() ─────┼── git CLI    │ Load() ──────────│── 重建(含截断)
+          │ IsGitRepo() ───┼── git CLI    │                  │
+          └────────────────┘              └──────────────────┘
+</pre>
+</div>
+
+<footer>
+  <p>Generated from commit <code>243a1b4</code> (add undo) · cogent project · 2026-06-22</p>
+</footer>
+
+</body>
+</html>

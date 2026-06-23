@@ -32,6 +32,7 @@ type goalOptions struct {
 	worktree     bool        // 是否用 git worktree 暂存落盘（通过才 Merge，物理隔离）
 	allowDirty   bool        // 是否跳过 --worktree 的脏工作树前置校验（风险自负）
 	budget       loop.Budget // 三重预算护栏
+	maxSteps     int         // 单轮 ReAct 最大轮数（0 = 走 env/默认）
 }
 
 // newGoalCmd 构造 goal 子命令：目标驱动循环——给定可验证终止条件，
@@ -46,6 +47,7 @@ func newGoalCmd() *cobra.Command {
 		maxIter      int
 		maxCost      float64
 		maxWall      time.Duration
+		maxSteps     int
 	)
 	cmd := &cobra.Command{
 		Use:   "goal <intent>",
@@ -64,6 +66,7 @@ func newGoalCmd() *cobra.Command {
 				worktree:     useWorktree,
 				allowDirty:   allowDirty,
 				budget:       loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: maxWall},
+				maxSteps:     maxSteps,
 			})
 		},
 	}
@@ -75,6 +78,7 @@ func newGoalCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限；需成本计量接入）")
 	cmd.Flags().DurationVar(&maxWall, "max-wallclock", 0, "端到端墙钟上限（如 15m，0 = 不限）")
+	cmd.Flags().IntVar(&maxSteps, "max-steps", 0, "单轮 ReAct 最大轮数（0 = 走 COGENT_MAX_REACT_STEPS env 或默认 50）")
 	return cmd
 }
 
@@ -97,7 +101,7 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 		}
 	}
 
-	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree)
+	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree, opts.maxSteps)
 	if err != nil {
 		return err
 	}

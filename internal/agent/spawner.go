@@ -18,7 +18,7 @@ import (
 // 子 Agent 默认参数。
 const (
 	defaultMaxSummaryBytes  = 8 * 1024 // 摘要回流上限，防止子任务输出撑大主上下文
-	defaultSubAgentMaxSteps = 8        // 子任务 ReAct 轮数上限，比主循环更紧以防失控
+	defaultSubAgentMaxSteps = 16       // 子任务 ReAct 轮数上限，比主循环更紧以防失控
 )
 
 // SubAgent 是 SubAgent 派发器：每次 Spawn 用模板依赖新建一个隔离子 Engine 执行子任务。

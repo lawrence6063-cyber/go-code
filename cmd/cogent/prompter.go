@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/alaindong/cogent/internal/permission"
 )
@@ -43,13 +44,16 @@ func (ir *inputReader) next(ctx context.Context) (string, bool) {
 }
 
 // cliPrompter 是 permission.Prompter 的 CLI 实现：在中断点读 stdin 完成 Approve/Edit/Reject。
+// 支持会话级 per-tool "always" 自动批准：输入 A 后该工具在本会话内不再询问。
 type cliPrompter struct {
-	in *inputReader
+	in    *inputReader
+	allow map[string]bool // 工具名 → 会话级自动批准（exit 清除）
+	mu    sync.Mutex      // 保护 allow（Guard 可并发调用 Ask）
 }
 
 // newCLIPrompter 构造一个基于共享输入的 CLI 中断决策器。
 func newCLIPrompter(in *inputReader) permission.Prompter {
-	return &cliPrompter{in: in}
+	return &cliPrompter{in: in, allow: make(map[string]bool)}
 }
 
 // yesPrompter 是无人值守自动批准决策器：对每个权限中断一律 Approve（不读 stdin）。
@@ -83,19 +87,36 @@ func newPrompter(in *inputReader) permission.Prompter {
 
 // Ask 见 permission.Prompter 接口说明。
 func (p *cliPrompter) Ask(ctx context.Context, req permission.Interrupt) (permission.Resolution, error) {
+	// 会话级 always 短路：已标记的工具直接批准，不读 stdin。
+	p.mu.Lock()
+	auto := p.allow[req.Tool]
+	p.mu.Unlock()
+	if auto {
+		fmt.Printf("\n[permission:auto-approve (always)] tool %q\n  input: %s\n", req.Tool, string(req.Input))
+		return permission.Resolution{Action: permission.ActionApprove}, nil
+	}
+
 	fmt.Printf("\n[permission] tool %q requests execution:\n  input: %s\n", req.Tool, string(req.Input))
 	if req.Reason != "" {
 		fmt.Printf("  reason: %s\n", req.Reason)
 	}
-	fmt.Print("  approve / edit / reject? [a/e/r] ")
+	fmt.Print("  approve / always / edit / reject? [a/A/e/r] ")
 	line, ok := p.in.next(ctx)
 	if !ok {
 		return permission.Resolution{}, ctx.Err()
 	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "a", "approve", "y", "yes":
+	trimmed := strings.TrimSpace(line)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case trimmed == "A" || lower == "always":
+		p.mu.Lock()
+		p.allow[req.Tool] = true
+		p.mu.Unlock()
+		fmt.Printf("  (always: %s auto-approved for this session)\n", req.Tool)
 		return permission.Resolution{Action: permission.ActionApprove}, nil
-	case "e", "edit":
+	case lower == "a" || lower == "approve" || lower == "y" || lower == "yes":
+		return permission.Resolution{Action: permission.ActionApprove}, nil
+	case lower == "e" || lower == "edit":
 		return p.askEdit(ctx)
 	default:
 		return p.askReject(ctx), nil

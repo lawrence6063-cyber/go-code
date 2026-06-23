@@ -31,6 +31,7 @@ type loopOptions struct {
 	watch        string        // 非空则文件变更触发（监听根目录）
 	interval     time.Duration // 定时触发间隔（watch 为空时生效）
 	budget       loop.Budget   // 三重预算护栏
+	maxSteps     int           // 单轮 ReAct 最大轮数（0 = 走 env/默认）
 }
 
 // newLoopCmd 构造 loop 守护子命令：被定时（--interval）或文件变更（--watch）触发，
@@ -42,6 +43,7 @@ func newLoopCmd() *cobra.Command {
 		interval, wall                time.Duration
 		maxIter                       int
 		maxCost                       float64
+		maxSteps                      int
 	)
 	cmd := &cobra.Command{
 		Use:   "loop [intent]",
@@ -60,7 +62,8 @@ func newLoopCmd() *cobra.Command {
 				intent: intent, goalFile: goalFile, verifyScript: verify, mode: m,
 				review: review, worktree: useWorktree,
 				watch: watch, interval: interval,
-				budget: loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: wall},
+				budget:   loop.Budget{MaxIterations: maxIter, MaxCostUSD: maxCost, MaxWallClock: wall},
+				maxSteps: maxSteps,
 			})
 		},
 	}
@@ -74,6 +77,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限）")
 	cmd.Flags().DurationVar(&wall, "max-wallclock", 0, "单次目标循环墙钟上限（如 15m，0 = 不限）")
+	cmd.Flags().IntVar(&maxSteps, "max-steps", 0, "单轮 ReAct 最大轮数（0 = 走 COGENT_MAX_REACT_STEPS env 或默认 50）")
 	return cmd
 }
 
@@ -94,7 +98,7 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	wd, _ := os.Getwd()
 	sid := session.NewSessionID()
 
-	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree)
+	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree, opts.maxSteps)
 	if err != nil {
 		return err
 	}

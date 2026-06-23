@@ -192,6 +192,7 @@ func buildMakerReviewer(
 	prompter permission.Prompter,
 	workRoot string,
 	discarder agent.Discarder,
+	maxSteps int,
 ) *agent.MakerReviewer {
 	model := os.Getenv("COGENT_MODEL")
 	makerDeps := engine.Deps{
@@ -202,6 +203,7 @@ func buildMakerReviewer(
 		Mode:     engine.ModeAuto,
 		Model:    model,
 		WorkRoot: workRoot,
+		MaxSteps: resolveMaxSteps(maxSteps),
 	}
 	reviewerDeps := engine.Deps{
 		LLM:      llmc,
@@ -210,6 +212,7 @@ func buildMakerReviewer(
 		Mode:     engine.ModeAsk,
 		Model:    reviewerModel(model),
 		WorkRoot: workRoot,
+		MaxSteps: resolveMaxSteps(maxSteps),
 	}
 	return agent.NewMakerReviewer(makerDeps, reviewerDeps, discarder)
 }
@@ -217,19 +220,19 @@ func buildMakerReviewer(
 // buildPipeline 装配 maker/reviewer 双角色流水线（diff 回滚版）：maker 改工作区，reviewer 审，
 // 客观 verify 作为落盘硬闸门（未通过经 git 回滚）。MakerReviewer 不持有 discarder——
 // 回滚时机改由 adapter 在客观 verify 之后决定，使 reviewer 不再能短路客观判据。
-func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
+func buildPipeline(prov observe.Provider, prompter permission.Prompter, workRoot string, maxSteps int) (loop.Pipeline, error) {
 	llmc, err := newLLMClient()
 	if err != nil {
 		return nil, err
 	}
 	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: false})
-	mr := buildMakerReviewer(llmc, prov, prompter, workRoot, nil)
+	mr := buildMakerReviewer(llmc, prov, prompter, workRoot, nil, maxSteps)
 	return pipelineAdapter{mr: mr, workRoot: workRoot, discarder: gitDiscarder{sb: sb}}, nil
 }
 
 // buildWorktreePipeline 装配 worktree 暂存版双角色流水线（L4-2）：每轮在隔离 worktree 内执行，
 // 通过才 Merge 落盘。maker/reviewer 在 worktree 根上重建，物理隔离主工作区。
-func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, workRoot string) (loop.Pipeline, error) {
+func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, workRoot string, maxSteps int) (loop.Pipeline, error) {
 	llmc, err := newLLMClient()
 	if err != nil {
 		return nil, err
@@ -241,7 +244,7 @@ func buildWorktreePipeline(prov observe.Provider, prompter permission.Prompter, 
 		baseRef: "HEAD",
 		tracer:  prov.Tracer(),
 		build: func(root string) makerReviewerRunner {
-			return buildMakerReviewer(llmc, prov, prompter, root, nil) // worktree 负责清理，无需 discarder
+			return buildMakerReviewer(llmc, prov, prompter, root, nil, maxSteps) // worktree 负责清理，无需 discarder
 		},
 	}, nil
 }
@@ -272,6 +275,7 @@ func buildOrchestrator(
 	mode engine.Mode,
 	sessionID, workRoot string,
 	review, useWorktree bool,
+	maxSteps int,
 ) (loop.Orchestrator, func(), error) {
 	noop := func() {}
 	// 装饰 provider 注入成本计量：拦截 cogent.tokens 累计美元成本，并作为 loop.CostMeter 接入护栏，
@@ -279,7 +283,7 @@ func buildOrchestrator(
 	costProv := newCostProvider(prov)
 	prov = costProv
 	if review || useWorktree {
-		pipeline, err := pipelineFor(prov, prompter, workRoot, useWorktree)
+		pipeline, err := pipelineFor(prov, prompter, workRoot, useWorktree, maxSteps)
 		if err != nil {
 			return nil, noop, err
 		}
@@ -295,7 +299,7 @@ func buildOrchestrator(
 	if err != nil {
 		return nil, noop, err
 	}
-	eng, err := buildEngine(prov, prompter, mode, sessionID, workRoot, mgr.Tools())
+	eng, err := buildEngine(prov, prompter, mode, sessionID, workRoot, mgr.Tools(), maxSteps)
 	if err != nil {
 		_ = mgr.Close()
 		return nil, noop, err
@@ -311,9 +315,9 @@ func buildOrchestrator(
 }
 
 // pipelineFor 按是否启用 worktree 选择双角色流水线的落盘策略。
-func pipelineFor(prov observe.Provider, prompter permission.Prompter, workRoot string, useWorktree bool) (loop.Pipeline, error) {
+func pipelineFor(prov observe.Provider, prompter permission.Prompter, workRoot string, useWorktree bool, maxSteps int) (loop.Pipeline, error) {
 	if useWorktree {
-		return buildWorktreePipeline(prov, prompter, workRoot)
+		return buildWorktreePipeline(prov, prompter, workRoot, maxSteps)
 	}
-	return buildPipeline(prov, prompter, workRoot)
+	return buildPipeline(prov, prompter, workRoot, maxSteps)
 }
