@@ -1,0 +1,16 @@
+# test log
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp

@@ -1,0 +1,9 @@
+./commands.go
+./cost.go
+./goal.go
+./init.go
+./loop.go
+./main.go
+./prompter.go
+./review.go
+./skills.go

@@ -1,0 +1,7 @@
+./engine.go
+./exec.go
+./prompt.go
+./safego.go
+./session_event.go
+./snapshot.go
+./undo.go

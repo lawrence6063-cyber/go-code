@@ -1,0 +1,14 @@
+./engine.go
+./exec.go
+./prompt.go
+./safego.go
+./session_event.go
+./snapshot.go
+./undo.go
+./engine_compact_test.go
+./engine_exec_test.go
+./engine_test.go
+./session_event_test.go
+./session_resume_test.go
+./snapshot_test.go
+./undo_test.go
