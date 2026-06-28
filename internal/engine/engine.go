@@ -197,12 +197,44 @@ func (e *engine) Run(ctx context.Context, task string) (<-chan types.StreamEvent
 	out := make(chan types.StreamEvent, 16)
 	go func() {
 		defer close(out)
+		// cogent.session 是本次执行的根 span，贯穿整轮 ReAct。
+		ctx, sessionEnd := e.tracer.Start(ctx, "cogent.session",
+			observe.Attr{Key: "llm.model", Value: e.model},
+		)
+		var (
+			steps    int
+			outcome  string // 零值 "" 表示未设定（panic 场景）
+			finalErr error
+		)
+		defer func() {
+			if outcome == "" {
+				outcome = "error" // panic 降级为 error
+			}
+			attrs := []observe.Attr{
+				{Key: "session.total_steps", Value: steps},
+				{Key: "session.outcome", Value: outcome},
+			}
+			if e.sessionID != "" {
+				attrs = append(attrs, observe.Attr{Key: "session.id", Value: e.sessionID})
+			}
+			sessionEnd(finalErr, attrs...)
+		}()
+
 		safeGo(e.onPanic(ctx, out), func() {
 			e.takeTurnSnapshot(ctx)
 			userMsg := types.Message{Role: types.RoleUser, Text: task}
 			e.msgs = append(e.msgs, userMsg)
 			e.record(ctx, userMsg)
-			e.step(ctx, out)
+			var stepErr error
+			steps, stepErr = e.step(ctx, out)
+			finalErr = stepErr
+			if ctx.Err() != nil {
+				outcome = "cancelled"
+			} else if stepErr != nil {
+				outcome = "error"
+			} else {
+				outcome = "done"
+			}
 		})
 	}()
 	return out, nil
@@ -240,12 +272,44 @@ func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.Str
 	out := make(chan types.StreamEvent, 16)
 	go func() {
 		defer close(out)
+		// cogent.session 是本次 resume 执行的根 span，贯穿整轮 ReAct。
+		ctx, sessionEnd := e.tracer.Start(ctx, "cogent.session",
+			observe.Attr{Key: "llm.model", Value: e.model},
+		)
+		var (
+			steps    int
+			outcome  string
+			finalErr error
+		)
+		defer func() {
+			if outcome == "" {
+				outcome = "error"
+			}
+			attrs := []observe.Attr{
+				{Key: "session.total_steps", Value: steps},
+				{Key: "session.outcome", Value: outcome},
+			}
+			if e.sessionID != "" {
+				attrs = append(attrs, observe.Attr{Key: "session.id", Value: e.sessionID})
+			}
+			sessionEnd(finalErr, attrs...)
+		}()
+
 		safeGo(e.onPanic(ctx, out), func() {
 			e.takeTurnSnapshot(ctx)
 			cont := types.Message{Role: types.RoleUser, Text: continuePrompt}
 			e.msgs = append(e.msgs, cont)
 			e.record(ctx, cont)
-			e.step(ctx, out)
+			var stepErr error
+			steps, stepErr = e.step(ctx, out)
+			finalErr = stepErr
+			if ctx.Err() != nil {
+				outcome = "cancelled"
+			} else if stepErr != nil {
+				outcome = "error"
+			} else {
+				outcome = "done"
+			}
 		})
 	}()
 	return out, nil
@@ -254,12 +318,13 @@ func (e *engine) Resume(ctx context.Context, sessionID string) (<-chan types.Str
 // step 是 ReAct 主循环的核心步进（不负责追加初始消息，由 Run/Resume 各自 bootstrap 后调用）：
 // 流式调 LLM → 文本上抛 → 无工具调用则结束；有则串行/并发执行工具、回流 tool_result 后进入下一轮，
 // 直至触达 maxSteps。每一步产生的消息同步 record 为 append-only 事件。
-func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
+// 返回本轮实际执行的步数与终端错误（正常结束为 nil，出错/超步/ctx 取消为对应 error）。
+func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) (int, error) {
 	stepsTaken := 0
 	defer func() { e.meter.Record("cogent.react.steps", float64(stepsTaken)) }()
 	for step := 0; step < e.maxSteps; step++ {
 		if ctx.Err() != nil {
-			return
+			return stepsTaken, ctx.Err()
 		}
 		stepsTaken = step + 1
 		stepStart := time.Now()
@@ -269,12 +334,12 @@ func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
 		if err != nil {
 			e.endStep(end, stepStart, len(toolUses), "error", err)
 			emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: err})
-			return
+			return stepsTaken, err
 		}
 		if len(toolUses) == 0 {
 			e.endStep(end, stepStart, 0, "done", nil)
 			emitEvent(ctx, out, types.StreamEvent{Type: types.EventDone})
-			return
+			return stepsTaken, nil
 		}
 		results := e.executeTools(sctx, toolUses, out)
 		e.endStep(end, stepStart, len(toolUses), "tools", nil)
@@ -282,6 +347,7 @@ func (e *engine) step(ctx context.Context, out chan<- types.StreamEvent) {
 		e.maybeCompact(ctx, out)
 	}
 	emitEvent(ctx, out, types.StreamEvent{Type: types.EventError, Err: ErrMaxStepsExceeded})
+	return stepsTaken, ErrMaxStepsExceeded
 }
 
 // endStep 结束一个 react.step span：记录单轮耗时指标并补 tool_use.count/step.outcome 属性（O3/O4）。
