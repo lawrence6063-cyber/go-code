@@ -127,14 +127,68 @@ func (s *sandbox) runCommand(ctx context.Context, command string) ExecResult {
 	}
 }
 
+// sandboxPathBase 是受限 PATH 的基础路径（标准系统路径）。
+const sandboxPathBase = "/usr/local/bin:/usr/bin:/bin"
+
 // restrictedEnv 构造最小受限环境：精简 PATH、HOME 指向 WorkRoot，不透传宿主密钥。
+// PATH 在基础系统路径之上，额外并入宿主 PATH 中包含 go/gofmt 的目录，
+// 使 Agent 在沙箱内仍能调用 Go 工具链（解决 worktree 中 go not found 的问题）。
 func (s *sandbox) restrictedEnv() []string {
-	return []string{
-		"PATH=/usr/local/bin:/usr/bin:/bin",
+	env := []string{
+		"PATH=" + goAwarePath(),
 		"HOME=" + s.cfg.WorkRoot,
 		"SHELL=/bin/bash",
 		"LANG=C.UTF-8",
 	}
+	// 透传 GOTOOLCHAIN（如 auto），使沙箱内 go 能按 go.mod 要求自动下载工具链。
+	if gt := os.Getenv("GOTOOLCHAIN"); gt != "" {
+		env = append(env, "GOTOOLCHAIN="+gt)
+	}
+	// 透传 GOPATH，使工具链缓存在沙箱内可访问（go 下载的工具链存在 GOPATH/pkg/mod）。
+	if gp := os.Getenv("GOPATH"); gp != "" {
+		env = append(env, "GOPATH="+gp)
+	}
+	return env
+}
+
+// goAwarePath 返回基础系统 PATH 加上宿主 PATH 中含 go 工具链的目录。
+// 仅并入确含 go 或 gofmt 二进制的目录，避免盲目透传整个宿主 PATH 泄露无关工具。
+func goAwarePath() string {
+	extra := findGoDirs()
+	if extra == "" {
+		return sandboxPathBase
+	}
+	return extra + ":" + sandboxPathBase
+}
+
+// findGoDirs 扫描宿主 PATH 中含 go 或 gofmt 二进制的目录，返回冒号分隔的列表。
+func findGoDirs() string {
+	hostPath := os.Getenv("PATH")
+	if hostPath == "" {
+		return ""
+	}
+	var dirs []string
+	seen := make(map[string]bool)
+	for _, dir := range filepath.SplitList(hostPath) {
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		if hasExecutable(dir, "go") || hasExecutable(dir, "gofmt") {
+			dirs = append(dirs, dir)
+		}
+	}
+	return strings.Join(dirs, ":")
+}
+
+// hasExecutable 报告 dir 下是否存在可执行的 name。
+func hasExecutable(dir, name string) bool {
+	p := filepath.Join(dir, name)
+	info, err := os.Stat(p)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode().Perm()&0o111 != 0
 }
 
 // snapshotTopLevel 记录 WorkRoot 顶层条目名集合，供执行后比对出本次新建的产物。
