@@ -1,0 +1,37 @@
+为 cogent 的执行内核补上缺失的 cogent.session 根 span。
+
+## 背景
+
+当前 internal/engine 的 Run/Resume 在 goroutine 内直接进入 step() 开 react.step span，
+单次 cogent run（不走 loop）的 trace 没有根节点——无法在一个 span 上汇总"这次任务共几轮、
+花了多少 token、最终成败"。DEV_SPEC §8.2/§8.3 把 cogent.session 定为根 span
+（携带 session.id / model / outcome / total_steps 等汇总属性），但代码层面尚未落地。
+
+## 要求
+
+1. 在 engine.Run 和 engine.Resume 的 goroutine 入口开启 cogent.session span，
+   使其贯穿整轮 ReAct；react.step 等子 span 自然挂为其子 span（通过 ctx 传播）。
+2. span 结束时（defer end）补写以下汇总属性（用 EndFunc 的可变 attrs 参数）：
+   - session.id（若 e.sessionID 非空）
+   - llm.model
+   - session.outcome：done / cancelled / error（根据结束方式判定）
+   - session.total_steps：本轮实际执行的 step 数
+3. 不改变 Engine 接口签名、不破坏现有测试。
+4. 遵循项目 Go 规范：导出符号带注释、error 末位、gofmt、函数不超过 80 行、嵌套不超过 4 层。
+
+## 提示
+
+- observe.Tracer 的 Start 签名已支持结束时补 attrs：
+  ctx, end := tr.Start(ctx, "cogent.session", attrs...); defer end(err, moreAttrs...)
+- step() 内部已有 stepsTaken 计数（defer 记录 cogent.react.steps 指标），
+  需想办法把实际步数透出到 session span 的结束属性。
+- outcome 判定：正常结束(EventDone)为 done，ctx 取消为 cancelled，出错/panic 为 error。
+
+## 验收标准（客观，verify.sh 退出码 0 = 达标）
+
+- gofmt / go vet / go build 通过
+- 全量 go test ./... 通过
+- 注入式验收测试：用真实 file exporter 构造 engine，跑一次 Run，
+  从 trace 文件中断言存在名为 cogent.session 的 span，且它是 react.step 的父 span。
+
+仅做上述相关改动；不要改动与本任务无关的代码，不要修改任何 verify 脚本或 eval/ 目录下的文件。

@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Loop Engineering 实现梳理</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #f0883e;
+    --danger: #f85149;
+    --code-bg: #0d1117;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+  .hero {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a2744 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 2.6em;
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero .subtitle {
+    font-size: 1.15em;
+    color: var(--text-dim);
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .hero .badge {
+    display: inline-block;
+    margin-top: 18px;
+    padding: 6px 16px;
+    font-size: 0.85em;
+    background: rgba(88, 166, 255, 0.12);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 20px;
+    color: var(--accent);
+  }
+  .container {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 {
+    font-size: 1.2em;
+    margin-bottom: 14px;
+    color: var(--accent);
+  }
+  .toc ol {
+    padding-left: 20px;
+    columns: 2;
+    column-gap: 40px;
+  }
+  .toc li {
+    margin: 6px 0;
+  }
+  .toc a {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .toc a:hover { color: var(--accent); }
+
+  section {
+    margin-bottom: 48px;
+  }
+  h2 {
+    font-size: 1.65em;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  h2 .num {
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  h3 {
+    font-size: 1.2em;
+    margin: 24px 0 12px;
+    color: var(--accent3);
+  }
+  h4 {
+    font-size: 1.05em;
+    margin: 18px 0 8px;
+    color: var(--accent4);
+  }
+  p { margin-bottom: 14px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code {
+    font-family: "SF Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 14px 0 18px;
+    line-height: 1.55;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 0.85em;
+  }
+  .keyword { color: #ff7b72; }
+  .type { color: #79c0ff; }
+  .string { color: #a5d6ff; }
+  .comment { color: #8b949e; font-style: italic; }
+  .func { color: #d2a8ff; }
+  .number { color: #79c0ff; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 20px;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: rgba(22, 27, 34, 0.5); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    margin: 16px 0;
+  }
+  .card-title {
+    font-weight: 700;
+    color: var(--accent2);
+    margin-bottom: 10px;
+    font-size: 1.05em;
+  }
+
+  .mermaid {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 20px;
+    margin: 22px 0;
+    text-align: center;
+    overflow-x: auto;
+  }
+  .mermaid svg { max-width: 100%; height: auto; }
+  .diagram-caption {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85em;
+    margin-top: -10px;
+    margin-bottom: 22px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 768px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .toc ol { columns: 1; }
+    .hero h1 { font-size: 1.8em; }
+    .hero { padding: 40px 20px 30px; }
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    font-size: 0.78em;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .tag-core { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+  .tag-safety { background: rgba(248,81,73,0.15); color: var(--danger); border: 1px solid rgba(248,81,73,0.3); }
+  .tag-observe { background: rgba(210,168,255,0.15); color: var(--accent3); border: 1px solid rgba(210,168,255,0.3); }
+  .tag-spec { background: rgba(63,185,80,0.15); color: var(--accent2); border: 1px solid rgba(63,185,80,0.3); }
+
+  .callout {
+    border-left: 4px solid var(--accent4);
+    background: rgba(240,136,62,0.06);
+    padding: 16px 20px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    margin: 16px 0;
+  }
+  .callout-warn {
+    border-left-color: var(--danger);
+    background: rgba(248,81,73,0.06);
+  }
+  .callout-success {
+    border-left-color: var(--accent2);
+    background: rgba(63,185,80,0.06);
+  }
+
+  .file-ref {
+    color: var(--text-dim);
+    font-size: 0.82em;
+    font-style: italic;
+  }
+
+  .layer-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 20px auto;
+    max-width: 520px;
+  }
+  .layer-box {
+    width: 100%;
+    text-align: center;
+    padding: 14px;
+    border: 2px solid;
+    font-weight: 600;
+    font-size: 0.95em;
+  }
+  .layer-box.l-daemon { border-color: var(--accent4); color: var(--accent4); border-radius: 8px 8px 0 0; background: rgba(240,136,62,0.08); }
+  .layer-box.l-orch { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,0.08); }
+  .layer-box.l-pipeline { border-color: var(--accent3); color: var(--accent3); background: rgba(210,168,255,0.08); }
+  .layer-box.l-engine { border-color: var(--accent2); color: var(--accent2); background: rgba(63,185,80,0.08); }
+  .layer-box.l-tools { border-color: var(--text-dim); color: var(--text-dim); border-radius: 0 0 8px 8px; background: rgba(139,148,158,0.08); }
+  .layer-arrow {
+    font-size: 1.2em;
+    color: var(--text-dim);
+    line-height: 1;
+  }
+
+  footer {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-dim);
+    font-size: 0.85em;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ Hero ═══════════════════ -->
+<div class="hero">
+  <h1>cogent Loop Engineering 实现梳理</h1>
+  <p class="subtitle">
+    深度解析 cogent 项目中 Loop Engineering 范式的完整 Go 语言实现——
+    从触发源、编排器、制造-审查分离、独立判定器到守护进程的全链路架构。
+  </p>
+  <span class="badge">cogent · Coding aGENT in Go · 2026-06</span>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════ TOC ═══════════════════ -->
+<nav class="toc">
+  <h2>📑 目录</h2>
+  <ol>
+    <li><a href="#s1">全景概览：什么是 Loop Engineering</a></li>
+    <li><a href="#s2">架构层次与依赖关系</a></li>
+    <li><a href="#s3">核心数据结构</a></li>
+    <li><a href="#s4">Orchestrator：外层循环编排器</a></li>
+    <li><a href="#s5">Trigger：触发源机制</a></li>
+    <li><a href="#s6">Daemon：守护进程</a></li>
+    <li><a href="#s7">Pipeline：制造-审查双角色</a></li>
+    <li><a href="#s8">Verifier：独立判定器</a></li>
+    <li><a href="#s9">Progress Board：跨 Run 看板</a></li>
+    <li><a href="#s10">CLI 集成：loop 子命令</a></li>
+    <li><a href="#s11">安全护栏与不变量</a></li>
+    <li><a href="#s12">可观测性集成</a></li>
+    <li><a href="#s13">Dogfood 实验：自循环报告</a></li>
+    <li><a href="#s14">文件清单与代码地图</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════ §1 全景概览 ═══════════════════ -->
+<section id="s1">
+  <h2><span class="num">§1</span> 全景概览：什么是 Loop Engineering</h2>
+
+  <p>
+    <strong>Loop Engineering（循环工程）</strong>是 2026 年 6 月兴起的 AI Agent 工程范式。
+    其核心思想是：<em>你不再亲自提示 Agent，而是设计一个能自动提示 Agent 的系统</em>——
+    把「发现任务 → 启动 Agent → 验证结果 → 记录状态 → 进入下一轮」设计成持续运行的工程循环。
+  </p>
+
+  <div class="callout">
+    <strong>cogent 对 Loop Engineering 的实现</strong>：在 <code>internal/loop/</code> 包中，
+    cogent 把自身的单次 ReAct 执行引擎（<code>engine.Engine</code>）包装进一个
+    <strong>目标驱动的外层自治循环</strong>——定义目标与验收条件后，系统自动完成
+    「执行 → 判定 → 未达标带反馈续跑 → 再判定」直到目标达成或撞预算。
+  </div>
+
+  <h3>AI 工程范式演进在 cogent 中的映射</h3>
+  <table>
+    <tr>
+      <th>范式</th><th>关注点</th><th>cogent 中的体现</th>
+    </tr>
+    <tr>
+      <td><strong>Prompt Engineering</strong></td>
+      <td>怎么问 AI</td>
+      <td><code>engine/prompt.go</code> — 系统提示词设计</td>
+    </tr>
+    <tr>
+      <td><strong>Context Engineering</strong></td>
+      <td>给 AI 什么信息</td>
+      <td><code>contextmgr/</code> — 上下文压缩与管理；<code>memory/</code> — 分层记忆</td>
+    </tr>
+    <tr>
+      <td><strong>Harness Engineering</strong></td>
+      <td>如何组织 AI 能力</td>
+      <td><code>engine/</code> — ReAct 内核；<code>tool/</code> — 工具池；<code>sandbox/</code> — 沙箱；<code>permission/</code> — 权限</td>
+    </tr>
+    <tr>
+      <td><strong>Loop Engineering</strong></td>
+      <td>如何让 AI 持续创造结果</td>
+      <td><code>loop/</code> — 外层循环编排；<code>verify/</code> — 独立判定；<code>agent/</code> — 双角色分离；<code>progress/</code> — 跨 run 看板</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §2 架构层次 ═══════════════════ -->
+<section id="s2">
+  <h2><span class="num">§2</span> 架构层次与依赖关系</h2>
+
+  <p>cogent 的 Loop 实现严格遵循<strong>单向依赖原则</strong>（<code>DEV_SPEC §4.4</code>）：
+  <code>loop → engine</code> 单向，<code>engine</code> 对 <code>loop</code> 零反向依赖。</p>
+
+  <div class="layer-stack">
+    <div class="layer-box l-daemon">Daemon（守护进程） <span class="file-ref">loop/daemon.go</span></div>
+    <div class="layer-arrow">▼</div>
+    <div class="layer-box l-orch">Orchestrator（外层循环编排器） <span class="file-ref">loop/orchestrator.go</span></div>
+    <div class="layer-arrow">▼</div>
+    <div class="layer-box l-pipeline">Pipeline（制造-审查双角色） <span class="file-ref">agent/maker_reviewer.go</span></div>
+    <div class="layer-arrow">▼</div>
+    <div class="layer-box l-engine">Engine（ReAct 内核） <span class="file-ref">engine/engine.go</span></div>
+    <div class="layer-arrow">▼</div>
+    <div class="layer-box l-tools">LLM + Tools + Sandbox + Permission <span class="file-ref">llm/ tool/ sandbox/ permission/</span></div>
+  </div>
+
+  <h3>完整依赖图</h3>
+  <div class="mermaid">
+flowchart TD
+    CLI["cmd/cogent/loop.go"]:::cli --> Daemon["loop.Daemon"]:::daemon
+    Daemon --> Trigger["loop.Trigger<br/>CronTrigger / FSWatchTrigger"]:::orch
+    Daemon --> Orch["loop.Orchestrator"]:::orch
+    Daemon --> Board["progress.Board<br/>跨 run 看板"]:::leaf
+    Orch --> Pipeline["loop.Pipeline<br/>可选 · 双角色"]:::pipe
+    Orch --> Engine["engine.Engine<br/>单角色回退"]:::engine
+    Orch --> Verifier["verify.Verifier<br/>独立判定"]:::leaf
+    Orch --> Observe["observe.Tracer / Meter<br/>可观测"]:::leaf
+    Pipeline --> MR["agent.MakerReviewer"]:::pipe
+    MR --> E2["engine.Engine × 2<br/>maker + reviewer"]:::engine
+    Verifier --> Sandbox["sandbox.Sandbox<br/>执行验收脚本"]:::leaf
+
+    classDef cli fill:#1a2744,stroke:#58a6ff,color:#e6edf3;
+    classDef daemon fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef orch fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef pipe fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef engine fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef leaf fill:#1c2128,stroke:#8b949e,color:#8b949e;
+  </div>
+  <p class="diagram-caption">图 1 · Loop 实现的完整组件依赖图（单向依赖：loop → engine）</p>
+</section>
+
+<!-- ═══════════════════ §3 核心数据结构 ═══════════════════ -->
+<section id="s3">
+  <h2><span class="num">§3</span> 核心数据结构</h2>
+  <p class="file-ref">📄 internal/loop/loop.go</p>
+
+  <h3>Goal — 目标定义</h3>
+  <p>一次目标驱动循环的输入：自然语言意图 + 可验证的终止条件 + 预算护栏。</p>
+  <pre><code><span class="keyword">type</span> <span class="type">Goal</span> <span class="keyword">struct</span> {
+    Intent   <span class="type">string</span>          <span class="comment">// 自然语言目标，如「修复 X 并保证全部测试通过」</span>
+    WorkRoot <span class="type">string</span>          <span class="comment">// 工作根目录，传给 Verifier</span>
+    Verifier verify.<span class="type">Verifier</span> <span class="comment">// 独立终止条件判定器；nil 时 fail-closed</span>
+    Budget   <span class="type">Budget</span>          <span class="comment">// 预算护栏；零值时用保守默认</span>
+}</code></pre>
+
+  <h3>Budget — 三重失控护栏</h3>
+  <p>任一触顶即终止循环，防止无限烧钱。</p>
+  <pre><code><span class="keyword">type</span> <span class="type">Budget</span> <span class="keyword">struct</span> {
+    MaxIterations <span class="type">int</span>           <span class="comment">// 外层循环最大轮数（默认 8）</span>
+    MaxCostUSD    <span class="type">float64</span>       <span class="comment">// 累计 LLM 成本上限（默认 $5）</span>
+    MaxWallClock  <span class="type">time.Duration</span> <span class="comment">// 端到端墙钟上限（默认 15m）</span>
+}</code></pre>
+
+  <h3>Outcome — 结局枚举</h3>
+  <table>
+    <tr><th>结局</th><th>值</th><th>含义</th></tr>
+    <tr><td><code>OutcomeAchieved</code></td><td>0</td><td>✅ 判定器确认目标达成（唯一成功结局）</td></tr>
+    <tr><td><code>OutcomeBudgetSpent</code></td><td>1</td><td>⏱️ 撞预算护栏（轮数 / 成本 / 墙钟）</td></tr>
+    <tr><td><code>OutcomeCanceled</code></td><td>2</td><td>🚫 ctx 被上游取消（如 Ctrl-C）</td></tr>
+    <tr><td><code>OutcomeFatal</code></td><td>3</td><td>💀 内层不可恢复错误</td></tr>
+  </table>
+
+  <h3>LoopEvent — 事件流</h3>
+  <p>外层循环向 UI 单向上抛的统一事件（事件单向上抛不变量）。</p>
+  <table>
+    <tr><th>事件类型</th><th>含义</th><th>携带数据</th></tr>
+    <tr><td><code>LoopIterationStart</code></td><td>新一轮开始</td><td>轮序号</td></tr>
+    <tr><td><code>LoopInner</code></td><td>透传内层 engine 事件</td><td><code>*types.StreamEvent</code></td></tr>
+    <tr><td><code>LoopVerify</code></td><td>一次判定完成</td><td><code>*verify.Report</code></td></tr>
+    <tr><td><code>LoopFinished</code></td><td>循环结束</td><td><code>*LoopResult</code></td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §4 Orchestrator ═══════════════════ -->
+<section id="s4">
+  <h2><span class="num">§4</span> Orchestrator：外层循环编排器</h2>
+  <span class="tag tag-core">核心组件</span>
+  <p class="file-ref">📄 internal/loop/orchestrator.go</p>
+
+  <p>
+    <code>Orchestrator</code> 是 Loop 的心脏——它接收一个 <code>Goal</code>，
+    启动后台目标循环，返回只读的 <code>&lt;-chan LoopEvent</code> 事件流。
+  </p>
+
+  <h3>核心循环流程</h3>
+  <div class="mermaid">
+flowchart TD
+    Start(["RunGoal()"]):::start --> Check{"Intent 非空?"}
+    Check -->|否| Err["返回 errEmptyIntent"]:::err
+    Check -->|是| Loop["loop 主循环"]:::orch
+    Loop --> Budget{"墙钟 / 取消<br/>超时?"}
+    Budget -->|是| BS(["BudgetSpent / Canceled"]):::stop
+    Budget -->|否| IterStart["发射 LoopIterationStart 事件"]:::orch
+    IterStart --> Iter["iterate · 单轮执行体"]:::orch
+    Iter --> Mode{"Pipeline != nil?"}
+    Mode -->|是| RP["runPipeline<br/>制造-审查双角色"]:::pipe
+    Mode -->|否| RI["runInner<br/>单 Engine 执行"]:::engine
+    RP --> V{"verify<br/>report.Passed?"}
+    RI --> V
+    V -->|是| Ach(["Achieved ✓"]):::ok
+    V -->|否| Cost{"overCost?"}
+    Cost -->|是| BS
+    Cost -->|否| FB["feedbackPrompt<br/>拼反馈 → 续跑"]:::feedback
+    FB -.下一轮.-> Loop
+
+    classDef start fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef orch fill:#0d2438,stroke:#58a6ff,color:#e6edf3;
+    classDef pipe fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef engine fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef ok fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef stop fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef err fill:#2a1215,stroke:#f85149,color:#f85149;
+    classDef feedback fill:#2a1d11,stroke:#f0883e,color:#e6edf3;
+  </div>
+  <p class="diagram-caption">图 2 · Orchestrator 外层循环：执行 → 判定 → 达标即停 / 未达标带反馈续跑</p>
+
+  <h3>关键方法解析</h3>
+
+  <h4>loop() — 外层循环主体</h4>
+  <pre><code><span class="keyword">func</span> (o *<span class="type">orchestrator</span>) <span class="func">loop</span>(ctx context.Context, goal Goal, budget Budget, ...) LoopResult {
+    deadline, cancel := <span class="func">budgetContext</span>(ctx, budget) <span class="comment">// 墙钟→派生ctx超时</span>
+    <span class="keyword">defer</span> cancel()
+
+    task := goal.Intent
+    <span class="keyword">for</span> iter := <span class="number">0</span>; iter < budget.MaxIterations; iter++ {
+        <span class="keyword">if</span> deadline.Err() != <span class="keyword">nil</span> { <span class="keyword">return</span> ... }   <span class="comment">// 墙钟检查</span>
+        report, stopped := o.<span class="func">iterate</span>(deadline, ...)  <span class="comment">// 执行+判定</span>
+        <span class="keyword">if</span> report.Passed { <span class="keyword">return</span> OutcomeAchieved }   <span class="comment">// 达标即停</span>
+        <span class="keyword">if</span> o.<span class="func">overCost</span>(budget) { <span class="keyword">return</span> BudgetSpent }  <span class="comment">// 成本护栏</span>
+        task = <span class="func">feedbackPrompt</span>(goal.Intent, report)    <span class="comment">// 带反馈续跑</span>
+    }
+    <span class="keyword">return</span> BudgetSpent <span class="comment">// 撞轮数上限</span>
+}</code></pre>
+
+  <h4>feedbackPrompt() — 反馈续跑</h4>
+  <p>把未达标的判定报告拼为下一轮 user task，注入原始目标 + 未通过的原因 + 修复建议，
+  让 Agent 在下一轮带着反馈继续迭代。</p>
+  <pre><code><span class="comment">// 输出示例：</span>
+<span class="string">"The goal is not yet achieved. Keep working until verification passes.
+
+Original goal: 修复所有测试用例
+Verification feedback (not passed):
+test TestFoo: expected 42, got 0
+
+Details:
+--- FAIL: TestFoo (0.00s)
+
+Please fix the remaining issues and try again."</span></code></pre>
+
+  <h4>iterate() — 两种执行路径</h4>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">路径 A：Pipeline（双角色）</div>
+      <p>当 <code>Pipeline != nil</code> 时走「制造-审查」双角色执行体。
+      Maker 改代码 → Reviewer 独立审查 → 客观 Verify 为最终硬闸门。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">路径 B：Engine（单引擎）</div>
+      <p>当 Pipeline 为 nil 时回退到单 Engine 执行 → 外层独立调用 Verifier 判定。
+      这是最简模式，适合不需要双角色审查的场景。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ §5 Trigger ═══════════════════ -->
+<section id="s5">
+  <h2><span class="num">§5</span> Trigger：触发源机制</h2>
+  <span class="tag tag-core">核心组件</span>
+  <p class="file-ref">📄 internal/loop/trigger.go</p>
+
+  <p><code>Trigger</code> 把「何时该干活」与「干什么」（Goal）解耦。
+  它返回一个事件 channel，每次有元素到达即表示应触发一次目标循环。</p>
+
+  <pre><code><span class="keyword">type</span> <span class="type">Trigger</span> <span class="keyword">interface</span> {
+    <span class="func">Fire</span>(ctx context.Context) (<-<span class="keyword">chan</span> <span class="type">TriggerSignal</span>, <span class="type">error</span>)
+}
+
+<span class="keyword">type</span> <span class="type">TriggerSignal</span> <span class="keyword">struct</span> {
+    Source  <span class="type">string</span> <span class="comment">// "cron" | "fswatch" | "manual" | ...</span>
+    Payload <span class="type">string</span> <span class="comment">// 触发上下文（如变更文件路径）</span>
+}</code></pre>
+
+  <h3>内置触发器</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🕐 CronTrigger — 定时触发</div>
+      <p>按固定间隔触发（基于 <code>time.Ticker</code>，零第三方依赖）。</p>
+      <pre><code><span class="type">CronTrigger</span>{Interval: <span class="number">10</span> * time.Minute}</code></pre>
+      <p>默认心跳间隔 10 分钟，可通过 <code>--interval</code> CLI 参数配置。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📁 FSWatchTrigger — 文件变更触发</div>
+      <p>监听 workRoot 下的文件变更（零依赖：周期轮询 <code>fs.WalkDir</code> 取最近修改时间 + 抖动合并）。</p>
+      <pre><code><span class="type">FSWatchTrigger</span>{WorkRoot: <span class="string">"./src"</span>, Debounce: <span class="number">2</span>*time.Second}</code></pre>
+      <p>自动跳过 <code>.git</code>、<code>.cogent</code>、<code>data</code> 等目录，避免自身写入触发死循环。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ §6 Daemon ═══════════════════ -->
+<section id="s6">
+  <h2><span class="num">§6</span> Daemon：守护进程</h2>
+  <span class="tag tag-core">核心组件</span>
+  <p class="file-ref">📄 internal/loop/daemon.go</p>
+
+  <p>
+    <code>Daemon</code> 是 Loop 的最外层——它把 <code>Trigger</code> 与 <code>Orchestrator</code> 接起来：
+    每次触发跑一次 <code>RunGoal</code>，把结局写入 <code>progress.md</code> 看板，并尊重全局预算与 ctx 取消。
+  </p>
+
+  <pre><code><span class="keyword">type</span> <span class="type">Daemon</span> <span class="keyword">struct</span> {
+    Trigger <span class="type">Trigger</span>        <span class="comment">// 触发源</span>
+    Orch    <span class="type">Orchestrator</span>   <span class="comment">// 目标循环编排器</span>
+    Board   progress.<span class="type">Board</span> <span class="comment">// 跨 run 待办看板</span>
+    Tracer  observe.<span class="type">Tracer</span> <span class="comment">// loop.daemon span</span>
+}</code></pre>
+
+  <h3>核心运行逻辑</h3>
+  <pre><code><span class="keyword">func</span> (d *<span class="type">Daemon</span>) <span class="func">Run</span>(ctx context.Context, goalOf <span class="keyword">func</span>(TriggerSignal) Goal) <span class="type">error</span> {
+    signals, err := d.Trigger.<span class="func">Fire</span>(ctx)   <span class="comment">// 启动触发源</span>
+    <span class="keyword">for</span> {
+        <span class="keyword">select</span> {
+        <span class="keyword">case</span> <-ctx.<span class="func">Done</span>():                    <span class="comment">// Ctrl-C 优雅停</span>
+            <span class="keyword">return</span> ctx.<span class="func">Err</span>()
+        <span class="keyword">case</span> sig, ok := <-signals:             <span class="comment">// 收到触发信号</span>
+            d.<span class="func">runOnce</span>(ctx, goalOf(sig))        <span class="comment">// 跑一轮目标循环</span>
+        }
+    }
+}</code></pre>
+
+  <h3>进度记录</h3>
+  <p>每轮结局自动 Upsert 进 <code>.cogent/progress.md</code> 看板：</p>
+  <table>
+    <tr><th>Loop Outcome</th><th>看板状态</th><th>含义</th></tr>
+    <tr><td>Achieved</td><td><code>done</code></td><td>✅ 目标达成</td></tr>
+    <tr><td>Canceled</td><td><code>doing</code></td><td>🔄 进行中（被中断）</td></tr>
+    <tr><td>BudgetSpent / Fatal</td><td><code>blocked</code></td><td>🚧 需人介入</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §7 Pipeline ═══════════════════ -->
+<section id="s7">
+  <h2><span class="num">§7</span> Pipeline：制造-审查双角色分离</h2>
+  <span class="tag tag-core">核心组件</span>
+  <span class="tag tag-safety">安全设计</span>
+  <p class="file-ref">📄 internal/agent/maker_reviewer.go</p>
+
+  <p>
+    Loop 的「制造-审查分离」是 Loop Engineering 六大构成要素中<strong>子 Agent（Sub-Agents）</strong>的具体实现：
+    <em>写代码和检查代码用不同 Agent</em>，实现「不批改自己的作业」。
+  </p>
+
+  <div class="mermaid">
+flowchart LR
+    M["<b>Maker</b><br/>可写工具池 · ModeAuto<br/>独立 Engine / 独立上下文<br/>改代码"]:::maker
+    R["<b>Reviewer</b><br/>只读工具池 · ModeAsk<br/>独立 Engine / 独立上下文<br/>审代码"]:::reviewer
+    V["<b>Verifier</b><br/>ScriptVerifier<br/>沙箱执行 · 退出码 0=通过<br/>客观硬闸门"]:::verifier
+    M -->|改动摘要| R
+    R -->|VERDICT| V
+    V ==>|通过才 Merge| Merge(["落盘 / Merge"]):::ok
+    R -.审查拒绝.-> Discard(["回滚 Discard"]):::stop
+
+    classDef maker fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef reviewer fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef verifier fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef ok fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef stop fill:#2a1215,stroke:#f85149,color:#f85149;
+  </div>
+  <p class="diagram-caption">图 3 · 制造-审查分离：写代码与审代码用不同 Agent，客观 verify 为最终硬闸门</p>
+
+  <h3>双角色特性对比</h3>
+  <table>
+    <tr><th>维度</th><th>Maker</th><th>Reviewer</th></tr>
+    <tr><td>运行模式</td><td><code>ModeAuto</code>（可写）</td><td><code>ModeAsk</code>（只读）</td></tr>
+    <tr><td>工具池</td><td>完整（读+写+执行）</td><td>只读（read_file/list_dir/grep）</td></tr>
+    <tr><td>Engine 实例</td><td>独立新建</td><td>独立新建</td></tr>
+    <tr><td>上下文</td><td>隔离（Session=nil）</td><td>隔离（Session=nil）</td></tr>
+    <tr><td>可选模型</td><td>fast 模型</td><td>strong 模型（成本花在刀刃上）</td></tr>
+  </table>
+
+  <h3>裁决解析 — fail-closed</h3>
+  <p>
+    Reviewer 被要求在最后一行输出 <code>VERDICT: APPROVED</code> 或 <code>VERDICT: REJECTED</code>。
+    解析逻辑全文扫描结构化裁决标记，取最后一个为准（兼容思维链型模型先推理后结论的输出模式）。
+    <strong>fail-closed</strong>：无明确 APPROVED 标记即判拒，防止自评虚高。
+  </p>
+
+  <h3>改动丢弃</h3>
+  <p>审查未通过时，<code>Discarder</code> 接口负责回滚 maker 的改动（典型实现经沙箱跑 git 命令回滚工作区）。
+  配合 <code>--worktree</code> 选项，每轮在独立 git worktree 中操作，<strong>通过才 Merge 回基线</strong>，物理隔离主工作区。</p>
+</section>
+
+<!-- ═══════════════════ §8 Verifier ═══════════════════ -->
+<section id="s8">
+  <h2><span class="num">§8</span> Verifier：独立判定器</h2>
+  <span class="tag tag-safety">安全设计</span>
+  <span class="tag tag-spec">LOOP_SPEC §4.1</span>
+  <p class="file-ref">📄 internal/verify/verify.go</p>
+
+  <p>
+    判定器与执行体（写代码的 Agent）<strong>完全解耦</strong>：执行体无法篡改判定结果
+    （<strong>独立判定不变量</strong>）。本包是依赖图的叶子，仅依赖 sandbox / 标准库。
+  </p>
+
+  <pre><code><span class="keyword">type</span> <span class="type">Verifier</span> <span class="keyword">interface</span> {
+    <span class="func">Verify</span>(ctx context.Context, workRoot, goalIntent <span class="type">string</span>) (<span class="type">Report</span>, <span class="type">error</span>)
+}
+
+<span class="keyword">type</span> <span class="type">Report</span> <span class="keyword">struct</span> {
+    Passed  <span class="type">bool</span>   <span class="comment">// fail-closed：判定异常一律视为 false</span>
+    Summary <span class="type">string</span> <span class="comment">// 人类可读结论；未通过时注入下一轮反馈</span>
+    Detail  <span class="type">string</span> <span class="comment">// 原始证据（脚本 stdout/stderr）</span>
+}</code></pre>
+
+  <h3>ScriptVerifier — 脚本判定器</h3>
+  <p>经沙箱执行开发者提供的验收脚本：</p>
+  <ul>
+    <li>退出码 <code>0</code> = 通过</li>
+    <li>stdout/stderr 收敛进 <code>Report.Detail</code></li>
+    <li>脚本是开发者提供的<strong>可信控制面</strong>，与不可信的模型输出隔离</li>
+    <li>支持 <code>NewSandbox</code> 按 workRoot 构造受限沙箱（让验收脚本跑在 worktree 改动目录）</li>
+  </ul>
+
+  <div class="callout callout-warn">
+    <strong>⚠️ 客观判据必须能被触达</strong>：自循环实验（§13）最大教训是 verify.sh 设计得再严谨，
+    只要它在 reviewer 闸门之后，就可能永远跑不到。cogent 已修复此问题：
+    <strong>客观 verify 成为不可被主观闸门短路的最终硬闸门</strong>——
+    即使 reviewer 拒绝，只要 verify 通过就视为达标。
+  </div>
+</section>
+
+<!-- ═══════════════════ §9 Progress Board ═══════════════════ -->
+<section id="s9">
+  <h2><span class="num">§9</span> Progress Board：跨 Run 待办看板</h2>
+  <p class="file-ref">📄 internal/progress/progress.go</p>
+
+  <p>
+    <code>progress.Board</code> 维护跨 run 的自治循环待办进度，落盘为人类可读的 Markdown 表格。
+    它与 session（单任务恢复）、memory（长期约定）职责正交：progress 追踪的是
+    「跨多个目标循环 run 的待办进度」，是 Loop 的「仓库记忆」。
+  </p>
+
+  <h3>落盘格式</h3>
+  <pre><code><span class="comment"># cogent progress</span>
+
+| ID | Status | Title | Note | Updated |
+| --- | --- | --- | --- | --- |
+| fix-the-parser-bug | done | Fix the parser bug! | achieved after 2 iter(s) | 1719129600 |
+| auto-fix-failing-tests | blocked | auto fix failing tests | budget_spent after 8 iter(s) | 1719129700 |</code></pre>
+
+  <h3>安全约束</h3>
+  <ul>
+    <li>落盘路径限定在控制面 <code>.cogent/</code> 之内</li>
+    <li>路径防穿越：boardPath 做前缀校验，防止 <code>..</code> 逃出工作根</li>
+    <li>文件权限 <code>0o600</code>、目录权限 <code>0o700</code></li>
+  </ul>
+</section>
+
+<!-- ═══════════════════ §10 CLI 集成 ═══════════════════ -->
+<section id="s10">
+  <h2><span class="num">§10</span> CLI 集成：loop 子命令</h2>
+  <p class="file-ref">📄 cmd/cogent/loop.go</p>
+
+  <p><code>cogent loop</code> 是 Loop Engineering 的 CLI 入口。</p>
+
+  <h3>使用示例</h3>
+  <pre><code><span class="comment"># 基本用法：定时触发目标循环</span>
+cogent loop <span class="string">"修复所有测试用例并保持覆盖率 &gt; 80%"</span>
+
+<span class="comment"># 指定验收脚本 + 双角色审查 + worktree 隔离</span>
+cogent loop --verify ./verify.sh --review --worktree \
+  --max-iterations <span class="number">8</span> --max-cost <span class="number">5</span> --max-wallclock 15m \
+  <span class="string">"迁移旧 SDK 调用到新 SDK"</span>
+
+<span class="comment"># 文件变更触发</span>
+cogent loop --watch ./src <span class="string">"自动修复 lint 错误"</span>
+
+<span class="comment"># 从 goal 文件读取目标意图</span>
+cogent loop --goal-file task.txt --verify verify.sh</code></pre>
+
+  <h3>完整参数表</h3>
+  <table>
+    <tr><th>参数</th><th>类型</th><th>默认</th><th>说明</th></tr>
+    <tr><td><code>--mode</code></td><td>string</td><td>auto</td><td>运行档位：auto / plan / ask</td></tr>
+    <tr><td><code>--goal-file</code></td><td>string</td><td>-</td><td>目标文件路径（覆盖位置参数）</td></tr>
+    <tr><td><code>--verify</code></td><td>string</td><td>-</td><td>验收脚本路径（退出码 0 = 达成）</td></tr>
+    <tr><td><code>--review</code></td><td>bool</td><td>false</td><td>启用 maker/reviewer 双角色</td></tr>
+    <tr><td><code>--worktree</code></td><td>bool</td><td>false</td><td>git worktree 物理隔离（隐含 --review）</td></tr>
+    <tr><td><code>--watch</code></td><td>string</td><td>-</td><td>文件变更触发（监听目录）</td></tr>
+    <tr><td><code>--interval</code></td><td>duration</td><td>10m</td><td>定时触发间隔</td></tr>
+    <tr><td><code>--max-iterations</code></td><td>int</td><td>8</td><td>外层循环最大轮数</td></tr>
+    <tr><td><code>--max-cost</code></td><td>float</td><td>0</td><td>累计 LLM 成本上限（美元）</td></tr>
+    <tr><td><code>--max-wallclock</code></td><td>duration</td><td>0</td><td>单次目标循环墙钟上限</td></tr>
+    <tr><td><code>--max-steps</code></td><td>int</td><td>0</td><td>单轮 ReAct 最大轮数</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §11 安全护栏 ═══════════════════ -->
+<section id="s11">
+  <h2><span class="num">§11</span> 安全护栏与不变量</h2>
+  <span class="tag tag-safety">安全设计</span>
+
+  <p>cogent 的 Loop 实现围绕以下<strong>系统不变量</strong>设计，确保自治循环安全可控：</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🔒 独立判定不变量</div>
+      <p>执行体（写代码的 Agent）<strong>无法篡改</strong>判定结果。Verifier 与 Engine 在依赖图中完全解耦，
+      判定器是开发者提供的可信控制面。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">💰 预算先行不变量</div>
+      <p>无 Budget 即用保守默认（8轮/$5/15分钟），<strong>绝不无限循环</strong>。
+      三重护栏（轮数 / 成本 / 墙钟）任一触顶即终止。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">📤 事件单向上抛不变量</div>
+      <p>外层事件通过 <code>chan LoopEvent</code> 单向推送到 UI 层，
+      UI 无法反向干预循环决策，保持执行的确定性。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🧪 客观判据为硬闸门</div>
+      <p>客观 verify（脚本退出码）为最终不可被短路的硬闸门。
+      即使 reviewer 主观拒绝，verify 通过仍视为达标——防止主观闸门屏蔽客观判据。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🔀 单向依赖</div>
+      <p><code>loop → engine</code> 单向，<code>engine</code> 对 <code>loop</code> 零反向依赖。
+      Pipeline 接口在消费侧（loop）定义，agent 包经 cmd 层薄适配满足之。</p>
+    </div>
+    <div class="card">
+      <div class="card-title">🌿 Worktree 物理隔离</div>
+      <p><code>--worktree</code> 模式下每轮在独立 git worktree 内操作，
+      通过才 Merge 回基线，物理隔离主工作区，防止未审查的改动污染代码。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ §12 可观测性 ═══════════════════ -->
+<section id="s12">
+  <h2><span class="num">§12</span> 可观测性集成</h2>
+  <span class="tag tag-observe">OpenTelemetry</span>
+
+  <p>Loop 的每个关键节点都通过 OpenTelemetry Span 埋点，构成完整的可观测 trace 树：</p>
+
+  <div class="mermaid">
+flowchart TD
+    D["loop.daemon<br/><i>守护进程级</i>"]:::daemon --> Run["loop.run<br/><i>单次目标循环</i>"]:::orch
+    Run --> I0["loop.iteration · iter=0"]:::orch
+    Run --> I1["loop.iteration · iter=1<br/><i>带反馈续跑</i>"]:::orch
+    Run --> Fin(["LoopFinished<br/>终局事件"]):::ok
+    I0 --> Mk["agent.maker"]:::pipe
+    I0 --> Rv["agent.reviewer"]:::pipe
+    I0 --> Gv["goal.verify"]:::leaf
+    Mk --> Ls1["llm.stream / tool.*"]:::engine
+    Rv --> Ls2["llm.stream / tool.*"]:::engine
+    Gv --> Se["sandbox.exec<br/>验收脚本执行"]:::leaf
+
+    classDef daemon fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef orch fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef pipe fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef engine fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef leaf fill:#1c2128,stroke:#8b949e,color:#8b949e;
+    classDef ok fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+  </div>
+  <p class="diagram-caption">图 4 · 一次目标循环的 OpenTelemetry Span 树</p>
+
+  <h3>关键指标</h3>
+  <table>
+    <tr><th>指标名</th><th>类型</th><th>含义</th></tr>
+    <tr><td><code>cogent.loop.iterations</code></td><td>Histogram</td><td>轮数分布</td></tr>
+    <tr><td><code>cogent.loop.outcome</code></td><td>Counter</td><td>结局计数（按 outcome 分组）</td></tr>
+    <tr><td><code>cogent.loop.cost_usd</code></td><td>Histogram</td><td>累计成本分布</td></tr>
+    <tr><td><code>cogent.verify.passed</code></td><td>Counter</td><td>判定通过/未通过计数</td></tr>
+    <tr><td><code>cogent.review.verdict</code></td><td>Counter</td><td>审查通过/拒绝计数</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §13 Dogfood 实验 ═══════════════════ -->
+<section id="s13">
+  <h2><span class="num">§13</span> Dogfood 实验：自循环报告</h2>
+  <span class="tag tag-spec">实战验证</span>
+  <p class="file-ref">📄 docs/selfloop-report.md</p>
+
+  <p>
+    cogent 用自身的 Loop 循环来优化自己的真实代码（dogfood），
+    是 Loop Engineering「吃自己的狗粮」的最佳验证。以下是关键实验结论：
+  </p>
+
+  <div class="card">
+    <div class="card-title">📋 实验配置</div>
+    <p><strong>模型</strong>: deepseek-reasoner ｜<strong>隔离</strong>: <code>--worktree</code>
+    ｜<strong>预算</strong>: 8轮 / $5 / 15分钟</p>
+    <p><strong>目标</strong>: 补全 <code>llm.finish_reason</code> 端到端透出</p>
+  </div>
+
+  <h3>六大关键发现</h3>
+
+  <div class="callout callout-warn">
+    <strong>发现②（已修复）</strong>：reviewer 双闸门在 verify 之前拦截，客观判据从未运行。
+    worktree 流水线的「maker改→reviewer审→通过才Merge→再跑verify.sh」双闸门中，
+    reviewer 3/3 拒绝 → verify.sh <strong>一次都没执行</strong>。
+    <br><br>
+    <strong>修复</strong>：客观 verify 升级为最终硬闸门（<code>VerifyAtFunc</code>），
+    执行体在落盘决策前必须先跑 verify，verify 通过即视为达标，reviewer 裁决降级为建议性反馈。
+  </div>
+
+  <table>
+    <tr><th>#</th><th>发现</th><th>状态</th><th>改进措施</th></tr>
+    <tr>
+      <td>①</td>
+      <td>无人值守 loop 缺自动批准开关</td>
+      <td>✅ 已修复</td>
+      <td>新增 <code>COGENT_YES=1</code> 环境变量门控的 yesPrompter</td>
+    </tr>
+    <tr>
+      <td>②</td>
+      <td>主观闸门短路客观判据</td>
+      <td>✅ 已修复</td>
+      <td>客观 verify 升级为不可短路的硬闸门（<code>VerifyAtFunc</code>）</td>
+    </tr>
+    <tr>
+      <td>③</td>
+      <td>deepseek-reasoner 裁决格式不合规</td>
+      <td>✅ 已修复</td>
+      <td>parseVerdict 升级为全文扫描 + 结构化裁决标记提取</td>
+    </tr>
+    <tr>
+      <td>④</td>
+      <td>reasoner 的 cwd 幻觉与高延迟</td>
+      <td>📝 记录</td>
+      <td>建议 maker 用 deepseek-chat、reviewer 用 strong 模型</td>
+    </tr>
+    <tr>
+      <td>⑤</td>
+      <td>$5 成本护栏未真正生效</td>
+      <td>📝 待做</td>
+      <td>需接入基于 token 指标 + 模型单价的 CostMeter</td>
+    </tr>
+    <tr>
+      <td>⑥</td>
+      <td>墙钟取消有滞后</td>
+      <td>📝 记录</td>
+      <td>属可接受范围（受 120s LLM 超时上界约束）</td>
+    </tr>
+  </table>
+
+  <div class="callout callout-success">
+    <strong>核心结论</strong>：循环机制（worktree 隔离 / maker-reviewer / 预算护栏 / 反馈续跑 / 全链路 trace）
+    端到端跑通且可观测。暴露的真实问题（主观闸门短路客观判据、reviewer 模型选型、成本护栏未闭环）
+    比一次侥幸成功<strong>更有价值</strong>。
+  </div>
+</section>
+
+<!-- ═══════════════════ §14 文件清单 ═══════════════════ -->
+<section id="s14">
+  <h2><span class="num">§14</span> 文件清单与代码地图</h2>
+
+  <h3>Loop 核心包</h3>
+  <table>
+    <tr><th>文件</th><th>行数</th><th>职责</th></tr>
+    <tr><td><code>internal/loop/loop.go</code></td><td>~165</td><td>数据结构定义：Goal、Budget、Outcome、LoopEvent、接口 Orchestrator/Pipeline/CostMeter</td></tr>
+    <tr><td><code>internal/loop/orchestrator.go</code></td><td>~310</td><td>外层循环主体实现：iterate、verify、feedbackPrompt、预算检查、事件发射</td></tr>
+    <tr><td><code>internal/loop/daemon.go</code></td><td>~155</td><td>守护进程：Trigger→Orchestrator 串联、progress 看板记录、优雅停机</td></tr>
+    <tr><td><code>internal/loop/trigger.go</code></td><td>~128</td><td>触发源：CronTrigger（定时）、FSWatchTrigger（文件变更）</td></tr>
+    <tr><td><code>internal/loop/loop_test.go</code></td><td>~486</td><td>编排器单测：首轮达标、多轮反馈、预算耗尽、成本护栏、nil 判定器、取消、Pipeline 路径</td></tr>
+    <tr><td><code>internal/loop/daemon_test.go</code></td><td>~188</td><td>守护进程单测：触发次数、进度记录、优雅停、参数校验、CronTrigger</td></tr>
+  </table>
+
+  <h3>支撑包</h3>
+  <table>
+    <tr><th>文件</th><th>职责</th></tr>
+    <tr><td><code>internal/verify/verify.go</code></td><td>独立判定器接口 + ScriptVerifier 脚本判定实现</td></tr>
+    <tr><td><code>internal/agent/maker_reviewer.go</code></td><td>制造-审查双角色流水线（MakerReviewer）</td></tr>
+    <tr><td><code>internal/progress/progress.go</code></td><td>跨 run 待办看板（Markdown 表格持久化）</td></tr>
+    <tr><td><code>internal/engine/engine.go</code></td><td>ReAct 执行内核（Loop 的内层执行体）</td></tr>
+    <tr><td><code>internal/memory/memory.go</code></td><td>分层记忆（Loop 的持久知识层）</td></tr>
+    <tr><td><code>internal/observe/</code></td><td>OpenTelemetry Tracer/Meter（Loop 的可观测层）</td></tr>
+  </table>
+
+  <h3>CLI 入口</h3>
+  <table>
+    <tr><th>文件</th><th>职责</th></tr>
+    <tr><td><code>cmd/cogent/loop.go</code></td><td>loop 子命令：参数解析、编排器装配、守护进程启动</td></tr>
+    <tr><td><code>cmd/cogent/goal.go</code></td><td>goal 子命令（单次目标循环，loop 的简化版）</td></tr>
+    <tr><td><code>cmd/cogent/prompter.go</code></td><td>交互提示器 + yesPrompter（COGENT_YES 自动批准）</td></tr>
+  </table>
+
+  <h3>文档与实验</h3>
+  <table>
+    <tr><th>文件</th><th>说明</th></tr>
+    <tr><td><code>docs/selfloop-report.md</code></td><td>自循环 dogfood 实验报告（六大发现与修复）</td></tr>
+    <tr><td><code>docs/loop-explained.html</code></td><td>Loop 概念教程</td></tr>
+    <tr><td><code>docs/loop-phase01-tutorial.html ~ loop-phase23-tutorial.html</code></td><td>Loop 分阶段实现教程</td></tr>
+    <tr><td><code>eval/tasks/</code></td><td>评估任务（含 selfloop 的 goal + verify.sh）</td></tr>
+    <tr><td><code>scripts/run-selfloop.sh</code></td><td>自循环运行编排脚本</td></tr>
+  </table>
+</section>
+
+</div>
+
+<footer>
+  <p>cogent Loop Engineering 实现梳理 · 生成于 2026-06-23</p>
+  <p>项目地址：github.com/alaindong/cogent</p>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    theme: 'base',
+    themeVariables: {
+      background: '#161b22',
+      primaryColor: '#0d2438',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#58a6ff',
+      lineColor: '#8b949e',
+      secondaryColor: '#1c2333',
+      tertiaryColor: '#161b22',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: '14px',
+    },
+    flowchart: { curve: 'linear', padding: 16, nodeSpacing: 45, rankSpacing: 55, htmlLabels: true },
+  });
+</script>
+
+</body>
+</html>

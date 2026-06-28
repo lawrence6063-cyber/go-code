@@ -5,7 +5,7 @@ package mathx
 // 当前实现存在 off-by-one 缺陷：循环漏掉了 n 本身，需修复为闭区间求和。
 func SumTo(n int) int {
 	total := 0
-	for i := 1; i < n; i++ {
+	for i := 1; i <= n; i++ {
 		total += i
 	}
 	return total

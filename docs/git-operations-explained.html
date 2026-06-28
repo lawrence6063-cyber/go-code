@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent Git 操作全解 · Worktree / 暂存区 / Stash / Undo</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2333;
+    --border: #30363d; --text: #e6edf3; --dim: #8b949e;
+    --blue: #58a6ff; --green: #3fb950; --purple: #d2a8ff;
+    --orange: #f0883e; --red: #f85149; --yellow: #e3b341;
+    --r: 8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.7;padding:0}
+
+  .hero{background:linear-gradient(135deg,#0d1117 0%,#161b22 40%,#1a2744 100%);border-bottom:1px solid var(--border);padding:56px 40px 46px;text-align:center}
+  .hero h1{font-size:2.4em;font-weight:700;margin-bottom:10px;background:linear-gradient(90deg,var(--orange),var(--yellow));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero .sub{font-size:1.1em;color:var(--dim);max-width:680px;margin:0 auto}
+
+  .container{max-width:1060px;margin:0 auto;padding:40px 24px 80px}
+
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px 28px;margin-bottom:44px}
+  .toc h2{font-size:1.15em;margin-bottom:12px;color:var(--blue)}
+  .toc ol{padding-left:20px;columns:2;column-gap:36px}
+  .toc li{margin:5px 0}
+  .toc a{color:var(--text);text-decoration:none}
+  .toc a:hover{color:var(--blue)}
+
+  section{margin-bottom:48px}
+  h2{font-size:1.6em;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  h2 .n{color:var(--blue);margin-right:8px}
+  h3{font-size:1.15em;margin:22px 0 10px;color:var(--purple)}
+  h4{font-size:1.02em;margin:16px 0 8px;color:var(--orange)}
+  p{margin-bottom:13px}
+  a{color:var(--blue);text-decoration:none}
+
+  code{font-family:"SF Mono","Fira Code","JetBrains Mono",Consolas,monospace;font-size:.87em;background:var(--bg);border:1px solid var(--border);padding:2px 6px;border-radius:4px;color:var(--purple)}
+  pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:18px 22px;overflow-x:auto;margin:12px 0 16px;line-height:1.55}
+  pre code{background:none;border:none;padding:0;color:var(--text);font-size:.84em}
+  .kw{color:#ff7b72} .ty{color:#79c0ff} .str{color:#a5d6ff} .cm{color:#8b949e;font-style:italic} .fn{color:#d2a8ff}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:.91em}
+  th,td{border:1px solid var(--border);padding:9px 13px;text-align:left}
+  th{background:var(--surface2);color:var(--blue);font-weight:600}
+  tr:nth-child(even) td{background:rgba(22,27,34,.5)}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px 26px;margin:14px 0}
+  .card-t{font-weight:700;margin-bottom:8px;font-size:1.03em}
+  .card-t.green{color:var(--green)} .card-t.orange{color:var(--orange)} .card-t.red{color:var(--red)} .card-t.blue{color:var(--blue)} .card-t.purple{color:var(--purple)}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:768px){.grid-2,.grid-3{grid-template-columns:1fr}.toc ol{columns:1}.hero h1{font-size:1.7em}.hero{padding:36px 18px 28px}}
+
+  .mermaid{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:26px 18px;margin:20px 0;text-align:center;overflow-x:auto}
+  .mermaid svg{max-width:100%;height:auto}
+  .cap{text-align:center;color:var(--dim);font-size:.84em;margin-top:-8px;margin-bottom:20px}
+
+  .tag{display:inline-block;padding:3px 9px;font-size:.77em;border-radius:12px;font-weight:600;margin-right:5px}
+  .tag-git{background:rgba(240,136,62,.15);color:var(--orange);border:1px solid rgba(240,136,62,.3)}
+  .tag-safe{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+  .tag-file{color:var(--dim);font-size:.82em;font-style:italic}
+
+  .callout{border-left:4px solid var(--orange);background:rgba(240,136,62,.06);padding:14px 18px;border-radius:0 var(--r) var(--r) 0;margin:14px 0}
+  .callout-blue{border-left-color:var(--blue);background:rgba(88,166,255,.06)}
+  .callout-green{border-left-color:var(--green);background:rgba(63,185,80,.06)}
+
+  .zone{border:2px dashed;border-radius:var(--r);padding:18px 22px;margin:10px 0;text-align:center}
+  .zone h4{margin-top:0}
+
+  footer{text-align:center;padding:36px;color:var(--dim);font-size:.84em;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>cogent Git 操作全解</h1>
+  <p class="sub">深入解析 cogent 在 Undo、双角色审查、Worktree 隔离三大场景中执行的每一条 Git 命令，并从零讲透 Git 四大存储区域。</p>
+</div>
+
+<div class="container">
+
+<nav class="toc">
+  <h2>📑 目录</h2>
+  <ol>
+    <li><a href="#s1">Git 四大区域：先搞懂地图</a></li>
+    <li><a href="#s2">git stash 到底是什么</a></li>
+    <li><a href="#s3">git worktree 到底是什么</a></li>
+    <li><a href="#s4">场景一：Undo 撤销</a></li>
+    <li><a href="#s5">场景二：双角色审查（无 worktree）</a></li>
+    <li><a href="#s6">场景三：Worktree 物理隔离</a></li>
+    <li><a href="#s7">15 条 Git 命令完整清单</a></li>
+    <li><a href="#s8">安全设计</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════ §1 四大区域 ═══════════════════ -->
+<section id="s1">
+  <h2><span class="n">§1</span> Git 四大区域：先搞懂地图</h2>
+
+  <p>在理解 cogent 的 git 操作之前，必须先搞清楚 git 的四个存储区域。它们就像流水线上的四个工位：</p>
+
+  <div class="mermaid">
+flowchart LR
+    WD["<b>工作区</b><br/>Working Directory<br/><i>你实际编辑的文件</i>"]:::wd
+    SA["<b>暂存区</b><br/>Staging Area / Index<br/><i>下次 commit 要包含的内容</i>"]:::sa
+    LR["<b>本地仓库</b><br/>Local Repository<br/><i>已提交的历史记录</i>"]:::lr
+    ST["<b>Stash</b><br/><i>临时保险箱</i>"]:::st
+
+    WD -- "git add" --> SA
+    SA -- "git commit" --> LR
+    WD -- "git stash" --> ST
+    ST -- "git stash apply" --> WD
+    LR -- "git checkout" --> WD
+    SA -- "git reset" --> WD
+
+    classDef wd fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef sa fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef lr fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef st fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+  </div>
+  <p class="cap">图 1 · Git 四大存储区域与它们之间的命令流</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-t green">工作区（Working Directory）</div>
+      <p>就是你电脑上的文件夹——你用编辑器打开、能看到、能修改的那些文件。</p>
+      <p><b>类比</b>：你的书桌，正在写的草稿就摊在上面。</p>
+    </div>
+    <div class="card">
+      <div class="card-t orange">暂存区（Staging Area / Index）</div>
+      <p>一个「待发货清单」。<code>git add</code> 把文件放进暂存区，意思是「这些改动我确认了，准备提交」。</p>
+      <p><b>类比</b>：打包台。你把写好的草稿放到打包台上，准备寄出去。</p>
+    </div>
+    <div class="card">
+      <div class="card-t blue">本地仓库（Local Repository）</div>
+      <p><code>git commit</code> 把暂存区的内容永久记录到仓库历史中。每次 commit 是一个不可篡改的快照。</p>
+      <p><b>类比</b>：已寄出的快递。包裹已经发走，有物流单号（commit SHA），随时可以追溯。</p>
+    </div>
+    <div class="card">
+      <div class="card-t purple">Stash（临时保险箱）</div>
+      <p>把当前改动「暂存到一边」，工作区恢复干净。需要时再取出来。详见 <a href="#s2">§2</a>。</p>
+      <p><b>类比</b>：抽屉。桌面太乱了，先把草稿塞进抽屉，等会儿再拿出来继续写。</p>
+    </div>
+  </div>
+
+  <h3>cogent 涉及的关键命令与区域对照</h3>
+  <table>
+    <tr><th>命令</th><th>从哪里</th><th>到哪里</th><th>做什么</th></tr>
+    <tr><td><code>git add -A</code></td><td>工作区</td><td>暂存区</td><td>把所有改动（包括新文件）加入暂存区</td></tr>
+    <tr><td><code>git reset</code></td><td>暂存区</td><td>（清空暂存区）</td><td>撤销 add，暂存区回到上次 commit 状态，工作区不变</td></tr>
+    <tr><td><code>git stash create</code></td><td>工作区+暂存区</td><td>Stash</td><td>创建一个轻量快照（不入 stash 列表），返回 SHA</td></tr>
+    <tr><td><code>git stash apply &lt;SHA&gt;</code></td><td>Stash</td><td>工作区</td><td>把快照内容恢复到工作区</td></tr>
+    <tr><td><code>git checkout -- .</code></td><td>本地仓库</td><td>工作区</td><td>把所有已跟踪文件恢复到最后一次 commit 状态</td></tr>
+    <tr><td><code>git clean -fd</code></td><td>—</td><td>（删除）</td><td>删除所有未被 git 跟踪的文件和目录</td></tr>
+    <tr><td><code>git commit</code></td><td>暂存区</td><td>本地仓库</td><td>把暂存区的改动永久记录为一个 commit</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §2 Stash ═══════════════════ -->
+<section id="s2">
+  <h2><span class="n">§2</span> git stash 到底是什么</h2>
+
+  <p>Stash 是 git 提供的「临时保险箱」——把当前工作区的改动打成一个包存起来，工作区恢复干净。需要时再把包取出来。</p>
+
+  <h3>普通 stash vs cogent 用的 stash create</h3>
+  <table>
+    <tr><th></th><th>git stash（普通）</th><th>git stash create（cogent 用的）</th></tr>
+    <tr><td><b>效果</b></td><td>保存改动 + 清空工作区</td><td>只创建快照对象，<b>不清空</b>工作区</td></tr>
+    <tr><td><b>stash 列表</b></td><td>出现在 <code>git stash list</code></td><td><b>不出现</b>（只返回 SHA）</td></tr>
+    <tr><td><b>恢复方式</b></td><td><code>git stash pop</code></td><td><code>git stash apply &lt;SHA&gt;</code></td></tr>
+    <tr><td><b>用途</b></td><td>人工暂存：切分支前保存进度</td><td>程序化快照：Undo 用</td></tr>
+  </table>
+
+  <div class="callout callout-blue">
+    <b>为什么 cogent 用 <code>stash create</code> 而不是 <code>stash push</code>？</b><br>
+    因为 <code>stash create</code> 是「只拍照不挪东西」——工作区文件原封不动，Agent 可以继续干活。
+    普通 <code>stash</code> 会把桌面清空，Agent 就没东西可改了。
+  </div>
+
+  <h3>cogent Undo 中的 stash 流程</h3>
+  <div class="mermaid">
+sequenceDiagram
+    participant WD as 工作区
+    participant SA as 暂存区
+    participant ST as Stash
+    Note over WD: 每轮对话开始前 → 拍快照
+    WD->>SA: git add -A（把所有改动纳入）
+    SA->>ST: git stash create → 返回 SHA
+    Note over ST: 快照已保存（工作区不变）
+    SA->>SA: git reset（撤销 add 的副作用）
+    Note over WD: Agent 开始干活...改了很多文件
+    Note over WD: 用户输入 /undo → 恢复快照
+    WD->>WD: git checkout -- .（丢弃修改）
+    WD->>WD: git clean -fd（删除新文件）
+    ST->>WD: git stash apply SHA（恢复快照）
+    Note over WD: 工作区回到那轮对话开始前 ✅
+  </div>
+  <p class="cap">图 2 · Undo 的 stash 快照机制：拍照时不打扰工作，恢复时先清空再还原</p>
+</section>
+
+<!-- ═══════════════════ §3 Worktree ═══════════════════ -->
+<section id="s3">
+  <h2><span class="n">§3</span> git worktree 到底是什么</h2>
+
+  <p>一个 git 仓库通常只有<b>一个</b>工作区（你 <code>cd</code> 进去看到的那些文件）。但 <code>git worktree add</code> 可以在<b>另一个目录</b>创建第二个、第三个工作区——它们共享同一个 <code>.git</code> 仓库，但各自检出不同的分支，<b>互不干扰</b>。</p>
+
+  <div class="mermaid">
+flowchart TD
+    REPO["<b>.git 仓库</b><br/>（共享的历史记录）"]:::repo
+    MAIN["<b>主工作区</b><br/>/project/<br/>分支: main"]:::main
+    WT1["<b>Worktree 1</b><br/>/tmp/cogent-wt-a1b2/<br/>分支: cogent/wt-a1b2"]:::wt
+    WT2["<b>Worktree 2</b><br/>/tmp/cogent-wt-c3d4/<br/>分支: cogent/wt-c3d4"]:::wt
+
+    REPO --- MAIN
+    REPO --- WT1
+    REPO --- WT2
+
+    classDef repo fill:#0d2438,stroke:#58a6ff,color:#58a6ff;
+    classDef main fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef wt fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+  </div>
+  <p class="cap">图 3 · 一个 .git 仓库 + 多个独立工作区，各自有自己的分支和文件</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-t green">普通分支切换<br><code>git checkout feature</code></div>
+      <p>在<b>同一个目录</b>里切换分支——你的文件会被覆盖。</p>
+      <p>问题：Agent 正在改 feature-A 的代码时，你不能同时改 feature-B。</p>
+    </div>
+    <div class="card">
+      <div class="card-t purple">Worktree<br><code>git worktree add /tmp/wt feature</code></div>
+      <p>在<b>另一个目录</b>创建一个独立工作区，检出 feature 分支。</p>
+      <p>好处：主目录完全不受影响，两个 Agent 可以<b>并行</b>在不同 worktree 里改代码。</p>
+    </div>
+  </div>
+
+  <h3>cogent 为什么需要 worktree？</h3>
+  <div class="callout callout-green">
+    <b>核心目的：物理隔离，通过才合并。</b><br><br>
+    没有 worktree 时：Maker 直接改你的代码 → 审查不通过 → 得用 <code>git checkout -- . && git clean -fd</code> 回滚。<br>
+    <b>风险</b>：回滚可能不彻底（比如改了 <code>.gitignore</code> 里的文件）。<br><br>
+    有了 worktree：Maker 在 <code>/tmp/cogent-wt-xxx/</code> 里改 → 审查不通过 → 直接删掉整个目录。<br>
+    <b>你的代码从头到尾没被碰过</b>——零风险。
+  </div>
+</section>
+
+<!-- ═══════════════════ §4 Undo ═══════════════════ -->
+<section id="s4">
+  <h2><span class="n">§4</span> 场景一：Undo 撤销</h2>
+  <span class="tag tag-git">snapshot.go</span>
+  <span class="tag tag-git">undo.go</span>
+  <p class="tag-file">📄 internal/engine/snapshot.go · internal/engine/undo.go</p>
+
+  <p>用户在 REPL 中输入 <code>/undo</code>，撤销上一轮对话——包括 Agent 写的代码都恢复原样。</p>
+
+  <h3>完整流程</h3>
+  <div class="mermaid">
+flowchart TD
+    subgraph TAKE ["拍快照（每轮对话开始前）"]
+        T1["git add -A<br/><i>暂存所有改动（含新文件）</i>"]:::cmd
+        T2["git stash create<br/><i>创建轻量快照 → 返回 SHA</i>"]:::cmd
+        T3["git reset<br/><i>撤销 add 对暂存区的副作用</i>"]:::cmd
+        T1 --> T2 --> T3
+    end
+
+    subgraph RESTORE ["恢复快照（/undo 时）"]
+        R0["弹出 turnSnapshots 栈顶"]:::logic
+        R1["截断 msgs 数组<br/><i>回退消息历史</i>"]:::logic
+        R2["git checkout -- .<br/><i>丢弃所有已跟踪文件的修改</i>"]:::cmd
+        R3["git clean -fd<br/><i>删除所有新增的未跟踪文件</i>"]:::cmd
+        R4["git stash apply SHA<br/><i>恢复到快照状态</i>"]:::cmd
+        R5["session.Append(undoEvent)<br/><i>记录 undo 事件到 transcript</i>"]:::logic
+        R0 --> R1 --> R2 --> R3 --> R4 --> R5
+    end
+
+    TAKE --> |"Agent 干活...<br/>改了一堆文件"| RESTORE
+
+    classDef cmd fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef logic fill:#0d2438,stroke:#58a6ff,color:#e6edf3;
+  </div>
+  <p class="cap">图 4 · Undo 完整流程：橙色 = git 命令，蓝色 = 程序逻辑</p>
+
+  <h3>前置检测</h3>
+  <table>
+    <tr><th>命令</th><th>用途</th><th>代码位置</th></tr>
+    <tr><td><code>git rev-parse --is-inside-work-tree</code></td><td>检测是否在 git 仓库内（不是就跳过快照）</td><td>snapshot.go:25</td></tr>
+  </table>
+
+  <h3>关键设计</h3>
+  <ul>
+    <li><code>stash create</code> 不入 stash 列表、不清空工作区——Agent 无感知，不影响正常工作</li>
+    <li>快照后立即 <code>git reset</code> 撤销 add 副作用——暂存区保持干净</li>
+    <li>恢复失败仅告警不阻断——消息回退和文件恢复解耦，一个失败不影响另一个</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════ §5 Review 无 worktree ═══════════════════ -->
+<section id="s5">
+  <h2><span class="n">§5</span> 场景二：双角色审查（无 worktree）</h2>
+  <span class="tag tag-git">review.go</span>
+  <p class="tag-file">📄 cmd/cogent/review.go · gitDiscarder</p>
+
+  <p>使用 <code>--review</code> 但不加 <code>--worktree</code> 时，Maker 直接在主工作区改代码。审查不通过就用 git 回滚。</p>
+
+  <div class="mermaid">
+flowchart TD
+    M["Maker 在主工作区改代码"]:::maker
+    R["Reviewer 独立审查"]:::reviewer
+    V{"Verify 判定<br/>通过?"}
+
+    M --> R --> V
+    V -->|是| Keep(["保留改动 ✅"]):::ok
+    V -->|否| D1["git checkout -- .<br/><i>丢弃已跟踪文件修改</i>"]:::cmd
+    D1 --> D2["git clean -fd<br/><i>删除未跟踪文件</i>"]:::cmd
+    D2 --> Clean(["工作区恢复干净<br/>带反馈续跑"]):::logic
+
+    classDef maker fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef reviewer fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef cmd fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef ok fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef logic fill:#0d2438,stroke:#58a6ff,color:#e6edf3;
+  </div>
+  <p class="cap">图 5 · 无 worktree 模式：不通过就用 git 回滚主工作区</p>
+
+  <h3>只用了 2 条 git 命令</h3>
+  <table>
+    <tr><th>命令</th><th>做什么</th><th>代码位置</th></tr>
+    <tr><td><code>git checkout -- .</code></td><td>把所有已跟踪文件恢复到最后一次 commit</td><td>review.go:31</td></tr>
+    <tr><td><code>git clean -fd</code></td><td>删除 Maker 新创建的文件</td><td>review.go:31</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>⚠️ 风险</b>：如果 Maker 修改了 <code>.gitignore</code> 文件里排除的内容，<code>checkout</code> 和 <code>clean</code> 可能无法完全回滚。这就是为什么有了更安全的 worktree 模式（§6）。
+  </div>
+</section>
+
+<!-- ═══════════════════ §6 Worktree 隔离 ═══════════════════ -->
+<section id="s6">
+  <h2><span class="n">§6</span> 场景三：Worktree 物理隔离</h2>
+  <span class="tag tag-git">worktree.go</span>
+  <span class="tag tag-safe">安全设计</span>
+  <p class="tag-file">📄 internal/worktree/worktree.go · cmd/cogent/review.go</p>
+
+  <p>使用 <code>--worktree</code> 时，每轮在独立的 git worktree 副本中操作。通过才合并回主仓库，不通过直接删掉——<b>主工作区从头到尾零接触</b>。</p>
+
+  <div class="mermaid">
+flowchart TD
+    subgraph PRE ["前置检查"]
+        C1["git status --porcelain<br/><i>主仓库必须干净</i>"]:::cmd
+    end
+
+    subgraph CREATE ["创建隔离工作区"]
+        C2["git worktree add -b<br/>cogent/wt-a1b2<br/>/tmp/cogent-wt-a1b2<br/>HEAD"]:::cmd
+    end
+
+    subgraph WORK ["在 worktree 内工作"]
+        W1["Maker 在 /tmp/.../ 内改代码"]:::maker
+        W2["Reviewer 在同一 worktree 内审代码"]:::reviewer
+        W3{"Verify 判定<br/>通过?"}
+        W1 --> W2 --> W3
+    end
+
+    subgraph MERGE ["通过 → 合并"]
+        M1["git -C /tmp/... add -A"]:::cmd
+        M2["git -C /tmp/... commit -m 'cogent: ...'"]:::cmd
+        M3["git merge --no-ff cogent/wt-a1b2"]:::cmd
+        M4{"合并冲突?"}
+        M1 --> M2 --> M3 --> M4
+        M4 -->|否| OK(["主仓库已更新 ✅"]):::ok
+        M4 -->|是| MA["git merge --abort"]:::cmd
+        MA --> DISCARD2
+    end
+
+    subgraph DISCARD ["不通过 → 丢弃"]
+        DISCARD2["git worktree remove --force /tmp/..."]:::cmd
+        DISCARD3["git branch -D cogent/wt-a1b2"]:::cmd
+        DISCARD2 --> DISCARD3
+        DISCARD3 --> GONE(["副本已销毁<br/>主仓库未被碰过"]):::logic
+    end
+
+    PRE --> CREATE --> WORK
+    W3 -->|是| MERGE
+    W3 -->|否| DISCARD
+
+    classDef cmd fill:#2a1d11,stroke:#f0883e,color:#f0883e;
+    classDef maker fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef reviewer fill:#241a35,stroke:#d2a8ff,color:#d2a8ff;
+    classDef ok fill:#0f2a17,stroke:#3fb950,color:#3fb950;
+    classDef logic fill:#0d2438,stroke:#58a6ff,color:#e6edf3;
+  </div>
+  <p class="cap">图 6 · Worktree 完整生命周期：创建 → 工作 → 通过合并 / 不通过丢弃</p>
+
+  <h3>涉及的 git 命令（按阶段）</h3>
+
+  <h4>阶段 1：前置检查</h4>
+  <table>
+    <tr><th>命令</th><th>做什么</th><th>代码位置</th></tr>
+    <tr><td><code>git status --porcelain</code></td><td>检查主仓库是否干净（有未提交改动就拒绝启动）</td><td>worktree.go:70</td></tr>
+  </table>
+
+  <h4>阶段 2：创建隔离工作区</h4>
+  <table>
+    <tr><th>命令</th><th>做什么</th><th>代码位置</th></tr>
+    <tr><td><code>git worktree add -b cogent/wt-xxxx /tmp/dir HEAD</code></td><td>从 HEAD 派生独立目录 + 临时分支</td><td>worktree.go:110</td></tr>
+  </table>
+
+  <h4>阶段 3a：审查通过 → 合并</h4>
+  <table>
+    <tr><th>命令</th><th>做什么</th><th>代码位置</th></tr>
+    <tr><td><code>git -C /tmp/dir add -A</code></td><td>在 worktree 内暂存改动</td><td>worktree.go:125</td></tr>
+    <tr><td><code>git -C /tmp/dir commit -m "cogent: ..." --allow-empty</code></td><td>提交到临时分支</td><td>worktree.go:125</td></tr>
+    <tr><td><code>git merge --no-ff --no-edit cogent/wt-xxxx</code></td><td>在主仓库合并（保留合并历史）</td><td>worktree.go:130</td></tr>
+    <tr><td><code>git merge --abort</code></td><td>（冲突时）回滚合并</td><td>worktree.go:136</td></tr>
+  </table>
+
+  <h4>阶段 3b：审查不通过 → 丢弃</h4>
+  <table>
+    <tr><th>命令</th><th>做什么</th><th>代码位置</th></tr>
+    <tr><td><code>git worktree remove --force /tmp/dir</code></td><td>删除 worktree 目录</td><td>worktree.go:146</td></tr>
+    <tr><td><code>git worktree prune</code></td><td>（回退方案）清理残留元数据</td><td>worktree.go:152</td></tr>
+    <tr><td><code>git branch -D cogent/wt-xxxx</code></td><td>删除临时分支</td><td>worktree.go:156</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════ §7 完整清单 ═══════════════════ -->
+<section id="s7">
+  <h2><span class="n">§7</span> 15 条 Git 命令完整清单</h2>
+
+  <table>
+    <tr><th>#</th><th>git 命令</th><th>场景</th><th>文件</th><th>用途</th></tr>
+    <tr><td>1</td><td><code>rev-parse --is-inside-work-tree</code></td><td>Undo</td><td>snapshot.go:25</td><td>检测 git 仓库</td></tr>
+    <tr><td>2</td><td><code>add -A</code></td><td>Undo</td><td>snapshot.go:39</td><td>暂存所有改动（含新文件）</td></tr>
+    <tr><td>3</td><td><code>stash create</code></td><td>Undo</td><td>snapshot.go:45</td><td>创建轻量快照</td></tr>
+    <tr><td>4</td><td><code>reset</code></td><td>Undo</td><td>snapshot.go:54</td><td>撤销 add 对暂存区的副作用</td></tr>
+    <tr><td>5</td><td><code>checkout -- .</code></td><td>Undo / Review</td><td>snapshot.go:81<br>review.go:31</td><td>丢弃已跟踪文件修改</td></tr>
+    <tr><td>6</td><td><code>clean -fd</code></td><td>Undo / Review</td><td>snapshot.go:86<br>review.go:31</td><td>删除未跟踪文件</td></tr>
+    <tr><td>7</td><td><code>stash apply &lt;SHA&gt;</code></td><td>Undo</td><td>snapshot.go:70</td><td>恢复到指定快照</td></tr>
+    <tr><td>8</td><td><code>status --porcelain</code></td><td>Worktree</td><td>worktree.go:70</td><td>检查工作区是否干净</td></tr>
+    <tr><td>9</td><td><code>worktree add -b</code></td><td>Worktree</td><td>worktree.go:110</td><td>创建隔离工作区</td></tr>
+    <tr><td>10</td><td><code>-C &lt;dir&gt; add -A</code></td><td>Worktree</td><td>worktree.go:125</td><td>在 worktree 内暂存</td></tr>
+    <tr><td>11</td><td><code>-C &lt;dir&gt; commit --allow-empty</code></td><td>Worktree</td><td>worktree.go:125</td><td>在 worktree 内提交</td></tr>
+    <tr><td>12</td><td><code>merge --no-ff --no-edit</code></td><td>Worktree</td><td>worktree.go:130</td><td>合并回主分支</td></tr>
+    <tr><td>13</td><td><code>merge --abort</code></td><td>Worktree</td><td>worktree.go:136</td><td>冲突时回滚合并</td></tr>
+    <tr><td>14</td><td><code>worktree remove --force</code></td><td>Worktree</td><td>worktree.go:146</td><td>删除 worktree 目录</td></tr>
+    <tr><td>15</td><td><code>branch -D</code></td><td>Worktree</td><td>worktree.go:156</td><td>删除临时分支</td></tr>
+  </table>
+
+  <p style="margin-top:6px"><code>worktree prune</code> 作为 <code>worktree remove</code> 的回退方案也会被调用（worktree.go:152），但不是独立命令，而是错误恢复路径。</p>
+
+  <div class="callout callout-green">
+    <b>安全边界</b>：全部 15 条命令都是<b>本地操作</b>——没有 <code>push</code>、没有 <code>pull</code>、没有 <code>remote</code>。cogent 永远不会碰你的远端仓库。
+  </div>
+</section>
+
+<!-- ═══════════════════ §8 安全设计 ═══════════════════ -->
+<section id="s8">
+  <h2><span class="n">§8</span> 安全设计</h2>
+  <span class="tag tag-safe">安全</span>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-t orange">Sandbox 保护（worktree / review）</div>
+      <p>Worktree 和 Review 的所有 git 命令都经 <code>sandbox.Exec()</code> 执行——sandbox 有危险命令白名单拦截和工作目录约束。</p>
+      <p>Agent 不可能通过工具调用执行 <code>git push --force</code> 或 <code>rm -rf /</code>。</p>
+    </div>
+    <div class="card">
+      <div class="card-t orange">直接执行（snapshot）</div>
+      <p>Undo 的快照操作使用 <code>exec.Command</code> 直接执行——因为快照属于<b>引擎内部可信控制面</b>，不是 Agent 的工具调用。</p>
+      <p>Agent 无法触发或篡改快照命令。</p>
+    </div>
+    <div class="card">
+      <div class="card-t red">bare repo 逃逸防御</div>
+      <p>Sandbox 在每次命令执行后检测工作根是否新出现了 bare git repo 的签名文件（HEAD/objects/refs），如果有就清理——防止恶意 Agent 通过伪造 git 仓库逃逸沙箱。</p>
+    </div>
+    <div class="card">
+      <div class="card-t blue">Worktree 命名隔离</div>
+      <p>所有临时分支以 <code>cogent/wt-</code> 开头，目录以 <code>cogent-wt-</code> 开头——便于识别和批量清理，不会与用户的分支冲突。</p>
+    </div>
+  </div>
+
+  <h3>三种模式安全性对比</h3>
+  <table>
+    <tr><th></th><th>Undo</th><th>Review（无 worktree）</th><th>Worktree 隔离</th></tr>
+    <tr><td><b>谁改主工作区</b></td><td>Agent 直接改</td><td>Agent 直接改</td><td>没人改（隔离副本）</td></tr>
+    <tr><td><b>回滚方式</b></td><td>stash apply</td><td>checkout + clean</td><td>删除整个目录</td></tr>
+    <tr><td><b>回滚彻底性</b></td><td>✅ 完全（有快照）</td><td>⚠️ 基本（.gitignore 例外）</td><td>✅ 完全（物理删除）</td></tr>
+    <tr><td><b>支持并行</b></td><td>❌</td><td>❌</td><td>✅（多 worktree）</td></tr>
+    <tr><td><b>git 命令数</b></td><td>6 条</td><td>2 条</td><td>8 条</td></tr>
+  </table>
+</section>
+
+</div>
+
+<footer>
+  <p>cogent Git 操作全解 · 生成于 2026-06-23</p>
+  <p>项目地址：github.com/alaindong/cogent</p>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    theme: 'base',
+    themeVariables: {
+      background: '#161b22',
+      primaryColor: '#0d2438',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#58a6ff',
+      lineColor: '#8b949e',
+      secondaryColor: '#1c2333',
+      tertiaryColor: '#161b22',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: '14px',
+      noteBkgColor: '#1c2333',
+      noteTextColor: '#e6edf3',
+      noteBorderColor: '#30363d',
+      actorBkg: '#0d2438',
+      actorBorder: '#58a6ff',
+      actorTextColor: '#e6edf3',
+      signalColor: '#8b949e',
+      signalTextColor: '#e6edf3',
+    },
+    flowchart: { curve: 'linear', padding: 16, nodeSpacing: 40, rankSpacing: 50, htmlLabels: true },
+    sequence: { actorMargin: 80, messageMargin: 40 },
+  });
+</script>
+
+</body>
+</html>

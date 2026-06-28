@@ -1,0 +1,8 @@
+修复 repo/counter.go 中的并发安全缺陷。
+
+Counter 是一个计数器，支持并发调用 Inc() 和 Value()。
+当前实现没有做并发保护，在并发场景下会出现数据竞态（race condition），
+导致 Value() 返回的值丢失部分 Inc() 调用。
+
+要求：仅修改 repo/counter.go，使 repo 下的单元测试全部通过（含 -race 检测）。
+不要修改 repo/counter_test.go。

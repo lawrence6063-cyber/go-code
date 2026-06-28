@@ -36,10 +36,12 @@ cd .. && bash verify.sh   # 校验 agent 的修改是否真正通过
 
 ## 现有任务
 
-| 任务 | 能力点 | 验证方式 |
-| --- | --- | --- |
-| `fix_off_by_one` | 定位并修复经典 off-by-one 循环边界缺陷 | `go test`（闭区间求和用例） |
-| `implement_fizzbuzz` | 从未实现的桩补全经典 FizzBuzz 规则 | `go test`（含 3/5/15 倍数边界用例） |
+| 任务 | 难度 | 能力点 | 验证方式 |
+| --- | --- | --- | --- |
+| `fix_off_by_one` | 简单 | 定位并修复经典 off-by-one 循环边界缺陷 | `go test`（闭区间求和用例） |
+| `fix_concurrent_counter` | 简单 | 识别并修复并发数据竞态（需理解 Go 并发同步） | `go test -race`（并发竞态检测） |
+| `add_find_files_tool` | 复杂 | 探索代码库后新增内建工具，在多处装配点注册 | 编译 + 注册校验 + canary 行为测试 + 全量测试 |
+| `session_root_span` | 复杂 | 补全缺失的 cogent.session 根 span（真实架构 gap） | 结构检查 + 注入式 trace 验收测试 + 全量测试 |
 
 ## 新增任务约定
 
