@@ -27,7 +27,6 @@ import (
 
 	"github.com/alaindong/cogent/internal/llm"
 	"github.com/alaindong/cogent/internal/observe"
-	"github.com/alaindong/cogent/internal/types"
 )
 
 // spanRecord 是 trace jsonl 中单条 span 的最小投影。
