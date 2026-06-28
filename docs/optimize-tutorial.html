@@ -231,7 +231,7 @@
   <div class="callout"><b>依赖方向自洽：</b><code>secret</code> 仅依赖标准库，是最内层叶子包，被 <code>session</code>/<code>observe</code> 复用<b>不构成循环依赖</b>；脱敏拦截全部落在 <code>observe</code> 包内，守「只有 observe 碰 OTel」。</div>
 
   <h3>S4 / S5 / S6 · 危险命令扩充 + 取舍文档化 <span class="badge b-p2">P2</span></h3>
-  <p><strong>S5</strong> 保守扩充危险命令清单（<code>chmod -R 777 /</code>、<code>chown -R root /</code>、<code>base64 -d …|sh</code> 编码绕过），并补测试断言<strong>不误拦</strong>合法的 <code>rm -rf ./build</code>。<strong>S4/S6</strong> 把「不做 OS 级强隔离的理由 + 残余风险」「<code>Enabled=false</code> 继承宿主环境的可信边界」写进 <code>sandbox/doc.go</code>，让安全姿态可审计、面试可解释。</p>
+  <p><strong>S5</strong> 保守扩充危险命令清单（<code>chmod -R 777 /</code>、<code>chown -R root /</code>、<code>base64 -d …|sh</code> 编码绕过），并补测试断言<strong>不误拦</strong>合法的 <code>rm -rf ./build</code>。<strong>S4/S6</strong> 把「不做 OS 级强隔离的理由 + 残余风险」「<code>Enabled=false</code> 继承宿主环境的可信边界」写进 <code>sandbox/doc.go</code>，让安全姿态可审计、可解释。</p>
 </section>
 
 <!-- 3 · 可观测 -->

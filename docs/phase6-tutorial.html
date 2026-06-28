@@ -247,7 +247,7 @@
     <span class="k">return</span> tool.<span class="f">NewPool</span>(tools...) <span class="c">// ★ 先到先得 ⇒ 内建优先</span>
 }</code></pre>
 
-    <div class="callout ok"><b>面试杠杆点：</b>"你怎么防止恶意 MCP server？"——三层闭环：命名前缀使其无法冒用内建名；池装配先到先得使同名时内建必胜；Guard + Defaults 让所有 MCP 工具默认走 HITL 询问。三者任一失守都不致命，构成<b>纵深防御</b>。</div>
+    <div class="callout ok"><b>工程杠杆点：</b>"你怎么防止恶意 MCP server？"——三层闭环：命名前缀使其无法冒用内建名；池装配先到先得使同名时内建必胜；Guard + Defaults 让所有 MCP 工具默认走 HITL 询问。三者任一失守都不致命，构成<b>纵深防御</b>。</div>
 
     <!-- ========== 06 CLI ========== -->
     <h2 id="cli"><span class="num">06</span>CLI 与配置文件</h2>
@@ -326,7 +326,7 @@ connected; 11 MCP tool(s) available:
       <div class="card"><h3>⑥ 协议契约可测</h3><p style="color:var(--text-dim)">把"连接→列工具→调用→错误结果"沉淀成内联一致性套件 + 协议兼容 fake server（测试二进制自执行充当），手写实现是否合规一目了然；全在主模块内、零额外依赖。</p></div>
     </div>
 
-    <h3>STAR 话术（面试可直接用）</h3>
+    <h3>STAR 要点</h3>
     <div class="callout">
       <p><b>S（Situation）：</b>Agent 工具池如果只能编进进程，能力扩展靠改源码重发版，与 MCP 生态绝缘。</p>
       <p><b>T（Task）：</b>接入 MCP 客户端，让 cogent 能动态接入任意 stdio MCP server 的工具，但不能为此牺牲<b>零依赖、安全默认、内核稳定</b>三条底线。</p>

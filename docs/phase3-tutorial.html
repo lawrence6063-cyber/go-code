@@ -208,7 +208,7 @@
       </div>
     </div>
 
-    <p>这份教学按「架构变更 → 并发调度 → 安全纵深 → 可观测 → 评测 → 测试」的顺序展开。每一节先讲<b>为什么这么设计</b>（取舍 + 面试话术），再展示<b>怎么做</b>（核心代码），最后用 callout 总结不变量。</p>
+    <p>这份教学按「架构变更 → 并发调度 → 安全纵深 → 可观测 → 评测 → 测试」的顺序展开。每一节先讲<b>为什么这么设计</b>（取舍 + 工程要点），再展示<b>怎么做</b>（核心代码），最后用 callout 总结不变量。</p>
 
     <!-- ========== 01 架构升级 ========== -->
     <h2 id="arch"><span class="num">01</span>架构升级全景</h2>
@@ -272,7 +272,7 @@
     <span class="k">if</span> !ok { <span class="k">return</span> <span class="n">false</span> }              <span class="c">// 未知工具 → 串行</span>
     <span class="k">return</span> t.IsConcurrencySafe(block.Input)
 }</code></pre>
-    <div class="callout ok"><b>面试要点：</b>fail-closed 把"忘记标记并发安全"从潜在 bug 变成"退化为全串行"（正确但慢），而不是"默认并发"（快但可能写竞态）。最坏情况只是性能退化，永远不会出数据一致性问题。</div>
+    <div class="callout ok"><b>工程要点：</b>fail-closed 把"忘记标记并发安全"从潜在 bug 变成"退化为全串行"（正确但慢），而不是"默认并发"（快但可能写竞态）。最坏情况只是性能退化，永远不会出数据一致性问题。</div>
 
     <!-- ========== 03 并发执行 ========== -->
     <h2 id="run"><span class="num">03</span>并发执行 Run</h2>
@@ -327,7 +327,7 @@
     }
     <span class="k">return</span> orchestrate.<span class="f">Run</span>(ctx, batches, run, e.tracer)
 }</code></pre>
-    <div class="callout ok"><b>面试话术（STAR）：</b>「Phase 2 执行是串行 for 循环；Phase 3 我把执行职责分离到 orchestrate 包，engine 只需注入一个回调。改造仅 3 行有效代码变更，但获得了并发提速 + 可独立单测的调度核心，且零行为回归——因为 per-tool 逻辑一字未改。」</div>
+    <div class="callout ok"><b>工程要点（STAR）：</b>「Phase 2 执行是串行 for 循环；Phase 3 我把执行职责分离到 orchestrate 包，engine 只需注入一个回调。改造仅 3 行有效代码变更，但获得了并发提速 + 可独立单测的调度核心，且零行为回归——因为 per-tool 逻辑一字未改。」</div>
 
     <!-- ========== 05 sandbox 四层 ========== -->
     <h2 id="sandbox"><span class="num">05</span>sandbox 四层纵深防御</h2>

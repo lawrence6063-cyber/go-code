@@ -142,7 +142,7 @@
     <pre><span class="code-label">最终依赖方向</span><code><span class="n">cmd</span> ──▶ <span class="n">agent</span> ──▶ <span class="n">engine</span> ──▶ <span class="n">tool</span> ──▶ <span class="n">types</span>
  │                                  ▲
  └──── agent.New(...) → tool.NewTask(spawner) ───┘   <span class="c">// cmd 在最外层做 wiring</span></code></pre>
-    <div class="callout ok"><b>设计模式归位：</b>这正是<b>依赖倒置原则（DIP）</b>——高层(<code>task</code>)与低层(<code>agent</code>)都依赖抽象(<code>Spawner</code>)，且抽象由<b>被依赖方</b>（内层 <code>tool</code>）定义。同样的手法在标准库随处可见（<code>io.Reader</code> 由消费方定义）。面试时这是一个能讲清"为什么这么放"的好例子。</div>
+    <div class="callout ok"><b>设计模式归位：</b>这正是<b>依赖倒置原则（DIP）</b>——高层(<code>task</code>)与低层(<code>agent</code>)都依赖抽象(<code>Spawner</code>)，且抽象由<b>被依赖方</b>（内层 <code>tool</code>）定义。同样的手法在标准库随处可见（<code>io.Reader</code> 由消费方定义）。这是一个能讲清"为什么这么放"的好例子。</div>
 
     <!-- ========== 03 隔离 ========== -->
     <h2 id="isolate"><span class="num">03</span>上下文隔离的四道保证</h2>
@@ -278,7 +278,7 @@ go test -race ./...   <span class="c"># 全绿；主 go.mod/go.sum 零改动</sp
       <div class="card"><b style="color:var(--accent)">摘要回流防膨胀</b><p style="color:var(--text-dim);font-size:14px">只回流 ≤8KB 摘要，探索噪声留在子上下文跑完即弃。</p></div>
     </div>
 
-    <div class="callout"><b>STAR（面试话术）：</b>
+    <div class="callout"><b>STAR（工程要点）：</b>
       <p style="margin:8px 0 0"><b>S</b>：探索类子任务会产生大量中间消息，堆进主上下文会撑爆窗口、淹没主线。</p>
       <p style="margin:4px 0 0"><b>T</b>：隔离探索、只回流结论，且不为此另写一套循环。</p>
       <p style="margin:4px 0 0"><b>A</b>：复用同一 <code>engine</code> 内核派发子 Agent（独立 msgs / 受限只读池 / 不落盘 / 更紧 maxSteps）；为破 <code>agent→engine→tool→agent</code> 的环，把 <code>Spawner</code> 接口下沉到 <code>tool</code> 包，<code>agent</code> 隐式满足；子 Agent 的 span 经 ctx 自动挂为 <code>agent.spawn</code> 子树；排空事件流累积摘要并 8KB 截断，goleak 验无泄漏。</p>

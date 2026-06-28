@@ -173,7 +173,7 @@
       </div>
     </div>
 
-    <p>这份教学按「问题背景 → 设计哲学 → 事件模型 → 内核记录 → 恢复路径 → CLI → 测试」的顺序展开。每节先讲<b>为什么这么设计</b>（取舍 + 面试话术），再展示<b>怎么做</b>（核心代码），最后用 callout 钉死不变量。</p>
+    <p>这份教学按「问题背景 → 设计哲学 → 事件模型 → 内核记录 → 恢复路径 → CLI → 测试」的顺序展开。每节先讲<b>为什么这么设计</b>（取舍 + 工程要点），再展示<b>怎么做</b>（核心代码），最后用 callout 钉死不变量。</p>
 
     <!-- ========== 01 为什么 ========== -->
     <h2 id="why"><span class="num">01</span>为什么自主 Agent 必须「可恢复」</h2>
@@ -197,7 +197,7 @@
       <tr><td><b>写入</b>（热路径）</td><td>每轮都跑、要快要稳</td><td>只做最简单的事：<b>顺序 append 一行 JSON</b>。无锁、无事务、append-only 天然崩溃安全（写到一半崩了，最多丢最后一行，已写的行完好）。</td></tr>
       <tr><td><b>恢复</b>（冷路径）</td><td>只在 resume 时跑一次</td><td>可以承担复杂度：去重、链路修复、剥离悬空 <code>tool_use</code>、丢弃孤立 <code>tool_result</code>。复杂性集中在这里，不污染热路径。</td></tr>
     </table>
-    <div class="callout"><b>面试杠杆点：</b>"为什么写简单、恢复复杂？"——因为写在每轮的热路径上，必须快且崩溃安全；恢复是冷路径，只跑一次，可承担修复成本。append-only 是这套取舍的载体：单向追加既最快又最抗崩溃。</div>
+    <div class="callout"><b>工程杠杆点：</b>"为什么写简单、恢复复杂？"——因为写在每轮的热路径上，必须快且崩溃安全；恢复是冷路径，只跑一次，可承担修复成本。append-only 是这套取舍的载体：单向追加既最快又最抗崩溃。</div>
 
     <!-- ========== 02 架构 ========== -->
     <h2 id="arch"><span class="num">02</span>模块全景与依赖方向</h2>
@@ -417,7 +417,7 @@ $ cogent resume 20260617-171500-a1b2c3d4e5f6   <span class="c"># 无损接着干
       <div class="card"><h3 style="margin-top:0">⑥ 零新依赖</h3><p style="color:var(--text-dim)">UUID 用 <code>crypto/rand</code> 自生成，持久化仅靠标准库 <code>os</code>/<code>encoding/json</code>。</p></div>
     </div>
 
-    <h3>面试 STAR（可中断可恢复）</h3>
+    <h3>STAR（可中断可恢复）</h3>
     <table>
       <tr><th>维度</th><th>要点</th></tr>
       <tr><td><b>S</b> 情境</td><td>自主编码任务长链路多轮，中途 Ctrl-C / 崩溃就得从头再来，重复烧钱踩坑。</td></tr>

@@ -127,7 +127,7 @@
       </div>
       <div class="card">
         <b style="color:var(--accent2)">引入 OTel SDK ✅</b>
-        <p style="color:var(--text-dim);font-size:14px">业界事实标准；<code>file/stdout/otlp</code> exporter 现成；一行 env 切到 Jaeger 看火焰图；面试时"上来就是 OTel"比自造结构更有说服力。代价：主 go.mod 多一批传递依赖。</p>
+        <p style="color:var(--text-dim);font-size:14px">业界事实标准；<code>file/stdout/otlp</code> exporter 现成；一行 env 切到 Jaeger 看火焰图；"上来就是 OTel"比自造结构更有说服力。代价：主 go.mod 多一批传递依赖。</p>
       </div>
     </div>
     <div class="callout warn"><b>取舍逻辑（可讲）：</b>MCP 那次自实现，是因为"亲手写协议"能讲清原理、且生态收益有限；Trace 这次用 SDK，是因为<b>可观测的价值恰恰在于接入标准生态（Jaeger 火焰图）</b>——自造一套谁都不认识的格式，反而丢掉了 trace 最大的价值。<b>同一个工程师，两次相反的决定，背后是同一套"按收益权衡"的判断框架</b>，而不是"凡事都手写"的教条。这本身就是成熟度的体现。</div>
@@ -260,7 +260,7 @@ go test -race ./...    <span class="c"># 全绿</span></code></pre>
       <div class="card"><b style="color:var(--accent)">接入标准生态</b><p style="color:var(--text-dim);font-size:14px">一行 env 切 Jaeger 火焰图，可观测价值最大化。</p></div>
     </div>
 
-    <div class="callout"><b>STAR（面试话术）：</b>
+    <div class="callout"><b>STAR（工程要点）：</b>
       <p style="margin:8px 0 0"><b>S</b>：Agent 任务长链路、多轮、并发，跑完一个 90s 的任务只知道"慢且贵"，定位不到瓶颈与坏 case。</p>
       <p style="margin:4px 0 0"><b>T</b>：用后端最成熟的可观测手段把决策链变成可视化调用树。</p>
       <p style="margin:4px 0 0"><b>A</b>：把 ReAct 循环建模为 OTel span 树（cogent.session→react.step→llm.stream/tool.call/agent.spawn/ctx.compact）；复用 <code>context.Context</code> 让 span 自动父子串联、与取消传播共用一条管线；observe 包封住 OTel 类型、对内核零暴露，<code>Enabled=false</code> 时 no-op 零开销；exporter 支持 file/stdout/otlp，一行 env 切 Jaeger 看火焰图；slog 注入 trace_id 与 span 对齐；goleak+race 验证后台导出 goroutine 随 Shutdown 退出。</p>
