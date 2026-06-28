@@ -1,0 +1,6 @@
+./daemon.go
+./loop.go
+./orchestrator.go
+./trigger.go
+./daemon_test.go
+./loop_test.go

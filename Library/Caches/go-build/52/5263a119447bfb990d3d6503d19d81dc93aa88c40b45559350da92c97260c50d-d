@@ -1,0 +1,9 @@
+./client.go
+./config.go
+./manager.go
+./remote_tool.go
+./trace.go
+./transport.go
+./conform_test.go
+./mcp_test.go
+./trace_test.go

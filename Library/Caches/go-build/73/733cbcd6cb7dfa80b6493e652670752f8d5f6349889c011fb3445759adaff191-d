@@ -1,0 +1,3 @@
+./permission.go
+./prompter.go
+./permission_test.go

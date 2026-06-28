@@ -1,0 +1,10 @@
+./bash.go
+./editfile.go
+./findfiles.go
+./grep.go
+./guard.go
+./listdir.go
+./readfile.go
+./task.go
+./tool.go
+./writefile.go

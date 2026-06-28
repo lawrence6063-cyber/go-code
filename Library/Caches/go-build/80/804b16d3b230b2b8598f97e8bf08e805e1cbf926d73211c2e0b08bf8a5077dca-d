@@ -1,0 +1,23 @@
+# test log
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+stat /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent
+stat /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+stat /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+stat /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+open /tmp/TestDaemon_RunsPerTriggerAndRecordsProgress71972563/001/.cogent/progress.md
+open /tmp
+getenv GOTMPDIR
+getenv TMPDIR
+open /tmp/TestDaemon_BudgetSpentRecordedBlocked1510905118/001/.cogent/progress.md
+stat /tmp/TestDaemon_BudgetSpentRecordedBlocked1510905118/001/.cogent
+stat /tmp/TestDaemon_BudgetSpentRecordedBlocked1510905118/001
+open /tmp/TestDaemon_BudgetSpentRecordedBlocked1510905118/001/.cogent/progress.md
+open /tmp/TestDaemon_BudgetSpentRecordedBlocked1510905118/001/.cogent/progress.md
+open /tmp

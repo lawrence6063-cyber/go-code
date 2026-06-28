@@ -379,6 +379,7 @@ func buildSpawner(llmc llm.Client, prov observe.Provider, workRoot string) tool.
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
+		tool.NewFindFiles(workRoot),
 	)
 	return agent.New(engine.Deps{
 		LLM:      llmc,
@@ -407,6 +408,7 @@ func buildToolPool(
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
+		tool.NewFindFiles(workRoot),
 		tool.NewTask(spawner), // 只读派发工具：把探索子任务交给隔离子 Agent
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
@@ -424,6 +426,7 @@ func buildReviewerPool(workRoot string) tool.Pool {
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
+		tool.NewFindFiles(workRoot),
 	)
 }
 
@@ -436,6 +439,7 @@ func buildMakerPool(workRoot string, prompter permission.Prompter, tracer observ
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
+		tool.NewFindFiles(workRoot),
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
 		guard(tool.NewBash(sb, tracer)),
