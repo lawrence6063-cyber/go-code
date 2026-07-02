@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cogent 專案全景：自主編碼 Agent 運行時</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --accent2: #7ee787;
+            --warn: #f0883e;
+            --code-bg: #1e242c;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            line-height: 1.7;
+            color: var(--text);
+            background: var(--bg);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
+
+        h1 { color: var(--accent); font-size: 2em; border-bottom: 2px solid var(--border); padding-bottom: .3em; }
+        h2 { color: var(--accent); margin-top: 2.2em; border-left: 4px solid var(--accent); padding-left: .5em; }
+        h3 { color: var(--accent2); margin-top: 1.6em; }
+
+        code {
+            background: var(--code-bg);
+            color: var(--accent2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: .9em;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: .82em;
+            line-height: 1.45;
+            color: var(--text);
+        }
+        pre code { background: none; color: var(--text); padding: 0; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.2em 0;
+            font-size: .92em;
+        }
+        th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+        th { background: var(--panel); color: var(--accent); }
+        tr:nth-child(even) td { background: #12171e; }
+
+        .lead { color: var(--muted); font-size: 1.05em; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 1em 0;
+        }
+        .tag {
+            display: inline-block;
+            background: var(--code-bg);
+            color: var(--accent);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1px 10px;
+            font-size: .8em;
+            margin: 2px;
+        }
+        .toc { columns: 2; font-size: .92em; }
+        .toc a { color: var(--accent); text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        strong { color: #e6edf3; }
+        .note { border-left: 4px solid var(--warn); background: #1c1712; padding: 10px 16px; border-radius: 0 6px 6px 0; }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>cogent 專案全景解析</h1>
+<p class="lead">用 Go 從零實現的<strong>自主編碼 Agent 運行時</strong>——一份從架構到資料流的完整導覽。</p>
+
+<div class="card">
+    <strong>目錄</strong>
+    <div class="toc">
+        <p>1. <a href="#s1">cogent 是什麼</a></p>
+        <p>2. <a href="#s2">核心概念：ReAct 迴圈</a></p>
+        <p>3. <a href="#s3">整體架構分層</a></p>
+        <p>4. <a href="#s4">執行內核 engine / agent / llm</a></p>
+        <p>5. <a href="#s5">工具系統</a></p>
+        <p>6. <a href="#s6">安全縱深防禦</a></p>
+        <p>7. <a href="#s7">上下文工程</a></p>
+        <p>8. <a href="#s8">可觀測與成本</a></p>
+        <p>9. <a href="#s9">終端 UI 六項 + MCP</a></p>
+        <p>10. <a href="#s10">三種自主級別</a></p>
+        <p>11. <a href="#s11">一次對話的完整資料流</a></p>
+        <p>12. <a href="#s12">套件地圖</a></p>
+        <p>13. <a href="#s13">設計哲學與學習路徑</a></p>
+    </div>
+</div>
+
+<h2 id="s1">一、cogent 是什麼</h2>
+<p><strong>一句話</strong>：cogent 是一個用 <strong>Go 語言</strong>從零實現的<strong>自主編碼 Agent 運行時</strong>——可理解為 Claude Code / Aider / Cursor Agent 的開源 Go 實現：一個活在終端裡、能讀寫程式碼、執行命令、多輪推理並自主完成編碼任務的 AI 助手。</p>
+<p>它不只是「呼叫一次 LLM」，而是一套完整工程系統，涵蓋九大能力領域：</p>
+<p>
+    <span class="tag">Agent 核心迴圈</span>
+    <span class="tag">串流 LLM</span>
+    <span class="tag">工具系統</span>
+    <span class="tag">多層安全</span>
+    <span class="tag">上下文工程</span>
+    <span class="tag">可觀測性</span>
+    <span class="tag">終端 UI</span>
+    <span class="tag">MCP 擴展</span>
+    <span class="tag">評測</span>
+</p>
+
+<h2 id="s2">二、核心概念：ReAct 迴圈</h2>
+<p>整個系統的心臟是 <code>internal/engine</code> 驅動的 <strong>ReAct 迴圈</strong>（Reasoning + Acting）：「推理 → 呼叫工具 → 觀察結果 → 再推理」不斷循環，直到模型認為任務完成。</p>
+<pre><code>   使用者輸入
+        │
+        ▼
+ ┌──────────────────────────────────────────────┐
+ │            engine.Run （一輪任務）              │
+ │                                                │
+ │   ┌─→ ① 推理 Reasoning  ── 呼叫 LLM 串流       │
+ │   │        │                                   │
+ │   │        ▼                                   │
+ │   │   模型輸出：文字增量 + 是否要用工具？        │
+ │   │        │                                   │
+ │   │        ├── 無工具 ──→ 完成，回覆使用者      │
+ │   │        │                                   │
+ │   │        ▼ 有工具                            │
+ │   │   ② 行動 Acting    ── 權限閘門 → 執行工具   │
+ │   │        │                                   │
+ │   │        ▼                                   │
+ │   └─ ③ 觀察 Observation ← 工具結果回流給模型    │
+ │              （直到無工具呼叫 或 觸達 MaxSteps） │
+ └──────────────────────────────────────────────┘</code></pre>
+<p><code>MaxSteps</code>（預設 50）是防止無限迴圈的護欄。</p>
+
+<h2 id="s3">三、整體架構分層</h2>
+<pre><code>╔═══════════════════════════════════════════════════════════════╗
+║  命令入口  cmd/cogent   run · resume · goal · loop · mcp        ║
+╠═══════════════════════════════════════════════════════════════╣
+║  終端 UI（行級 TUI）                                            ║
+║  lineeditor · streamview · menu · statusbar · slashcmd         ║
+║  ├─ render（Markdown/Diff/寬度）completion（@///補全）history   ║
+╠═══════════════════════════════════════════════════════════════╣
+║  執行內核                                                       ║
+║  engine（ReAct 迴圈）· agent（子 Agent）· llm（串流客戶端）      ║
+╠════════════════════╦══════════════════╦═══════════════════════╣
+║  工具系統           ║  安全縱深防禦      ║  上下文工程            ║
+║  tool（8 個工具）   ║  permission(HITL) ║  session（會話持久化） ║
+║  + Guard 裝飾器     ║  sandbox（沙箱）  ║  memory（長期記憶）    ║
+║  + mcp（外部工具）  ║  worktree（隔離） ║  contextmgr（壓縮）    ║
+║                    ║                  ║  progress（待辦看板）  ║
+╠════════════════════╩══════════════════╩═══════════════════════╣
+║  橫切設施   observe（trace/metric）· cost（成本）· types（型別）║
+╚═══════════════════════════════════════════════════════════════╝
+                          依賴方向：上層 → 下層（單向）</code></pre>
+
+<h2 id="s4">四、執行內核（engine / agent / llm）</h2>
+<table>
+    <tr><th>套件</th><th>職責</th></tr>
+    <tr><td><code>engine</code></td><td>執行內核，驅動 ReAct 迴圈。對外方法：<code>Run</code>（跑一輪對話）、<code>Resume</code>（從會話恢復續跑）、<code>Undo</code>（撤銷上一輪，含檔案還原）。透過 <code>StreamEvent</code> 事件流向上輸出。</td></tr>
+    <tr><td><code>agent</code></td><td>封裝「單個自治 Agent 的一次完整運行」，供 engine 與 <code>task</code> 工具複用——子 Agent 派發的基礎。</td></tr>
+    <tr><td><code>llm</code></td><td>對接 DeepSeek / OpenAI 相容的 Chat Completions <strong>串流</strong>接口（SSE），<code>Stream(ctx, req) → &lt;-chan Delta</code>。重試策略考究：<strong>只在建流階段重試</strong>，一旦開始吐 token 就不重試（避免破壞增量語義）。</td></tr>
+</table>
+<p><strong>事件流 <code>StreamEvent</code></strong>（型別在 <code>internal/types</code>）把整個過程事件化：<code>EventText</code>（文字增量）、<code>EventToolStart</code>、<code>EventToolResult</code>、<code>EventCompacted</code>（上下文壓縮）、<code>EventDone</code>、<code>EventError</code>。</p>
+
+<h2 id="s5">五、工具系統（tool）</h2>
+<p>Agent 透過工具與世界互動。<strong>8 個內建工具</strong>：</p>
+<table>
+    <tr><th>工具</th><th>類型</th><th>作用</th></tr>
+    <tr><td><code>read_file</code></td><td>唯讀</td><td>讀檔</td></tr>
+    <tr><td><code>list_dir</code></td><td>唯讀</td><td>列目錄</td></tr>
+    <tr><td><code>grep</code></td><td>唯讀</td><td>內容搜尋</td></tr>
+    <tr><td><code>find_files</code></td><td>唯讀</td><td>檔名搜尋</td></tr>
+    <tr><td><code>write_file</code></td><td>寫入</td><td>建立/覆寫檔案（產出 Diff）</td></tr>
+    <tr><td><code>edit_file</code></td><td>寫入</td><td>精確字串替換（產出 Diff）</td></tr>
+    <tr><td><code>bash</code></td><td>執行</td><td>執行 shell 命令（過沙箱）</td></tr>
+    <tr><td><code>task</code></td><td>派發</td><td>派發唯讀子 Agent 做探索（刻意不含自身以杜絕遞迴派發）</td></tr>
+</table>
+<p><strong>Tool 介面</strong>：<code>Name / Description / InputSchema / Call / CheckPermission</code>。<code>Pool</code> 負責註冊與去重（內建優先，防外部同名工具劫持）。<strong>Guard 裝飾器</strong>統一為「寫/執行類 + 全部 MCP 外部工具」注入權限閘門與 HITL。</p>
+
+<h2 id="s6">六、安全縱深防禦（permission / sandbox / worktree）</h2>
+<p>本專案最見功力之處——<strong>多層設防、fail-closed</strong>：</p>
+<pre><code>模型想執行 bash「rm -rf build/」
+    │
+    ▼  ① permission：預設 ask → 觸發 HITL 中斷
+    │     └─ 彈出 raw 選單：Approve / Always / Edit / Reject
+    ▼  ② sandbox：ValidatePath 路徑必須在工作區內
+    │     IsControlPlaneWrite 禁止寫 .cogent/ 控制面
+    │     危險命令確定性攔截
+    ▼  ③ worktree：高風險任務在 git worktree 隔離副本執行
+    │     改動先進沙盒副本，diff 審閱後才合併
+    ▼  執行</code></pre>
+<table>
+    <tr><th>套件</th><th>職責</th></tr>
+    <tr><td><code>permission</code></td><td>權限模型與<strong>人類在環（HITL）中斷協議</strong>：<code>Prompter / Interrupt / Resolution / Decision</code>，動作 <code>Approve / Edit / Reject</code>。</td></tr>
+    <tr><td><code>sandbox</code></td><td>工作區路徑校驗 + 命令執行安全邊界。</td></tr>
+    <tr><td><code>worktree</code></td><td>用 <code>git worktree</code> 為高風險任務建立隔離工作副本。</td></tr>
+</table>
+<p class="note">無人值守場景（goal/loop）可設 <code>COGENT_YES</code> 自動批准，但危險命令仍被 sandbox 確定性攔截、worktree 隔離兜底——<strong>爆炸半徑可控</strong>。</p>
+
+<h2 id="s7">七、上下文工程（session / memory / contextmgr / progress）</h2>
+<p>讓 Agent「記得住、接得上、不爆窗」：</p>
+<table>
+    <tr><th>套件</th><th>職責</th><th>落盤位置</th></tr>
+    <tr><td><code>session</code></td><td>會話持久化：每輪對話與工具呼叫落盤為可恢復的 transcript</td><td><code>data/</code></td></tr>
+    <tr><td><code>memory</code></td><td>跨會話長期記憶：讀取專案約定與偏好，注入系統提示</td><td><code>.cogent/memory</code></td></tr>
+    <tr><td><code>contextmgr</code></td><td>上下文視窗計算與<strong>自動壓縮</strong>：接近視窗上限時把舊歷史摘要成狀態筆記再重注入，並有連續失敗熔斷</td><td>—</td></tr>
+    <tr><td><code>progress</code></td><td>跨 run 的待辦看板（Loop 的「倉庫記憶」）</td><td><code>.cogent/progress.md</code></td></tr>
+</table>
+
+<h2 id="s8">八、可觀測與成本（observe / cost）</h2>
+<ul>
+    <li><strong>observe</strong>：統一的 trace（追蹤）/ metric（指標）抽象與 exporter（file/stdout/otlp），預設零開銷 no-op。</li>
+    <li><strong>cost</strong>：裝飾 <code>observe.Meter</code>，攔截 <code>cogent.tokens</code> 計數，按模型單價累計美元成本並分類累計 in/out token；驅動 loop 的 <code>--max-cost</code> 護欄，也供狀態列展示。</li>
+</ul>
+
+<h2 id="s9">九、終端 UI 六項 + MCP 擴展</h2>
+<p>行級 TUI 六項能力（基於 raw 模式 + ANSI + 解耦狀態機）：</p>
+<table>
+    <tr><th>#</th><th>能力</th><th>關鍵套件</th></tr>
+    <tr><td>①</td><td>串流富渲染（Markdown-lite + spinner + 工具分區）</td><td><code>render.StreamMarkdown</code> · <code>streamview</code></td></tr>
+    <tr><td>②</td><td>Diff 彩色渲染（工具產出 unified diff + 著色）</td><td><code>render.ColorizeDiff</code> · <code>tool/diff.go</code></td></tr>
+    <tr><td>③</td><td>權限確認菜單（raw 單選，文本回退）</td><td><code>menu.go</code> · <code>prompter.go</code></td></tr>
+    <tr><td>④</td><td>歷史 + Ctrl-R reverse-i-search（含持久化）</td><td><code>history.Store</code> · <code>lineeditor.go</code></td></tr>
+    <tr><td>⑤</td><td>@ / 斜杠命令補全（雙觸發符 + 命令路由）</td><td><code>completion</code> · <code>slashcmd.go</code></td></tr>
+    <tr><td>⑥</td><td>狀態列（模型 / token / 成本）</td><td><code>statusbar.go</code> · <code>cost.go</code></td></tr>
+</table>
+<p><strong>MCP 擴展</strong>：<code>mcp</code> 套件連接並管理 MCP（Model Context Protocol）server，把外部工具<strong>適配成內建 Tool 介面</strong>注入工具池——外部工具一律過 Guard 權限閘門，視為不可信。</p>
+
+<h2 id="s10">十、三種自主級別（關鍵設計）★</h2>
+<p>cogent 提供<strong>遞進的三種自主程度</strong>，這是它作為「Agent 運行時」的精髓：</p>
+<pre><code>  🧑 人在環           🤖 單目標自主          🚀 完全自治
+  cogent run    ──→   cogent goal "…"   ──→   cogent loop
+  交互式 REPL          給目標自主規劃執行         反覆從待辦看板取目標
+  多輪對話             maker/reviewer 雙角色      直到清空或觸達預算上限
+  resume 可續跑        實作者改碼 + 審查把關      --max-cost 成本護欄</code></pre>
+<table>
+    <tr><th>命令</th><th>自主級別</th><th>說明</th></tr>
+    <tr><td><code>cogent run</code></td><td>人在環互動</td><td>交互式 REPL，多輪對話，每輪由使用者驅動；<code>resume</code> 可從中斷處恢復。</td></tr>
+    <tr><td><code>cogent goal "…"</code></td><td>單目標自主</td><td>給一個目標，自主規劃並執行到完成——採 maker/reviewer 雙角色迴圈。</td></tr>
+    <tr><td><code>cogent loop</code></td><td>完全自治</td><td>反覆從待辦看板 <code>.cogent/progress.md</code> 取目標執行，直到清空或觸達預算/次數上限。</td></tr>
+</table>
+
+<h2 id="s11">十一、一次對話的完整資料流</h2>
+<pre><code>使用者輸入 "幫我把 timeout 從 5 改成 30"
+   │
+   ▼ engine.Run
+   │  組裝訊息 = 系統提示 + memory(專案約定) + 歷史 + 本次輸入
+   ▼ llm.Stream ─────────→ EventText「我來修改 config.go」（串流渲染 Markdown）
+   │  模型決定呼叫 edit_file
+   ▼ Guard.CheckPermission → HITL 選單「Approve/Always/Edit/Reject」（raw TUI）
+   │  使用者選 Approve
+   ▼ sandbox.ValidatePath 校驗 → edit_file 執行 → 產出 unified diff
+   ▼ EventToolResult（render.ColorizeDiff 綠加紅刪彩顯）
+   │  結果回流給模型
+   ▼ llm.Stream ─────────→ EventText「已完成，timeout 現為 30」
+   ▼ EventDone
+   │
+   └─ 全程：session 落盤 · observe 記 trace+token · cost 累計美元
+             · contextmgr 若接近視窗則 compact · 狀態列顯示 token/成本</code></pre>
+
+<h2 id="s12">十二、套件地圖速查</h2>
+<pre><code>cogent/
+├── cmd/cogent/        # CLI 入口 + 終端 UI
+│   ├── main/commands  # cobra 根命令、依賴裝配、REPL 迴圈
+│   ├── goal/loop      # 單目標 / 自治迴圈
+│   ├── review         # maker/reviewer 流水線 + worktree
+│   ├── lineeditor/streamview/menu/statusbar/slashcmd  # TUI 六項
+│   └── prompter/cost/skills/init
+├── internal/
+│   ├── engine agent llm         # 執行內核
+│   ├── tool sandbox permission mcp worktree  # 工具與安全
+│   ├── session memory contextmgr progress    # 上下文工程
+│   ├── observe                  # 可觀測 + 成本
+│   ├── render completion history # 終端 UI 純邏輯
+│   ├── types                    # 共享型別（Message/ToolResult/StreamEvent）
+│   └── eval                     # 評測
+├── docs/              # 教學文件（本系列）
+└── spec/              # 設計規格</code></pre>
+
+<h2 id="s13">十三、設計哲學與學習路徑</h2>
+<h3>工程亮點</h3>
+<ol>
+    <li><strong>嚴格分層 + 依賴單向</strong>：<code>types</code> 是最內層葉子（零業務依賴），杜絕循環依賴。純邏輯（render/completion/history/contextmgr）全部可單測。</li>
+    <li><strong>縱深防禦</strong>：permission（HITL）→ sandbox（路徑/命令）→ worktree（隔離）→ 唯讀子 Agent，層層設防，fail-closed。</li>
+    <li><strong>串流優先</strong>：從 LLM 的 SSE 到事件流到終端渲染，端到端串流；重試只在建流階段，保護增量語義。</li>
+    <li><strong>上下文工程</strong>：session（接得上）+ memory（記得住）+ contextmgr（不爆窗）三位一體。</li>
+    <li><strong>可觀測 + 成本護欄</strong>：trace/metric 內建，<code>--max-cost</code> 讓自治迴圈花費可控。</li>
+    <li><strong>遞進自主</strong>：run → goal → loop，同一內核三種放權。</li>
+    <li><strong>可擴展</strong>：MCP 讓工具可插拔。</li>
+</ol>
+<h3>建議學習路徑</h3>
+<ol>
+    <li><strong>先跑起來</strong>：<code>cogent run</code> 感受互動 → <code>cogent goal "…"</code> 感受自主。</li>
+    <li><strong>讀內核</strong>：<code>internal/engine</code> 的 ReAct 迴圈 → <code>internal/llm</code> 串流 → <code>internal/tool</code> 工具介面。</li>
+    <li><strong>讀安全</strong>：<code>Guard</code> → <code>permission</code> → <code>sandbox</code> → <code>worktree</code> 的縱深防禦鏈。</li>
+    <li><strong>讀上下文工程</strong>：<code>session</code> / <code>memory</code> / <code>contextmgr</code>。</li>
+    <li><strong>讀終端 UI</strong>：配合 <code>docs/repl-raw-and-at-completion-tutorial.html</code>。</li>
+</ol>
+
+<div class="card">
+    <strong>一句話總結</strong>：cogent 是一個麻雀雖小、五臟俱全的<strong>生產級自主編碼 Agent 運行時</strong>——把「LLM + 工具 + 安全 + 上下文 + 自治迴圈」這套現代 AI Agent 的完整範式，用乾淨的 Go 架構完整落地了。
+</div>
+
+</div>
+</body>
+</html>

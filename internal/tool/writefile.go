@@ -61,8 +61,12 @@ func (t *writeFileTool) Call(_ context.Context, input json.RawMessage, _ Progres
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return types.ToolResult{Content: fmt.Sprintf("mkdir: %v", err), IsError: true}, nil
 	}
+	old, _ := os.ReadFile(abs) // 文件不存在或不可读时视为空（新建场景）
 	if err := os.WriteFile(abs, []byte(in.Content), 0o644); err != nil {
 		return types.ToolResult{Content: fmt.Sprintf("write %s: %v", in.Path, err), IsError: true}, nil
 	}
-	return types.ToolResult{Content: fmt.Sprintf("wrote %d bytes to %s", len(in.Content), in.Path)}, nil
+	return types.ToolResult{
+		Content: fmt.Sprintf("wrote %d bytes to %s", len(in.Content), in.Path),
+		Diff:    unifiedDiff(in.Path, string(old), in.Content),
+	}, nil
 }

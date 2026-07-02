@@ -62,7 +62,7 @@ func runInit() error {
 		or(existing["COGENT_MODEL"], "deepseek-chat"))
 
 	entries := map[string]string{
-		"DEEPSEEK_API_KEY":     apiKey,
+		"DEEPSEEK_API_KEY":    apiKey,
 		"COGENT_LLM_BASE_URL": baseURL,
 		"COGENT_MODEL":        model,
 	}

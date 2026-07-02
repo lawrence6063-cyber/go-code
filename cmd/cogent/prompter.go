@@ -13,13 +13,16 @@ import (
 	"github.com/alaindong/cogent/internal/permission"
 )
 
-// inputReader 是单一的 stdin 行来源：后台 goroutine 逐行读取，按需串行交给请求者。
-// REPL 提示与权限中断（HITL）共用它，避免多处并发读取 stdin 造成竞争。
+// inputReader 是单一的 stdin 行来源，REPL 提示与权限中断（HITL）共用它。
+// 两种模式互斥：TTY 时用 raw 模式交互式行编辑器（支持 @ 文件补全下拉），
+// 非 TTY（管道/测试）或 raw 不可用时用后台 goroutine 逐行读取，避免多处并发读取 stdin 造成竞争。
 type inputReader struct {
-	lines <-chan string
+	lines  <-chan string // 非 TTY / 已回退：后台 Scanner 的行来源
+	editor *lineEditor   // TTY：交互式行编辑器（nil 表示走逐行读取路径）
+	tty    *os.File      // TTY 源；raw 交互不可用时据此懒回退到逐行读取
 }
 
-// newInputReader 启动后台读取并返回行来源。
+// newInputReader 启动后台逐行读取并返回行来源（非 TTY 路径，供管道与测试使用）。
 func newInputReader(r io.Reader) *inputReader {
 	out := make(chan string)
 	go func() {
@@ -33,14 +36,48 @@ func newInputReader(r io.Reader) *inputReader {
 	return &inputReader{lines: out}
 }
 
+// newTTYInputReader 构造感知终端的行来源：stdin 为终端时启用 @ 补全行编辑器（候选取自 workRoot），
+// 否则退回 newInputReader 的逐行读取，保证脚本与非交互场景行为不变。
+// 注意：这里只判定“是否终端”（能读 termios），真正能否进入 raw 模式在首次 readLine 时才知晓；
+// 若届时发现 raw 不可用（如受限 TTY/部分 pty 拒绝写 termios，或读键即 I/O 错误），
+// next 会一次性懒回退到逐行读取，而非让整个 REPL 直接退出（详见 next）。
+func newTTYInputReader(f *os.File, workRoot string) *inputReader {
+	if isTerminalFD(f.Fd()) {
+		return &inputReader{editor: newLineEditor(f, workRoot), tty: f}
+	}
+	return newInputReader(f)
+}
+
 // next 取下一行；ctx 取消或输入结束时返回 ok=false。
+// TTY 路径下，若 readLine 判定 raw 交互不可用（usable=false），则一次性回退到逐行读取并重试本次读取——
+// 这样即便某些终端允许读 termios 却拒绝进入 raw（或首次读键即底层 I/O 失败），REPL 仍能正常交互。
 func (ir *inputReader) next(ctx context.Context) (string, bool) {
+	if ir.editor != nil {
+		line, ok, usable := ir.editor.readLine(ctx)
+		if usable {
+			return line, ok
+		}
+		fmt.Fprintln(os.Stderr,
+			"cogent: 交互式行编辑不可用，回退到逐行输入模式（无 @ 文件补全下拉）")
+		ir.fallbackToLines()
+		// 回退后继续走下方逐行读取，完成本次取行。
+	}
 	select {
 	case <-ctx.Done():
 		return "", false
 	case line, ok := <-ir.lines:
 		return line, ok
 	}
+}
+
+// fallbackToLines 关闭行编辑器并改用后台 Scanner 逐行读取 TTY（raw 不可用时的降级路径）。
+func (ir *inputReader) fallbackToLines() {
+	ir.editor = nil
+	src := io.Reader(os.Stdin)
+	if ir.tty != nil {
+		src = ir.tty
+	}
+	ir.lines = newInputReader(src).lines
 }
 
 // cliPrompter 是 permission.Prompter 的 CLI 实现：在中断点读 stdin 完成 Approve/Edit/Reject。

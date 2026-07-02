@@ -90,11 +90,10 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
-	in := newInputReader(os.Stdin)
-	prompter := newPrompter(in)
 	wd, _ := os.Getwd()
+	in := newTTYInputReader(os.Stdin, wd)
+	prompter := newPrompter(in)
 	sid := session.NewSessionID()
-
 	if opts.worktree && !opts.allowDirty {
 		if err := ensureCleanWorktree(ctx, wd); err != nil {
 			return err

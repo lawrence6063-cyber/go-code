@@ -7,7 +7,7 @@
 
 ## 关键约定（务必遵守）
 - **go module 路径**：`github.com/alaindong/cogent`（已定，影响所有 import 前缀）。
-- **Go 版本**：本机 go1.22.5 darwin/arm64；goimports 已装；golangci-lint 未装。
+- **Go 版本**：go.mod 现要求 **go 1.26**（2026-07-02 更新，此前为 1.23）。本机系统 brew 仅 go1.22.5，构建/测试用 `export GOTOOLCHAIN=auto` 让其按 go.mod 自动下载 go1.26.0（已验证可用）。goimports 已装；golangci-lint 未装。
 - **架构不变量**：`internal/types` 是最内层共享类型层，不依赖任何业务包；engine 依赖接口经 Deps 注入；fail-closed 默认。
 - **对 spec 的合理收敛**：`ToolResult` 定义在 `types` 包（而非 §5.4 的 tool 包），以守住"types 不依赖业务包"，tool 包后续引用 `types.ToolResult`。
 - 严格按 Phase 分阶段交付，不提前实现后续 Phase 内容。

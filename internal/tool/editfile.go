@@ -73,5 +73,8 @@ func (t *editFileTool) Call(_ context.Context, input json.RawMessage, _ Progress
 	if err := os.WriteFile(abs, []byte(updated), 0o644); err != nil {
 		return types.ToolResult{Content: fmt.Sprintf("write %s: %v", in.Path, err), IsError: true}, nil
 	}
-	return types.ToolResult{Content: fmt.Sprintf("edited %s", in.Path)}, nil
+	return types.ToolResult{
+		Content: fmt.Sprintf("edited %s", in.Path),
+		Diff:    unifiedDiff(in.Path, string(data), updated),
+	}, nil
 }

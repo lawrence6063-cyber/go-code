@@ -35,6 +35,7 @@ type ToolUseBlock struct {
 type ToolResult struct {
 	Content string // 结果文本
 	IsError bool   // 是否为错误结果
+	Diff    string // 可选：unified diff 文本，供终端渲染层着色；为空表示无 diff
 }
 
 // EventType 标识一个流式事件的类型。

@@ -93,9 +93,9 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
-	in := newInputReader(os.Stdin)
-	prompter := newPrompter(in)
 	wd, _ := os.Getwd()
+	in := newTTYInputReader(os.Stdin, wd)
+	prompter := newPrompter(in)
 	sid := session.NewSessionID()
 
 	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree, opts.maxSteps)

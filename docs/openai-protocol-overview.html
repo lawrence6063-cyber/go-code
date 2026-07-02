@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenAI Chat Completions 协议：流式 vs 非流式</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1d212c;
+    --border: #2a2f3d;
+    --text: #e6e8ee;
+    --text-dim: #9aa2b4;
+    --accent: #5b9dff;
+    --accent-2: #7ee3b0;
+    --accent-3: #ffb454;
+    --danger: #ff6b6b;
+    --code-bg: #0b0d13;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: linear-gradient(180deg, #0b0d13 0%, var(--bg) 100%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+    padding-bottom: 60px;
+  }
+  header {
+    padding: 48px 24px 32px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: radial-gradient(1200px 400px at 50% -20%, rgba(91,157,255,0.15), transparent);
+  }
+  header h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+  }
+  header p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 860px) {
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .card.stream::before { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .card.nonstream::before { background: linear-gradient(90deg, var(--accent-3), var(--danger)); }
+  .card h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .badge.on { background: rgba(126,227,176,0.15); color: var(--accent-2); }
+  .badge.off { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .card .desc {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 6px 0 16px;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 48px 0 16px;
+    padding-left: 12px;
+    border-left: 4px solid var(--accent);
+  }
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 18px;
+    font-size: 13px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .flow .box {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .flow .arrow { color: var(--accent); }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  code { font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .json-key { color: #7ee3b0; }
+  .json-str { color: #ffb454; }
+  .json-num { color: #5b9dff; }
+  .json-punc { color: #6b7280; }
+  .json-comment { color: #6b7280; font-style: italic; }
+  .frames {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .frame {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+  }
+  .frame .idx {
+    flex: 0 0 auto;
+    background: rgba(91,157,255,0.15);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-weight: 700;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .frame .content { flex: 1; }
+  .frame code { color: var(--text); }
+  .frame .note { color: var(--text-dim); margin-left: 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 32px;
+    font-size: 13px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+  }
+  th {
+    background: var(--panel-2);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: rgba(91,157,255,0.15);
+    color: var(--accent);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .tag.tool { background: rgba(255,180,84,0.15); color: var(--accent-3); }
+  .tag.text { background: rgba(126,227,176,0.15); color: var(--accent-2); }
+  .footer-note {
+    margin-top: 48px;
+    padding: 20px 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .footer-note strong { color: var(--text); }
+  .toc {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .toc a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: all 0.2s;
+  }
+  .toc a:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OpenAI Chat Completions 协议</h1>
+  <p>流式（SSE）vs 非流式 · 请求 &amp; 响应结构梳理</p>
+  <div class="toc">
+    <a href="#compare">概览对比</a>
+    <a href="#nonstream">非流式</a>
+    <a href="#stream">流式</a>
+    <a href="#toolcalls">工具调用分片</a>
+    <a href="#finishreason">finish_reason 取值</a>
+    <a href="#roundtrip">工具调用完整往返</a>
+    <a href="#messagefields">messages 字段 &amp; tools 区别</a>
+    <a href="#fields">字段速查表</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div id="compare" class="compare-grid">
+    <div class="card nonstream">
+      <h2>非流式 <span class="badge off">stream: false</span></h2>
+      <p class="desc">一次性等待模型生成完毕，返回完整 JSON。适合后台批处理、简单调用。</p>
+      <div class="flow">
+        <span class="box">Client</span>
+        <span class="arrow">──POST──▶</span>
+        <span class="box">OpenAI</span>
+        <span class="arrow">──等待生成完毕──▶</span>
+        <span class="box">完整 JSON</span>
+      </div>
+    </div>
+    <div class="card stream">
+      <h2>流式 <span class="badge on">stream: true</span></h2>
+      <p class="desc">SSE 逐 token 推送，client 边收边拼接。适合实时打字效果 + 可中断的 Agent 循环。</p>
+      <div class="flow">
+        <span class="box">Client</span>
+        <span class="arrow">──POST──▶</span>
+        <span class="box">OpenAI</span>
+        <span class="arrow">──多帧 SSE──▶</span>
+        <span class="box">增量拼接</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 非流式 ================= -->
+  <div id="nonstream" class="section-title">① 非流式请求 &amp; 响应</div>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">请求（Request）</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"user"</span><span class="json-punc">,</span> <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"帮我读一下 a.go"</span> <span class="json-punc">}</span>
+  <span class="json-punc">],</span>
+  <span class="json-key">"tools"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">/* function schema，可选 */</span> <span class="json-punc">],</span>
+  <span class="json-key">"stream"</span><span class="json-punc">:</span> <span class="json-num">false</span>  <span class="json-comment">// 默认值，可省略</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">响应（Response）— 单个完整 JSON，一次性返回</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"chatcmpl-abc123"</span><span class="json-punc">,</span>
+  <span class="json-key">"object"</span><span class="json-punc">:</span> <span class="json-str">"chat.completion"</span><span class="json-punc">,</span>
+  <span class="json-key">"created"</span><span class="json-punc">:</span> <span class="json-num">1677858242</span><span class="json-punc">,</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"choices"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span>
+      <span class="json-key">"index"</span><span class="json-punc">:</span> <span class="json-num">0</span><span class="json-punc">,</span>
+      <span class="json-key">"message"</span><span class="json-punc">:</span> <span class="json-punc">{</span>  <span class="json-comment">// 注意：是完整 "message"，不是 "delta"</span>
+        <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+        <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"好的，我来读取这个文件"</span><span class="json-punc">,</span>
+        <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+          <span class="json-punc">{</span>
+            <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>
+            <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span>
+            <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+              <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span>
+              <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span>  <span class="json-comment">// 已是完整 JSON</span>
+            <span class="json-punc">}</span>
+          <span class="json-punc">}</span>
+        <span class="json-punc">]</span>
+      <span class="json-punc">},</span>
+      <span class="json-key">"finish_reason"</span><span class="json-punc">:</span> <span class="json-str">"tool_calls"</span>
+    <span class="json-punc">}</span>
+  <span class="json-punc">],</span>
+  <span class="json-key">"usage"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"prompt_tokens"</span><span class="json-punc">:</span> <span class="json-num">100</span><span class="json-punc">,</span> <span class="json-key">"completion_tokens"</span><span class="json-punc">:</span> <span class="json-num">20</span><span class="json-punc">,</span> <span class="json-key">"total_tokens"</span><span class="json-punc">:</span> <span class="json-num">120</span> <span class="json-punc">}</span>
+<span class="json-punc">}</span></code></pre>
+
+  <table>
+    <tr><th>特点</th><th>说明</th></tr>
+    <tr><td>关键字段</td><td><code>choice.message</code>（完整消息对象，含 content + tool_calls）</td></tr>
+    <tr><td>拿到结果</td><td>一次 HTTP 响应 body 即完整答案，无需拼接</td></tr>
+    <tr><td>中途取消</td><td>只能整体取消 HTTP 请求，无法"看到一半就停"</td></tr>
+    <tr><td>适用场景</td><td>后台自动化任务、无 UI 展示需求、逻辑简单的单轮调用</td></tr>
+  </table>
+
+  <!-- ================= 流式 ================= -->
+  <div id="stream" class="section-title">② 流式请求 &amp; 响应（SSE）</div>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">请求（Request）— 仅多了两个字段</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">...</span> <span class="json-punc">],</span>
+  <span class="json-key">"tools"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">...</span> <span class="json-punc">],</span>
+  <span class="json-key">"stream"</span><span class="json-punc">:</span> <span class="json-num">true</span><span class="json-punc">,</span>                          <span class="json-comment">// ★ 开启流式</span>
+  <span class="json-key">"stream_options"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"include_usage"</span><span class="json-punc">:</span> <span class="json-num">true</span> <span class="json-punc">}</span>  <span class="json-comment">// ★ 末尾帧附带 usage</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">响应（Response）— SSE（Server-Sent Events）协议</p>
+
+  <p style="color:var(--text-dim); font-size:13px;">
+    流式响应不是一个 JSON，而是一个 <strong>HTTP 长连接</strong>，body 遵循
+    <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html" style="color:var(--accent);" target="_blank">SSE 规范</a>持续推送。
+  </p>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">① 响应头（Response Headers）</p>
+  <pre><code><span class="json-key">HTTP/1.1 200 OK</span>
+<span class="json-key">Content-Type</span><span class="json-punc">:</span> <span class="json-str">text/event-stream</span>       <span class="json-comment">// ★ 标识这是 SSE 流，不是普通 JSON</span>
+<span class="json-key">Cache-Control</span><span class="json-punc">:</span> <span class="json-str">no-cache</span>
+<span class="json-key">Connection</span><span class="json-punc">:</span> <span class="json-str">keep-alive</span>            <span class="json-comment">// ★ 保持连接不关闭，持续推送</span>
+<span class="json-key">Transfer-Encoding</span><span class="json-punc">:</span> <span class="json-str">chunked</span>         <span class="json-comment">// 分块传输，服务端边生成边发送</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">② SSE 原始报文格式规则</p>
+  <table>
+    <tr><th>规则</th><th>说明</th></tr>
+    <tr><td>事件前缀</td><td>每条事件以 <code>data: </code>（英文冒号+一个空格）开头</td></tr>
+    <tr><td>事件分隔</td><td>每条事件后跟 <strong>两个换行符</strong>（<code>\n\n</code>）表示一条事件结束</td></tr>
+    <tr><td>payload 格式</td><td><code>data:</code> 后面是一整行 JSON 字符串（本身不能包含未转义的换行）</td></tr>
+    <tr><td>结束标志</td><td>最后一条固定为 <code>data: [DONE]\n\n</code>（不是 JSON，是纯文本字面量）</td></tr>
+    <tr><td>其他字段（可选）</td><td>SSE 规范还支持 <code>event:</code> / <code>id:</code> / <code>retry:</code> 字段，但 OpenAI 只用 <code>data:</code></td></tr>
+  </table>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">③ 原始报文示例（TCP 层面实际收到的字节流）</p>
+  <pre><code><span class="json-key">data:</span> <span class="json-punc">{"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}</span>
+
+<span class="json-key">data:</span> <span class="json-punc">{"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"好"},"finish_reason":null}]}</span>
+
+<span class="json-key">data:</span> <span class="json-punc">{"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"的"},"finish_reason":null}]}</span>
+
+<span class="json-key">data:</span> <span class="json-punc">{"id":"chatcmpl-abc","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}</span>
+
+<span class="json-key">data:</span> <span class="json-str">[DONE]</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px;">
+    Client 侧按行读取，遇到 <code>data: </code> 前缀就取出后面的内容：如果是 <code>[DONE]</code> 就结束流；否则
+    <code>json.Unmarshal</code> 成一个 <code>ChatCompletionChunk</code> 对象，再从 <code>choices[0].delta</code> 里取增量。
+  </p>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">④ 语义化拆解（下面把关键帧的 delta 字段单独列出，方便理解每帧携带了什么）</p>
+
+  <div class="frames">
+    <div class="frame">
+      <span class="idx">帧 1</span>
+      <div class="content">
+        <code>delta: {"role":"assistant"}</code>
+        <span class="note">首帧标识角色，通常无内容</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 2</span>
+      <div class="content">
+        <code>delta: {"content":"好"}</code> <span class="tag text">TEXT</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 3</span>
+      <div class="content">
+        <code>delta: {"content":"的，我来"}</code> <span class="tag text">TEXT</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 4</span>
+      <div class="content">
+        <code>delta: {"tool_calls":[{"index":0,"id":"call_abc","function":{"name":"read_file","arguments":""}}]}</code>
+        <span class="tag tool">TOOL 首片</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 5</span>
+      <div class="content">
+        <code>delta: {"tool_calls":[{"index":0,"function":{"arguments":"{\"pa"}}]}</code>
+        <span class="tag tool">TOOL 分片</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 6</span>
+      <div class="content">
+        <code>delta: {"tool_calls":[{"index":0,"function":{"arguments":"th\":\"a.go\"}"}}]}</code>
+        <span class="tag tool">TOOL 分片</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 7</span>
+      <div class="content">
+        <code>delta: {}, finish_reason: "tool_calls"</code>
+        <span class="note">结束标志：本轮请求工具调用</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">帧 8</span>
+      <div class="content">
+        <code>usage: {"prompt_tokens":100,"completion_tokens":20}</code>
+        <span class="note">末尾附带用量（因 include_usage:true）</span>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="idx">EOF</span>
+      <div class="content">
+        <code>data: [DONE]</code>
+        <span class="note">流结束标志（原始 SSE 协议约定）</span>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>特点</th><th>说明</th></tr>
+    <tr><td>关键字段</td><td><code>choice.delta</code>（增量片段，需 client 自己拼接）</td></tr>
+    <tr><td>拿到结果</td><td>多次网络帧，text 逐 token 拼接，tool_calls 按 index 累积后组装</td></tr>
+    <tr><td>中途取消</td><td>可以随时关闭连接（ctx cancel），已花费的 token 立即停止</td></tr>
+    <tr><td>适用场景</td><td>CLI/Web 实时打字效果、Agent 循环（需可中断 + 低首字延迟）</td></tr>
+  </table>
+
+  <!-- ================= 工具调用分片 ================= -->
+  <div id="toolcalls" class="section-title">③ 工具调用（tool_calls）分片累积逻辑</div>
+  <p style="color:var(--text-dim); font-size:13px;">
+    流式下 <code>tool_calls</code> 的 <code>arguments</code> 是逐片 JSON 字符串拼接的，中间态可能是不完整的 JSON（如 <code>{"pa</code>），
+    必须等 <code>finish_reason == "tool_calls"</code> 才能安全地把所有分片拼成完整对象再解析。
+  </p>
+  <div class="flow">
+    <span class="box">帧4: id + name</span>
+    <span class="arrow">＋</span>
+    <span class="box">帧5: args 分片</span>
+    <span class="arrow">＋</span>
+    <span class="box">帧6: args 分片</span>
+    <span class="arrow">═══finish_reason═══▶</span>
+    <span class="box" style="border-color:var(--accent-2); color:var(--accent-2);">完整工具调用对象</span>
+  </div>
+  <pre><code><span class="json-comment">// 累积后组装出的完整调用（可安全 json.Unmarshal arguments）</span>
+<span class="json-punc">{</span>
+  <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>
+  <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span>
+  <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span>
+<span class="json-punc">}</span></code></pre>
+
+  <!-- ================= finish_reason ================= -->
+  <div id="finishreason" class="section-title">④ finish_reason 取值一览</div>
+  <table>
+    <tr><th>值</th><th>触发条件</th></tr>
+    <tr><td><code>"stop"</code></td><td>模型自然结束（遇到停止符或正常说完），<strong>无</strong>工具调用</td></tr>
+    <tr><td><code>"tool_calls"</code></td><td>模型决定调用一个或多个工具，本轮已生成完整调用</td></tr>
+    <tr><td><code>"length"</code></td><td>达到 <code>max_tokens</code> 限制被截断，回复可能不完整</td></tr>
+    <tr><td><code>"content_filter"</code></td><td>内容被安全过滤器拦截/截断</td></tr>
+    <tr><td><code>"function_call"</code></td><td>已废弃的旧版单函数调用格式（现统一用 <code>tool_calls</code>）</td></tr>
+    <tr><td><code>null</code></td><td>流式传输中间帧：本轮尚未结束（只有末帧才带值）</td></tr>
+  </table>
+
+  <!-- ================= 工具调用完整往返 ================= -->
+  <div id="roundtrip" class="section-title">⑤ 工具调用完整往返（两轮 HTTP 请求）</div>
+  <p style="color:var(--text-dim); font-size:13px;">
+    工具调用<strong>不是一次请求搞定</strong>：模型只能"请求"调用工具，真正执行是 client（agent）自己做的。
+    完整流程需要 <strong>两轮 HTTP 请求</strong>：
+  </p>
+  <div class="flow">
+    <span class="box">Req①: user 消息 + tools 声明</span>
+    <span class="arrow">──▶</span>
+    <span class="box" style="border-color:var(--accent-3); color:var(--accent-3);">Resp①: tool_calls</span>
+    <span class="arrow">──client 本地执行工具──▶</span>
+    <span class="box">Req②: 追加 assistant(tool_calls) + tool(result)</span>
+    <span class="arrow">──▶</span>
+    <span class="box" style="border-color:var(--accent-2); color:var(--accent-2);">Resp②: 最终文本</span>
+  </div>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Req① — 首次请求（声明 tools）</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"user"</span><span class="json-punc">,</span> <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"帮我读一下 a.go"</span> <span class="json-punc">}</span>
+  <span class="json-punc">],</span>
+  <span class="json-key">"tools"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span>
+      <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span>
+      <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+        <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span>
+        <span class="json-key">"description"</span><span class="json-punc">:</span> <span class="json-str">"读取指定路径文件内容"</span><span class="json-punc">,</span>
+        <span class="json-key">"parameters"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+          <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"object"</span><span class="json-punc">,</span>
+          <span class="json-key">"properties"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"path"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"string"</span> <span class="json-punc">}</span> <span class="json-punc">},</span>
+          <span class="json-key">"required"</span><span class="json-punc">:</span> <span class="json-punc">[</span><span class="json-str">"path"</span><span class="json-punc">]</span>
+        <span class="json-punc">}</span>
+      <span class="json-punc">}</span>
+    <span class="json-punc">}</span>
+  <span class="json-punc">]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Resp① — 模型请求调用工具（非流式简化展示）</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"choices"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+    <span class="json-key">"message"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-num">null</span><span class="json-punc">,</span>
+      <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+        <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>
+        <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span>
+        <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span> <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span> <span class="json-punc">}</span>
+      <span class="json-punc">}]</span>
+    <span class="json-punc">},</span>
+    <span class="json-key">"finish_reason"</span><span class="json-punc">:</span> <span class="json-str">"tool_calls"</span>
+  <span class="json-punc">}]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin: 12px 0 4px;">
+    ▸ <strong>client 本地执行</strong> <code>read_file({"path":"a.go"})</code>，得到结果 <code>"package main..."</code>
+  </p>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Req② — 携带 assistant(tool_calls) + tool(result) 追加历史，再次请求</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"user"</span><span class="json-punc">,</span> <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"帮我读一下 a.go"</span> <span class="json-punc">},</span>
+    <span class="json-punc">{</span>  <span class="json-comment">// ★ 把 Resp① 的 assistant 消息原样放回去</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-num">null</span><span class="json-punc">,</span>
+      <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[{</span> <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span> <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span> <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span> <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span> <span class="json-punc">}</span> <span class="json-punc">}]</span>
+    <span class="json-punc">},</span>
+    <span class="json-punc">{</span>  <span class="json-comment">// ★ 新增：工具执行结果，role 必须是 "tool"</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"tool"</span><span class="json-punc">,</span>
+      <span class="json-key">"tool_call_id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>  <span class="json-comment">// 必须与 Resp① 里的 id 对应</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"package main\n\nfunc main() {...}"</span>
+    <span class="json-punc">}</span>
+  <span class="json-punc">],</span>
+  <span class="json-key">"tools"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">/* 同 Req①，通常继续携带，方便模型再次调用 */</span> <span class="json-punc">]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Resp② — 模型基于工具结果给出最终回复</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"choices"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+    <span class="json-key">"message"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"文件 a.go 的内容是一个简单的 main 函数，仅打印..."</span>
+    <span class="json-punc">},</span>
+    <span class="json-key">"finish_reason"</span><span class="json-punc">:</span> <span class="json-str">"stop"</span>
+  <span class="json-punc">}]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <table>
+    <tr><th>关键约束</th><th>说明</th></tr>
+    <tr><td>配对完整性</td><td>每个 <code>assistant.tool_calls[i].id</code> 必须有且仅有一条对应 <code>role:"tool"</code> 消息，<code>tool_call_id</code> 精确匹配</td></tr>
+    <tr><td>顺序要求</td><td><code>tool</code> 消息必须紧跟在对应的 <code>assistant(tool_calls)</code> 消息之后</td></tr>
+    <tr><td>并行调用</td><td>一次 Resp① 可能同时返回多个 <code>tool_calls</code>（不同 <code>index</code>），Req② 需为每个都追加对应的 <code>tool</code> 结果消息</td></tr>
+    <tr><td>可能多轮</td><td>Resp② 也可能再次是 <code>finish_reason:"tool_calls"</code>（继续调用工具），如此循环直至 <code>"stop"</code></td></tr>
+  </table>
+
+  <!-- ================= messages 字段 & tools vs tool_calls ================= -->
+  <div id="messagefields" class="section-title">⑥ messages 对象字段 &amp; tools 与 tool_calls 的区别</div>
+
+  <p style="color:var(--text-dim); font-size:13px;">
+    请求体是<strong>扁平结构</strong>：<code>model</code> / <code>messages</code> / <code>tools</code> / <code>stream</code> 等都是
+    <strong>顶层平级字段</strong>，<code>tools</code> <strong>不属于</strong> <code>messages</code>。二者常被混淆，但语义完全不同：
+    <code>tools</code> 是"这轮对话模型可以使用哪些工具"的<strong>能力声明</strong>；<code>messages[].tool_calls</code> 是
+    "模型这轮实际决定调用了哪个工具"的<strong>调用记录</strong>，只会出现在 <code>role: "assistant"</code> 的消息里。
+  </p>
+
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>          <span class="json-comment">// 顶层字段</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">...</span> <span class="json-punc">],</span>  <span class="json-comment">// 顶层字段：对话历史数组</span>
+  <span class="json-key">"tools"</span><span class="json-punc">:</span> <span class="json-punc">[</span> <span class="json-comment">...</span> <span class="json-punc">],</span>     <span class="json-comment">// 顶层字段：与 messages 平级，声明"有哪些工具可用"</span>
+  <span class="json-key">"tool_choice"</span><span class="json-punc">:</span> <span class="json-str">"auto"</span><span class="json-punc">,</span>  <span class="json-comment">// 顶层字段：auto / none / required / 指定某个工具</span>
+  <span class="json-key">"stream"</span><span class="json-punc">:</span> <span class="json-num">false</span>          <span class="json-comment">// 顶层字段</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px;">
+    上面只是与 <code>messages</code>/<code>tools</code> 关系最相关的几个，请求顶层字段远不止这些，按用途完整分类如下：
+  </p>
+  <table>
+    <tr><th>分类</th><th>字段</th><th>说明</th></tr>
+    <tr><td>必需</td><td><code>model</code> / <code>messages</code></td><td>模型名 + 对话历史</td></tr>
+    <tr><td>工具调用</td><td><code>tools</code> / <code>tool_choice</code> / <code>parallel_tool_calls</code></td><td>可用工具声明 / 调用策略（auto/none/required/指定） / 是否允许一次并行返回多个调用（默认 true）</td></tr>
+    <tr><td>采样与生成控制</td><td><code>temperature</code> / <code>top_p</code> / <code>max_tokens</code>（新版 <code>max_completion_tokens</code>） / <code>n</code> / <code>stop</code> / <code>presence_penalty</code> / <code>frequency_penalty</code> / <code>seed</code> / <code>logit_bias</code></td><td>控制随机性、输出长度、候选数量、重复惩罚、可复现性等</td></tr>
+    <tr><td>流式相关</td><td><code>stream</code> / <code>stream_options</code></td><td>是否 SSE 推送 / 流式附加选项（如 <code>include_usage</code>）</td></tr>
+    <tr><td>输出格式</td><td><code>response_format</code></td><td>强制输出合法 JSON（<code>json_object</code>）或按 JSON Schema 严格约束（<code>json_schema</code>）</td></tr>
+    <tr><td>可观测/审计</td><td><code>user</code> / <code>metadata</code> / <code>store</code> / <code>logprobs</code> / <code>top_logprobs</code></td><td>终端用户标识、附加元数据、是否留存用于评测蒸馏、返回 token 概率</td></tr>
+    <tr><td>特殊模型专属</td><td><code>reasoning_effort</code> / <code>modalities</code> / <code>audio</code> / <code>prediction</code></td><td>o 系列推理强度、多模态语音输出、预测输出加速</td></tr>
+    <tr><td>已废弃</td><td><code>functions</code> / <code>function_call</code></td><td>被 <code>tools</code> / <code>tool_choice</code> 取代，勿再使用</td></tr>
+  </table>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;"><code>messages[]</code> 数组中每个消息对象的字段：</p>
+  <table>
+    <tr><th>字段</th><th>出现在哪种 role</th><th>说明</th></tr>
+    <tr><td><code>role</code></td><td>全部</td><td><code>system</code> / <code>user</code> / <code>assistant</code> / <code>tool</code>（旧版还有已废弃的 <code>function</code>）</td></tr>
+    <tr><td><code>content</code></td><td>全部（tool_calls 场景下 assistant 可为 <code>null</code>）</td><td>文本内容，也可以是多模态内容数组（文本+图片）</td></tr>
+    <tr><td><code>name</code></td><td>可选，user/system</td><td>标识消息发送者名称，较少使用</td></tr>
+    <tr><td><code>tool_calls</code></td><td>仅 <code>assistant</code></td><td>本轮模型发起的工具调用列表（<code>id</code> / <code>type</code> / <code>function.name</code> / <code>function.arguments</code>）</td></tr>
+    <tr><td><code>tool_call_id</code></td><td>仅 <code>tool</code></td><td>对应 <code>assistant.tool_calls[].id</code>，标明这是哪次调用的结果</td></tr>
+    <tr><td><code>refusal</code></td><td>较新，仅 <code>assistant</code></td><td>模型拒答时的说明文本（安全策略触发）</td></tr>
+  </table>
+
+  <table>
+    <tr><th></th><th><code>tools</code>（顶层字段）</th><th><code>messages[].tool_calls</code>（消息内字段）</th></tr>
+    <tr><td>位置</td><td>请求顶层，与 <code>messages</code> 平级</td><td>某条 <code>role:"assistant"</code> 消息内部</td></tr>
+    <tr><td>方向</td><td>Client → Model：告知模型"有哪些工具可用"</td><td>Model → Client：模型返回"我要调用哪个工具"</td></tr>
+    <tr><td>内容</td><td>工具的 JSON Schema 定义（name/description/parameters）</td><td>具体调用实例（id + name + 已填好的 arguments）</td></tr>
+    <tr><td>出现时机</td><td>每次请求都可携带（尤其 Req①、Req②通常都带）</td><td>只在模型决定调用工具时的响应里出现</td></tr>
+  </table>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-top:20px;">
+    <strong><code>role</code> 字段只存在于 <code>messages[]</code> 数组的每个对象里</strong>——它不是请求顶层字段，
+    <code>tools</code>/<code>tool_choice</code> 等顶层字段本身没有 <code>role</code>。响应里 <code>choices[0].message</code> 其实也是同一种
+    "消息对象"结构（只是永远固定为 <code>role:"assistant"</code>）。完整对话共有 <strong>4 种角色</strong>，下面分别给出每种角色单独的 Req / Resp 长什么样：
+  </p>
+  <table>
+    <tr><th>role</th><th>出现在 Req？</th><th>出现在 Resp？</th><th>由谁产生 / 何时出现</th></tr>
+    <tr><td><code>system</code></td><td>✅ 会</td><td>❌ 不会</td><td>开发者预设的人设/规则，每次请求固定携带，模型永远不会"回复"一条 system 消息</td></tr>
+    <tr><td><code>user</code></td><td>✅ 会</td><td>❌ 不会</td><td>终端用户的输入，API 只会"消费"它，不会在 Resp 里回传</td></tr>
+    <tr><td><code>assistant</code></td><td>✅ 会（历史回填）</td><td>✅ 会（本轮结果）</td><td>模型生成；出现在 Resp 后，client 若要继续对话，需把它<strong>原样放回</strong>下一次 Req 的 <code>messages[]</code> 尾部</td></tr>
+    <tr><td><code>tool</code></td><td>✅ 会（工具结果）</td><td>❌ 不会</td><td>client 在本地执行完 <code>tool_calls</code> 后<strong>自己构造</strong>并放进下一次 Req，API 从不会在 Resp 里直接返回 <code>role:"tool"</code> 的消息</td></tr>
+  </table>
+
+  <div class="compare-grid" style="grid-template-columns: 1fr 1fr; gap:16px; margin: 20px 0;">
+    <div class="card nonstream" style="padding:16px;">
+      <h2 style="font-size:15px;">role: <code>system</code></h2>
+      <p class="desc" style="margin:4px 0 10px;">只会出现在 Req 里，Resp 永远不会返回它</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:0 0 4px;">Req 片段</p>
+      <pre><code><span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"system"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"你是一个专业的代码助手"</span> <span class="json-punc">}</span></code></pre>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 0;">Resp：（无——不存在该角色）</p>
+    </div>
+    <div class="card nonstream" style="padding:16px;">
+      <h2 style="font-size:15px;">role: <code>user</code></h2>
+      <p class="desc" style="margin:4px 0 10px;">只会出现在 Req 里，Resp 永远不会返回它</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:0 0 4px;">Req 片段</p>
+      <pre><code><span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"user"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"北京今天天气怎么样"</span> <span class="json-punc">}</span></code></pre>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 0;">Resp：（无——不存在该角色）</p>
+    </div>
+    <div class="card stream" style="padding:16px;">
+      <h2 style="font-size:15px;">role: <code>assistant</code></h2>
+      <p class="desc" style="margin:4px 0 10px;">Resp 唯一会返回的角色；下一轮需回填进 Req</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:0 0 4px;">Resp 片段（<code>choices[0].message</code>）</p>
+      <pre><code><span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"北京今天晴，25℃"</span> <span class="json-punc">}</span></code></pre>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 4px;">Req 片段（原样回填到 <code>messages[]</code>）</p>
+      <pre><code><span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"北京今天晴，25℃"</span> <span class="json-punc">}</span></code></pre>
+    </div>
+    <div class="card stream" style="padding:16px;">
+      <h2 style="font-size:15px;">role: <code>tool</code></h2>
+      <p class="desc" style="margin:4px 0 10px;">只会出现在 Req 里，由 client 自己构造，Resp 永远不会返回它</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:0 0 4px;">Req 片段（工具执行结果）</p>
+      <pre><code><span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"tool"</span><span class="json-punc">,</span>
+  <span class="json-key">"tool_call_id"</span><span class="json-punc">:</span> <span class="json-str">"call_xyz"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"{\"temp\":25,\"cond\":\"晴\"}"</span> <span class="json-punc">}</span></code></pre>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 0;">Resp：（无——不存在该角色）</p>
+    </div>
+  </div>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Req — 把上面 4 种角色拼在一起看：包含全部 4 种 role 的完整 <code>messages[]</code>（工具调用已执行完毕，正在请求最终回复）</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"model"</span><span class="json-punc">:</span> <span class="json-str">"gpt-4"</span><span class="json-punc">,</span>
+  <span class="json-key">"messages"</span><span class="json-punc">:</span> <span class="json-punc">[</span>
+    <span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"system"</span><span class="json-punc">,</span> <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"你是一个代码助手，可以读写文件"</span> <span class="json-punc">},</span>  <span class="json-comment">// ① 人设，开发者固定注入</span>
+    <span class="json-punc">{</span> <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"user"</span><span class="json-punc">,</span> <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"帮我读一下 a.go"</span> <span class="json-punc">},</span>  <span class="json-comment">// ② 用户输入</span>
+    <span class="json-punc">{</span>  <span class="json-comment">// ③ 上一轮 Resp 里模型返回的 assistant 消息，原样回填</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-num">null</span><span class="json-punc">,</span>
+      <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[{</span> <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span> <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span> <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span> <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span> <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span> <span class="json-punc">}</span> <span class="json-punc">}]</span>
+    <span class="json-punc">},</span>
+    <span class="json-punc">{</span>  <span class="json-comment">// ④ client 本地执行工具后自己构造，从未由 API 直接返回</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"tool"</span><span class="json-punc">,</span>
+      <span class="json-key">"tool_call_id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"package main\n\nfunc main() {...}"</span>
+    <span class="json-punc">}</span>
+  <span class="json-punc">]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <p style="color:var(--text-dim); font-size:13px; margin-bottom:4px;">Resp — 只会新增一条 <code>role:"assistant"</code>，绝不会出现 system/user/tool</p>
+  <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"choices"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+    <span class="json-key">"message"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+      <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>  <span class="json-comment">// ⑤ Resp 里唯一可能出现的 role</span>
+      <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"文件内容是一个简单的 main 包，包含 main 函数"</span>
+    <span class="json-punc">},</span>
+    <span class="json-key">"finish_reason"</span><span class="json-punc">:</span> <span class="json-str">"stop"</span>
+  <span class="json-punc">}]</span>
+<span class="json-punc">}</span></code></pre>
+
+  <div class="footer-note">
+    <strong>一句话总结：</strong> Req 的 <code>messages[]</code> 是"全量历史"，四种 role 都可能出现；
+    Resp 永远只吐出<strong>一条</strong> <code>role:"assistant"</code> 消息——它既是给用户看的最终答案，也是下一轮 Req 里要回填的历史片段。
+    <code>system</code>/<code>user</code>/<code>tool</code> 都只能由 client 端"喂"给模型，模型自己永远不会"扮演"这三种角色。
+  </div>
+
+  <!-- ================= 字段速查表 ================= -->
+  <div id="fields" class="section-title">⑦ 字段速查表</div>
+
+  <p style="color:var(--text-dim); font-size:13px;">
+    <code>delta</code> 和 <code>message</code> 结构上<strong>长得几乎一样</strong>（都可能有 <code>role</code>/<code>content</code>/<code>tool_calls</code>），
+    但语义完全不同：<code>message</code> 是"完整快照"，<code>delta</code> 是"本帧新增的增量"。二者<strong>不会同时出现</strong>——
+    非流式响应的 <code>choices[0]</code> 只有 <code>message</code>；流式的每一帧 <code>choices[0]</code> 只有 <code>delta</code>。
+  </p>
+  <div class="compare-grid" style="grid-template-columns: 1fr 1fr; gap:16px; margin: 12px 0 20px;">
+    <div class="card nonstream" style="padding:16px;">
+      <h2 style="font-size:15px;"><code>message</code>（非流式）</h2>
+      <p class="desc" style="margin:4px 0 10px;">一次性给出完整值，直接能用</p>
+      <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"role"</span><span class="json-punc">:</span> <span class="json-str">"assistant"</span><span class="json-punc">,</span>
+  <span class="json-key">"content"</span><span class="json-punc">:</span> <span class="json-str">"好的，我来读取"</span><span class="json-punc">,</span>
+  <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+    <span class="json-key">"id"</span><span class="json-punc">:</span> <span class="json-str">"call_abc"</span><span class="json-punc">,</span>
+    <span class="json-key">"type"</span><span class="json-punc">:</span> <span class="json-str">"function"</span><span class="json-punc">,</span>
+    <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+      <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"read_file"</span><span class="json-punc">,</span>
+      <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"{\"path\":\"a.go\"}"</span>  <span class="json-comment">// 完整JSON</span>
+    <span class="json-punc">}</span>
+  <span class="json-punc">}]</span>
+<span class="json-punc">}</span></code></pre>
+    </div>
+    <div class="card stream" style="padding:16px;">
+      <h2 style="font-size:15px;"><code>delta</code>（流式，某一帧）</h2>
+      <p class="desc" style="margin:4px 0 10px;">只带本帧新增的字段，其余字段直接不存在（不是 null）</p>
+      <pre><code><span class="json-punc">{</span>
+  <span class="json-key">"tool_calls"</span><span class="json-punc">:</span> <span class="json-punc">[{</span>
+    <span class="json-key">"index"</span><span class="json-punc">:</span> <span class="json-num">0</span><span class="json-punc">,</span>  <span class="json-comment">// ★ message 里没有，delta 独有</span>
+    <span class="json-key">"function"</span><span class="json-punc">:</span> <span class="json-punc">{</span>
+      <span class="json-key">"arguments"</span><span class="json-punc">:</span> <span class="json-str">"th\":\"a.go\"}"</span>  <span class="json-comment">// 只是JSON字符串的一小段碎片</span>
+    <span class="json-punc">}</span>
+    <span class="json-comment">// 本帧没有 id/type/function.name，因为它们已在更早的帧出现过</span>
+  <span class="json-punc">}]</span>
+<span class="json-punc">}</span></code></pre>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>维度</th><th><code>message</code>（非流式 / 流式收尾累积后）</th><th><code>delta</code>（流式，单帧）</th></tr>
+    <tr><td>本质</td><td>完整快照，可直接用</td><td>相对上一帧的增量，需要累积才能用</td></tr>
+    <tr><td><code>role</code></td><td>必定存在</td><td>只在第 1 帧出现一次，后续帧不再重复</td></tr>
+    <tr><td><code>content</code></td><td>完整字符串（或 <code>null</code>）</td><td>每帧是文本的一个片段，需按帧顺序拼接</td></tr>
+    <tr><td><code>tool_calls[].id</code>/<code>type</code>/<code>function.name</code></td><td>始终完整存在</td><td>只在该工具调用的首个分片帧出现，后续分片帧没有这些字段</td></tr>
+    <tr><td><code>tool_calls[].function.arguments</code></td><td>完整、合法的 JSON 字符串</td><td>JSON 字符串的碎片，中间态通常不是合法 JSON</td></tr>
+    <tr><td><code>tool_calls[].index</code></td><td><strong>没有这个字段</strong>（数组下标本身就是序号）</td><td><strong>message 没有的独有字段</strong>：多个工具并行调用时，用它标识"这个分片属于第几个调用"，是跨帧对齐拼接的关键</td></tr>
+    <tr><td>缺省表现</td><td>字段值为空时是 <code>null</code>（如无工具调用时 <code>tool_calls</code> 不出现，但 <code>content</code> 显式为字符串）</td><td>字段没有新增时<strong>直接不出现</strong>在这一帧 JSON 里（省流量），不是显式 <code>null</code></td></tr>
+    <tr><td>何时可用</td><td>拿到即用</td><td>必须等 <code>finish_reason</code> 出现（尤其 tool_calls 场景）才能安全使用累积结果</td></tr>
+  </table>
+
+  <table>
+    <tr><th>字段路径</th><th>非流式</th><th>流式</th><th>含义</th></tr>
+    <tr><td><code>choices[0].message</code></td><td>✅ 完整消息对象</td><td>❌ 不存在</td><td>模型完整回复（content + tool_calls）</td></tr>
+    <tr><td><code>choices[0].delta</code></td><td>❌ 不存在</td><td>✅ 增量片段</td><td>本帧新增的部分内容</td></tr>
+    <tr><td><code>delta.content</code> / <code>message.content</code></td><td>完整文本</td><td>逐 token 文本片段</td><td>模型文本输出</td></tr>
+    <tr><td><code>tool_calls[].function.arguments</code></td><td>完整 JSON 字符串</td><td>JSON 字符串分片，需拼接</td><td>工具调用入参</td></tr>
+    <tr><td><code>choices[0].finish_reason</code></td><td>始终携带</td><td>仅收尾帧携带</td><td><code>stop</code> / <code>tool_calls</code> / <code>length</code> / <code>content_filter</code></td></tr>
+    <tr><td><code>usage</code></td><td>始终携带</td><td>需 <code>stream_options.include_usage:true</code>，仅末帧携带</td><td>token 用量统计</td></tr>
+  </table>
+
+  <div class="footer-note">
+    <strong>核心要点回顾：</strong>
+    非流式响应用 <code>choices[0].message</code> 一次性给出完整消息；流式响应用 <code>choices[0].delta</code>
+    分帧给出增量片段，text 逐 token 拼接、<code>tool_calls</code> 按 <code>index</code> 累积到 <code>finish_reason:"tool_calls"</code> 才算完整。
+    工具调用永远是「模型只请求、client 自己执行」的两轮往返模式：Resp① 拿到 <code>tool_calls</code> → 本地执行 →
+    Req② 把 <code>assistant(tool_calls)</code> 和 <code>tool(result)</code> 一起放回 <code>messages</code> → Resp② 得到最终回复，
+    如此循环直至 <code>finish_reason:"stop"</code>。
+  </div>
+
+</div>
+
+</body>
+</html>

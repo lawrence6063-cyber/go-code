@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,7 +26,6 @@ import (
 	"github.com/alaindong/cogent/internal/sandbox"
 	"github.com/alaindong/cogent/internal/session"
 	"github.com/alaindong/cogent/internal/tool"
-	"github.com/alaindong/cogent/internal/types"
 )
 
 // dataDirName 是会话 transcript 与 trace 的运行期数据目录（.gitignore 已排除）。
@@ -237,13 +238,16 @@ func runREPL(ctx context.Context, opts replOptions) error {
 	}
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
-	in := newInputReader(os.Stdin)
+	wd, _ := os.Getwd()
+	in := newTTYInputReader(os.Stdin, wd)
 	prompter := newCLIPrompter(in)
+	costProv := newCostProvider(prov)
+	prov = costProv
+	bar := newStatusBar(costProv.meter, os.Getenv("COGENT_MODEL"))
 	sid := opts.resumeID
 	if sid == "" {
 		sid = session.NewSessionID()
 	}
-	wd, _ := os.Getwd()
 	mgr, err := buildMCPManager(ctx, wd, prov.Tracer())
 	if err != nil {
 		return err
@@ -266,7 +270,7 @@ func runREPL(ctx context.Context, opts replOptions) error {
 	fmt.Printf("cogent — session %s — type 'exit' or 'quit' (or Ctrl-C) to leave.\n", sid)
 	fmt.Printf("  (resume later with: cogent resume %s)\n", sid)
 	fmt.Println("  (type '/undo' to undo last turn)")
-	runErr = driveREPL(ctx, eng, in, opts)
+	runErr = driveREPL(ctx, eng, in, opts, bar)
 	if errors.Is(runErr, context.Canceled) {
 		return nil
 	}
@@ -274,22 +278,21 @@ func runREPL(ctx context.Context, opts replOptions) error {
 }
 
 // driveREPL 根据是否 resume 选择启动方式，随后进入共享的多轮输入循环。
-func driveREPL(ctx context.Context, eng engine.Engine, in *inputReader, opts replOptions) error {
+func driveREPL(ctx context.Context, eng engine.Engine, in *inputReader, opts replOptions, bar *statusBar) error {
 	if opts.resumeID != "" {
-		fmt.Print("cogent> ")
 		events, err := eng.Resume(ctx, opts.resumeID)
 		if err != nil {
 			return fmt.Errorf("resume: %w", err)
 		}
-		if err := consumeEvents(ctx, events); err != nil {
+		if err := consumeEvents(ctx, events, "cogent> "); err != nil {
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
 			fmt.Fprintln(os.Stderr, "\ncogent: resume error:", err)
 		}
-		return inputLoop(ctx, eng, in)
+		return inputLoop(ctx, eng, in, bar)
 	}
-	return replLoop(ctx, eng, in, opts.first)
+	return replLoop(ctx, eng, in, opts.first, bar)
 }
 
 // buildMCPManager 加载 .cogent/mcp.json 并连接配置的 MCP server（缺省配置时为空管理器，不影响运行）。
@@ -447,37 +450,107 @@ func buildMakerPool(workRoot string, prompter permission.Prompter, tracer observ
 }
 
 // replLoop 驱动对话循环：先处理 first（若有），再进入共享的多轮输入循环。
-func replLoop(ctx context.Context, eng engine.Engine, in *inputReader, first string) error {
+func replLoop(ctx context.Context, eng engine.Engine, in *inputReader, first string, bar *statusBar) error {
 	if strings.TrimSpace(first) != "" {
 		if err := runTurn(ctx, eng, first); err != nil {
 			return err
 		}
 	}
-	return inputLoop(ctx, eng, in)
+	return inputLoop(ctx, eng, in, bar)
 }
 
-// inputLoop 循环读取共享输入并逐轮执行；Ctrl-C 在等待输入时也能即时退出。
-func inputLoop(ctx context.Context, eng engine.Engine, in *inputReader) error {
+// inputLoop 循环读取共享输入并逐轮执行。
+// 在 REPL 循环内自行管理 SIGINT：等待输入时由 raw mode 双击 Ctrl-C 退出；
+// 模型执行时 SIGINT 仅中断当前 turn（不退出整个 REPL）。
+func inputLoop(ctx context.Context, eng engine.Engine, in *inputReader, bar *statusBar) error {
+	// 接管 SIGINT：先 Reset 解除 main.go NotifyContext 对 SIGINT 的监听（防止其 cancel 顶层 ctx），
+	// 再用本地 channel 独占管理 SIGINT——模型执行时仅中断当前 turn，等待输入时由 raw mode 处理。
+	signal.Reset(syscall.SIGINT)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT)
+	defer signal.Stop(sigCh)
+
 	for {
+		if bar != nil && in.editor != nil {
+			fmt.Print(bar.render())
+		}
 		fmt.Print("\nyou> ")
+
+		// 等待输入前，排空 sigCh 中可能遗留的信号（来自上一轮 runTurn 的残留 SIGINT）。
+		drainSignals(sigCh)
+
 		line, ok := in.next(ctx)
 		if !ok {
 			fmt.Println()
-			return ctx.Err()
+			// 如果顶层 ctx 已被 cancel（SIGTERM 等），返回其 err；
+			// 否则是 readLine 双击 Ctrl-C 返回的 ok=false，正常退出。
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return nil
 		}
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		if line == "exit" || line == "quit" {
+		if line == "exit" || line == "quit" || line == "/exit" {
 			return nil
 		}
-		if line == "/undo" {
-			handleUndo(ctx, eng)
+		if strings.HasPrefix(line, "/") {
+			handleSlashCommand(ctx, eng, line)
 			continue
 		}
-		if err := runTurn(ctx, eng, line); err != nil {
+		// 模型执行：用 per-turn ctx，SIGINT 只取消当前 turn。
+		if err := runTurnInterruptible(ctx, eng, line, sigCh); err != nil {
 			return err
+		}
+	}
+}
+
+// runTurnInterruptible 执行一轮对话，SIGINT 仅取消本轮（REPL 继续）。
+func runTurnInterruptible(parent context.Context, eng engine.Engine, line string, sigCh <-chan os.Signal) error {
+	turnCtx, cancel := context.WithCancel(parent)
+	defer cancel()
+
+	// 监听 SIGINT：收到时 cancel 本轮 turnCtx。
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-sigCh:
+			cancel()
+		case <-done:
+		}
+	}()
+
+	events, err := eng.Run(turnCtx, line)
+	if err != nil {
+		if errors.Is(err, context.Canceled) && parent.Err() == nil {
+			// 仅本轮被 SIGINT 中断，REPL 继续。
+			fmt.Fprintln(os.Stderr, "\n[interrupted]")
+			return nil
+		}
+		return fmt.Errorf("run: %w", err)
+	}
+	if err := consumeEvents(turnCtx, events, "cogent> "); err != nil {
+		if errors.Is(err, context.Canceled) && parent.Err() == nil {
+			fmt.Fprintln(os.Stderr, "\n[interrupted]")
+			return nil
+		}
+		if !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "\ncogent: turn error:", err)
+		}
+	}
+	return nil
+}
+
+// drainSignals 排空 signal channel 中积压的信号，防止误触发。
+func drainSignals(ch <-chan os.Signal) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
 		}
 	}
 }
@@ -508,55 +581,11 @@ func runTurn(ctx context.Context, eng engine.Engine, line string) error {
 	if err != nil {
 		return fmt.Errorf("run: %w", err)
 	}
-	fmt.Print("cogent> ")
-	if err := consumeEvents(ctx, events); err != nil {
+	if err := consumeEvents(ctx, events, "cogent> "); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
 		fmt.Fprintln(os.Stderr, "\ncogent: turn error:", err)
-	}
-	return nil
-}
-
-// consumeEvents 消费事件流并打印到 stdout；ctx 取消时安全收尾。
-func consumeEvents(ctx context.Context, events <-chan types.StreamEvent) error {
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("\n[interrupted]")
-			return ctx.Err()
-		case ev, ok := <-events:
-			if !ok {
-				return nil
-			}
-			if err := printEvent(ev); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-// printEvent 将单个事件渲染到 stdout。
-func printEvent(ev types.StreamEvent) error {
-	switch ev.Type {
-	case types.EventText:
-		fmt.Print(ev.Text)
-	case types.EventToolStart:
-		if ev.ToolUse != nil {
-			fmt.Printf("\n[tool] %s\n", ev.ToolUse.Name)
-		}
-	case types.EventToolResult:
-		if ev.Result != nil {
-			fmt.Printf("\n[result] %s\n", ev.Result.Content)
-		}
-	case types.EventCompacted:
-		fmt.Println("\n[context compacted]")
-	case types.EventDone:
-		fmt.Println()
-	case types.EventError:
-		return ev.Err
-	default:
-		slog.Warn("unknown event type", "type", int(ev.Type))
 	}
 	return nil
 }

@@ -35,9 +35,11 @@ var fallbackModelPrice = modelPrice{inputPerMTok: 0.50, outputPerMTok: 1.50}
 // 其余指标原样转发。同时实现 loop.CostMeter（SpentUSD），驱动外层循环的 --max-cost 护栏。
 // 线程安全：引擎多 goroutine 写入、loop 读取累计值。
 type costMeter struct {
-	inner observe.Meter
-	mu    sync.Mutex
-	spent float64
+	inner  observe.Meter
+	mu     sync.Mutex
+	spent  float64
+	inTok  int64 // 累计输入（prompt）token 数
+	outTok int64 // 累计输出（completion）token 数
 }
 
 // newCostMeter 构造一个装饰 inner 的成本计量器。
@@ -65,7 +67,14 @@ func (m *costMeter) SpentUSD() float64 {
 	return m.spent
 }
 
-// accrue 根据 token 数与属性（token.kind/llm.model）累加成本。
+// Tokens 返回至今累计的输入与输出 token 数（供状态栏展示）。
+func (m *costMeter) Tokens() (in, out int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.inTok, m.outTok
+}
+
+// accrue 根据 token 数与属性（token.kind/llm.model）累加成本与分类 token 计数。
 func (m *costMeter) accrue(tokens int64, attrs []observe.Attr) {
 	kind, model := tokenAttrs(attrs)
 	price := priceFor(model)
@@ -77,6 +86,11 @@ func (m *costMeter) accrue(tokens int64, attrs []observe.Attr) {
 
 	m.mu.Lock()
 	m.spent += usd
+	if kind == "output" {
+		m.outTok += tokens
+	} else {
+		m.inTok += tokens
+	}
 	m.mu.Unlock()
 }
 
