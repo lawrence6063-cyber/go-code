@@ -1,10 +1,10 @@
-package main
+package tui
 
 import (
 	"context"
 	"testing"
 
-	"github.com/alaindong/cogent/internal/history"
+	"github.com/alaindong/cogent/internal/tui/history"
 )
 
 // feedRunes 依次把字符串的每个 rune 作为按键喂给 editorCore。
@@ -96,7 +96,7 @@ func TestReverseSearchCancelRestores(t *testing.T) {
 func TestDropdownTakesPriorityOverHistory(t *testing.T) {
 	// 下拉激活时 ↑ 应移动候选而非翻历史。
 	e := newHistoryCore(t, "hist entry")
-	e.provider = stubProvider{list: []string{"a.go", "b.go", "c.go"}}
+	e.provider = stubProvider{all: []string{"a.go", "b.go", "c.go"}}
 	feedRunes(e, "@") // 触发文件补全下拉
 	if !e.active {
 		t.Fatalf("@ should activate dropdown")

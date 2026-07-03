@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // 同工具后续 Ask 直接批准且不消费 stdin（用不同工具能读到残留输入来证明）。
 func TestCLIPrompter_AlwaysAutoApprovesSameTool(t *testing.T) {
 	in := newInputReader(strings.NewReader("A\nreject-me\n"))
-	p := newCLIPrompter(in).(*cliPrompter)
+	p := NewCLIPrompter(in).(*cliPrompter)
 	ctx := context.Background()
 	input := permission.Interrupt{Tool: "write_file", Input: []byte(`{"path":"a.go"}`)}
 
@@ -53,7 +53,7 @@ func TestCLIPrompter_AlwaysAutoApprovesSameTool(t *testing.T) {
 // TestCLIPrompter_AlwaysCaseSensitive 验证小写 a 不设 allowlist。
 func TestCLIPrompter_AlwaysCaseSensitive(t *testing.T) {
 	in := newInputReader(strings.NewReader("a\nr\n"))
-	p := newCLIPrompter(in).(*cliPrompter)
+	p := NewCLIPrompter(in).(*cliPrompter)
 	ctx := context.Background()
 	input := permission.Interrupt{Tool: "write_file", Input: []byte(`{"path":"a.go"}`)}
 
@@ -71,7 +71,7 @@ func TestCLIPrompter_AlwaysCaseSensitive(t *testing.T) {
 // TestCLIPrompter_AlwaysKeyword 验证 "always" 关键字等价于大写 A。
 func TestCLIPrompter_AlwaysKeyword(t *testing.T) {
 	in := newInputReader(strings.NewReader("always\n"))
-	p := newCLIPrompter(in).(*cliPrompter)
+	p := NewCLIPrompter(in).(*cliPrompter)
 	ctx := context.Background()
 	input := permission.Interrupt{Tool: "bash", Input: []byte(`{"command":"ls"}`)}
 
@@ -89,7 +89,7 @@ func TestCLIPrompter_AlwaysKeyword(t *testing.T) {
 // TestCLIPrompter_AlwaysConcurrent 验证并发调用 Ask 无 race（-race 必跑）。
 func TestCLIPrompter_AlwaysConcurrent(t *testing.T) {
 	in := newInputReader(strings.NewReader(strings.Repeat("A\n", 20)))
-	p := newCLIPrompter(in).(*cliPrompter)
+	p := NewCLIPrompter(in).(*cliPrompter)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup

@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alaindong/cogent/internal/render"
+	"github.com/alaindong/cogent/internal/tui/render"
 )
 
 // menuStatus 表示单选菜单处理一次按键后的状态流转。

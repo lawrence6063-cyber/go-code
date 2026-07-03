@@ -1,10 +1,11 @@
-package main
+package tui
 
 import (
 	"context"
 	"strings"
 	"sync"
 
+	"github.com/alaindong/cogent/internal/loop"
 	"github.com/alaindong/cogent/internal/observe"
 )
 
@@ -154,22 +155,25 @@ func modelEnvKey(model string) string {
 	return sb.String()
 }
 
-// costProvider 装饰 observe.Provider，使 Meter() 返回成本计量器（Tracer/Shutdown 原样转发）。
-type costProvider struct {
+// CostProvider 装饰 observe.Provider，使 Meter() 返回成本计量器（Tracer/Shutdown 原样转发）。
+type CostProvider struct {
 	inner observe.Provider
 	meter *costMeter
 }
 
-// newCostProvider 包装 inner，返回装饰后的 Provider 与可读取累计成本的计量器。
-func newCostProvider(inner observe.Provider) costProvider {
-	return costProvider{inner: inner, meter: newCostMeter(inner.Meter())}
+// NewCostProvider 包装 inner，返回装饰后的 Provider 与可读取累计成本的计量器。
+func NewCostProvider(inner observe.Provider) CostProvider {
+	return CostProvider{inner: inner, meter: newCostMeter(inner.Meter())}
 }
 
 // Tracer 见 observe.Provider 接口说明：转发底层 Tracer。
-func (p costProvider) Tracer() observe.Tracer { return p.inner.Tracer() }
+func (p CostProvider) Tracer() observe.Tracer { return p.inner.Tracer() }
 
 // Meter 见 observe.Provider 接口说明：返回成本计量器（拦截 token 计数）。
-func (p costProvider) Meter() observe.Meter { return p.meter }
+func (p CostProvider) Meter() observe.Meter { return p.meter }
 
 // Shutdown 见 observe.Provider 接口说明：转发底层 Shutdown。
-func (p costProvider) Shutdown(ctx context.Context) error { return p.inner.Shutdown(ctx) }
+func (p CostProvider) Shutdown(ctx context.Context) error { return p.inner.Shutdown(ctx) }
+
+// CostMeter 返回累计成本计量器（实现 loop.CostMeter），供外层循环 --max-cost 护栏接入。
+func (p CostProvider) CostMeter() loop.CostMeter { return p.meter }

@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/alaindong/cogent/internal/completion"
 	"github.com/alaindong/cogent/internal/engine"
+	"github.com/alaindong/cogent/internal/tui/completion"
 )
 
 // handleSlashCommand 路由并执行一条斜杠命令（line 已去除首尾空白，且以 / 开头）。

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cogent TUI 全功能教学 · 从 Raw 模式到类 Claude Code 流式渲染</title>
+<style>
+  :root {
+    --bg: #0B0E14; --bg-soft: #161C28; --bg-card: #1A2130; --border: #28324a;
+    --text: #E6EDF3; --text-dim: #93A1B3;
+    --accent: #5EEAD4; --accent2: #818CF8; --ok: #4ADE80; --warn: #FBBF24; --danger: #F87171; --purple: #c4b5fd;
+    --code-bg: #0a0d13; --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.75; font-size: 16px; }
+  .layout { display: flex; max-width: 1440px; margin: 0 auto; }
+  aside { position: sticky; top: 0; align-self: flex-start; width: 290px; height: 100vh; overflow-y: auto; padding: 30px 18px; border-right: 1px solid var(--border); flex-shrink: 0; }
+  aside .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+  aside .brand span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  aside .sub { color: var(--text-dim); font-size: 13px; margin-bottom: 22px; }
+  aside nav a { display: block; color: var(--text-dim); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 13.5px; margin: 1px 0; border-left: 2px solid transparent; transition: all .15s; }
+  aside nav a:hover { color: var(--text); background: var(--bg-soft); border-left-color: var(--accent); transform: translateX(2px); }
+  main { flex: 1; min-width: 0; padding: 48px 56px 120px; }
+  .hero { background: radial-gradient(1200px 420px at 0% 0%, rgba(94,234,212,.13), transparent), radial-gradient(900px 420px at 100% 0%, rgba(129,140,248,.12), transparent); border: 1px solid var(--border); border-radius: 18px; padding: 44px 40px; margin-bottom: 36px; }
+  .hero .tag { display: inline-block; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(94,234,212,.4); border-radius: 999px; padding: 4px 14px; margin-bottom: 18px; }
+  .hero h1 { font-size: 37px; margin: 0 0 14px; line-height: 1.22; letter-spacing: -.5px; }
+  .hero h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { color: var(--text-dim); font-size: 17px; margin: 0; max-width: 880px; }
+  .hero .stats { display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; }
+  .hero .stat b { display: block; font-size: 25px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero .stat span { font-size: 13px; color: var(--text-dim); }
+  h2 { font-size: 25px; margin: 58px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); scroll-margin-top: 20px; }
+  h2 .num { font-family: var(--mono); margin-right: 10px; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  h3 { font-size: 19px; margin: 32px 0 12px; scroll-margin-top: 20px; }
+  h4 { font-size: 16px; margin: 22px 0 8px; color: var(--accent); }
+  p { color: #c4cdd9; }
+  a { color: var(--accent); }
+  code:not(pre code) { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13.5px; color: var(--purple); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; overflow-x: auto; font-size: 13px; line-height: 1.6; font-family: var(--mono); position: relative; margin: 16px 0; }
+  pre code { font-family: var(--mono); color: #c9d1d9; }
+  .code-label { position: absolute; top: 0; right: 0; font-size: 11px; color: var(--text-dim); background: var(--bg-soft); border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 2px 10px; border-radius: 0 var(--radius) 0 8px; font-family: var(--mono); }
+  .k { color: #F87171; } .s { color: #5EEAD4; } .c { color: #6b7689; font-style: italic; } .f { color: #818CF8; } .n { color: #79c0ff; } .t { color: #FBBF24; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin: 14px 0; transition: transform .15s, border-color .15s; }
+  .card:hover { transform: translateY(-2px); border-color: rgba(94,234,212,.4); }
+  .card h4 { margin-top: 0; }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols4 { grid-template-columns: repeat(4, 1fr); }
+  .callout { border-left: 3px solid var(--accent); background: rgba(94,234,212,.07); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: rgba(251,191,36,.08); }
+  .callout.danger { border-color: var(--danger); background: rgba(248,113,113,.08); }
+  .callout.ok { border-color: var(--ok); background: rgba(74,222,128,.07); }
+  .callout b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--text); font-weight: 600; }
+  td { color: #c4cdd9; }
+  tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  .badge { font-family: var(--mono); font-size: 12px; padding: 1px 9px; border-radius: 999px; display: inline-block; }
+  .b-ok { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+  .b-warn { background: rgba(251,191,36,.15); color: var(--warn); border: 1px solid rgba(251,191,36,.3); }
+  .b-deny { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
+  .fig { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin: 22px 0; text-align: center; }
+  .fig svg { max-width: 100%; height: auto; }
+  .fig .cap, .cap { color: var(--text-dim); font-size: 13px; margin-top: 12px; }
+  .mermaid { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin: 22px 0; text-align: center; }
+  .pill { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 9px; border-radius:6px; background:var(--bg-soft); border:1px solid var(--border); color:var(--text-dim); margin:2px 4px 2px 0;}
+  footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 13px; }
+  .key { background: linear-gradient(90deg, rgba(94,234,212,.1), rgba(129,140,248,.08)); border: 1px solid rgba(94,234,212,.25); border-radius: 12px; padding: 18px 22px; margin: 24px 0; font-size: 16px; }
+  .key b { color: var(--accent); }
+  kbd { font-family: var(--mono); font-size: 12px; background:#05070b; border:1px solid var(--border); border-bottom-width:2px; border-radius:6px; padding:1px 7px; color:var(--accent); }
+  .term { background:#05070b; border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-family:var(--mono); font-size:13px; line-height:1.7; color:#c9d1d9; margin:14px 0; white-space:pre; overflow-x:auto; }
+  .term .hl { background:#5EEAD4; color:#05070b; padding:0 4px; border-radius:3px; }
+  .term .dim { color:#6b7689; } .term .cy { color:#5EEAD4; } .term .gn { color:#4ADE80; } .term .rd { color:#F87171; } .term .pp { color:#c4b5fd; } .term .cur { border-bottom:2px solid #5EEAD4; }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand"><span>cogent</span> · TUI</div>
+  <div class="sub">全功能教学</div>
+  <nav>
+    <a href="#overview">0 · 功能全景 & 聚合架构</a>
+    <a href="#raw">1 · Cooked/Raw 与 termios</a>
+    <a href="#decode">2 · 按键解码 & 可取消读</a>
+    <a href="#edit">3 · 行编辑 & CJK 宽字符</a>
+    <a href="#at">4 · @ 文件补全</a>
+    <a href="#slash">5 · / 斜杠命令补全</a>
+    <a href="#history">6 · 历史 & 反向搜索</a>
+    <a href="#dropdown">7 · 下拉框渲染</a>
+    <a href="#ctrlc">8 · Ctrl-C/D & 单选菜单</a>
+    <a href="#status">9 · 状态栏 & 成本计量</a>
+    <a href="#stream">10 · 流式渲染（重点）</a>
+    <a href="#hitl">11 · 权限 HITL</a>
+    <a href="#repl">12 · REPL 循环 & SIGINT</a>
+    <a href="#fallback">13 · 非 TTY 回退 & loopview</a>
+    <a href="#wrap">14 · 收尾</a>
+  </nav>
+</aside>
+<main>
+
+<div class="hero">
+  <div class="tag">TERMINAL UI · Raw / 补全 / 历史 / 菜单 / 状态栏 / 流式渲染 / HITL</div>
+  <h1>cogent 的 <span>终端交互层</span>：一个包，十四项能力</h1>
+  <p>cogent 的 TUI 已聚合到单一 <code>internal/tui</code> 包。它逐字节接管键盘，实现 <code>@</code> 文件补全下拉、<code>/</code> 斜杠命令、命令历史与反向搜索、单选菜单、常驻状态栏与成本计量、权限 HITL 交互，以及类 Claude Code 的流式渲染（工具调用折叠成一行摘要、正文与工具视觉分区）。本文逐一拆解<strong>当前 TUI 的全部功能</strong>及其实现原理——SVG 展示终端观感，Mermaid 描绘时序。</p>
+  <div class="stats">
+    <div class="stat"><b>1</b><span>包：internal/tui + 3 子包</span></div>
+    <div class="stat"><b>Raw</b><span>逐字节接管键盘</span></div>
+    <div class="stat"><b>@ /</b><span>文件 & 命令补全</span></div>
+    <div class="stat"><b>●⎿</b><span>工具折叠两行</span></div>
+  </div>
+</div>
+
+<!-- ========== 0 全景 ========== -->
+<section id="overview">
+  <h2><span class="num">0</span>功能全景与聚合架构</h2>
+  <p>先鸟瞰当前 TUI 的能力版图，以及它们在 <code>internal/tui</code> 包内的落点。整个交互层从原先散落在 <code>cmd/cogent</code> 的十余个文件，聚合成「扁平主包 + 三个纯子包」。</p>
+
+  <table>
+    <thead><tr><th>能力</th><th>文件</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td>Raw 模式 / termios</td><td><code>editor_raw.go</code> · <code>editor_ioctl_*.go</code></td><td>逐字节接管键盘，进出原始模式</td></tr>
+      <tr><td>按键解码状态机</td><td><code>editor_keys.go</code></td><td>控制字符 / ESC 序列 / UTF-8 → keyEvent</td></tr>
+      <tr><td>行编辑 + CJK 宽字符</td><td><code>editor_core.go</code> · <code>editor_render.go</code></td><td>插入/退格/光标/双宽定位</td></tr>
+      <tr><td>@ 文件补全</td><td><code>completion/{token,provider}.go</code></td><td>git ls-files + 模糊排序下拉</td></tr>
+      <tr><td>/ 斜杠命令补全</td><td><code>completion/command.go</code></td><td>内建命令注册表 + 前缀过滤</td></tr>
+      <tr><td>历史 + 反向搜索</td><td><code>history/history.go</code></td><td>落盘历史、↑↓ 浏览、Ctrl-R 搜索</td></tr>
+      <tr><td>下拉框渲染</td><td><code>editor_render.go</code></td><td>相对光标移动重绘、窗口滚动</td></tr>
+      <tr><td>单选菜单</td><td><code>menu.go</code></td><td>↑↓/Enter/Esc 的 raw 菜单</td></tr>
+      <tr><td>状态栏 + 成本</td><td><code>statusbar.go</code> · <code>cost.go</code></td><td>model/token/$ 计量</td></tr>
+      <tr><td>流式渲染</td><td><code>stream.go</code> · <code>toolsummary.go</code></td><td>spinner + Markdown + 工具折叠分区</td></tr>
+      <tr><td>权限 HITL</td><td><code>prompter.go</code></td><td>approve/always/edit/reject</td></tr>
+      <tr><td>REPL 循环 + SIGINT</td><td><code>repl.go</code></td><td>多轮循环、per-turn 中断</td></tr>
+      <tr><td>外层循环渲染</td><td><code>loopview.go</code></td><td>goal/loop 事件透传</td></tr>
+      <tr><td>渲染基座</td><td><code>render/</code></td><td>ANSI/Markdown-lite/diff/宽度</td></tr>
+    </tbody>
+  </table>
+
+  <div class="mermaid">
+flowchart TD
+    subgraph CMD["cmd/cogent · 仅 cobra + 运行时装配"]
+      A["commands / goal / loop / review"]
+    end
+    A -->|"RunREPL / RunLoopView / NewCostProvider"| TUI
+    subgraph TUI["internal/tui · 交互层聚合"]
+      direction TB
+      R["repl.go 循环+SIGINT"]
+      P["prompter.go HITL"]
+      S["stream.go 渲染"]
+      TS["toolsummary.go"]
+      BAR["statusbar+cost"]
+      ED["editor_* / menu"]
+      R --> S --> TS
+      R --> P --> TS
+      R --> BAR
+      R --> ED
+    end
+    ED --> RND["tui/render"]
+    ED --> CMP["tui/completion"]
+    ED --> HIS["tui/history"]
+    S --> RND
+    R -.->|"消费 &lt;-chan StreamEvent"| ENG["engine（接口）"]
+    BAR -.->|"装饰"| OBS["observe.Provider/Meter"]
+  </div>
+  <p class="cap">图 0 · 依赖单向：tui → engine(接口)/loop/permission/observe，无反向依赖、无环。</p>
+</section>
+
+<!-- ========== 1 Raw ========== -->
+<section id="raw">
+  <h2><span class="num">1</span>Cooked vs Raw 模式与 termios</h2>
+  <p>默认的 <strong>Cooked（规范）模式</strong>下，内核终端行规程替你回显、处理退格、把 <kbd>Ctrl-C</kbd> 翻成信号，直到回车才把整行交给程序——做不了「边打字边弹框」。要实时交互，必须切到 <strong>Raw 模式</strong>，让程序自己收字节、自己画界面。</p>
+  <div class="fig">
+    <svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, monospace">
+      <rect x="20" y="30" width="360" height="140" rx="10" fill="#141019" stroke="#3a2530"/>
+      <text x="200" y="55" fill="#FBBF24" font-size="14" text-anchor="middle">Cooked（默认）</text>
+      <text x="40" y="85" fill="#93A1B3" font-size="12">键盘 → 内核行规程缓冲</text>
+      <text x="40" y="107" fill="#93A1B3" font-size="12">（回显/退格/Ctrl-C→信号）</text>
+      <text x="40" y="135" fill="#6b7689" font-size="12">↓ 按下回车才交付</text>
+      <text x="40" y="157" fill="#4ADE80" font-size="12">程序拿到「一整行」</text>
+      <path d="M395 100 L465 100" stroke="#5EEAD4" stroke-width="2" marker-end="url(#a)"/>
+      <text x="430" y="92" fill="#5EEAD4" font-size="11" text-anchor="middle">enterRaw</text>
+      <rect x="480" y="30" width="360" height="140" rx="10" fill="#0e1a17" stroke="#1f3a34"/>
+      <text x="660" y="55" fill="#5EEAD4" font-size="14" text-anchor="middle">Raw（行编辑器）</text>
+      <text x="500" y="85" fill="#93A1B3" font-size="12">键盘 → 程序（逐字节）</text>
+      <text x="500" y="107" fill="#93A1B3" font-size="12">自己回显/退格/画下拉</text>
+      <text x="500" y="135" fill="#93A1B3" font-size="12">Ctrl-C=0x03 由编辑器识别</text>
+      <text x="500" y="157" fill="#4ADE80" font-size="12">每个按键即时可响应</text>
+      <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5EEAD4"/></marker></defs>
+    </svg>
+    <div class="cap">图 1 · 行规程「代劳」的 Cooked 模式 vs 程序自管的 Raw 模式。</div>
+  </div>
+  <p><code>enterRaw</code> 用 <code>golang.org/x/sys/unix</code> 读改 termios：关闭 <code>ECHO/ICANON/ISIG/IEXTEN</code>、关 <code>ICRNL/IXON/OPOST</code>，并设 <code>VMIN=0 / VTIME=1</code>（0.1s 轮询超时），为「可取消阻塞读」铺路；返回恢复闭包由 <code>defer</code> 保证退出复位。请求号按平台分文件：darwin 用 <code>TIOCGETA/SETA</code>，linux 用 <code>TCGETS/SETS</code>，其它平台 <code>editor_stub.go</code> 一律返回非终端 → 走逐行回退。</p>
+  <pre><span class="code-label">editor_raw.go（darwin||linux）</span><code>raw.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
+raw.Iflag &^= unix.ICRNL | unix.IXON | unix.BRKINT | ...
+raw.Oflag &^= unix.OPOST
+raw.Cc[unix.VMIN] = <span class="n">0</span>; raw.Cc[unix.VTIME] = <span class="n">1</span>   <span class="c">// 无数据 0.1s 返回，支持轮询取消</span></code></pre>
+  <div class="callout"><b>关 ISIG 的关键含义：</b>Raw 期 <kbd>Ctrl-C</kbd> 不再产生 SIGINT，而是以字节 <code>0x03</code> 抵达，由编辑器自行决定语义（清行 / 双击退出）——见 §8。</div>
+</section>
+
+<!-- ========== 2 解码 ========== -->
+<section id="decode">
+  <h2><span class="num">2</span>按键解码状态机 & 可取消阻塞读</h2>
+  <p>Raw 下拿到的是原始字节流。<code>decodeKey</code> 把它翻译成语义 <code>keyEvent</code>：单字节控制符直接映射，<kbd>ESC</kbd> 引导的转义序列（方向键 <code>ESC[A/B/C/D</code>、Home/End、<code>ESC[n~</code>）分支解析，<code>&gt;=0x80</code> 的多字节按 UTF-8 首字节长度续读。</p>
+  <div class="mermaid">
+flowchart TD
+    B["readByte()"] --> C{首字节?}
+    C -->|"0x1b ESC"| E["decodeEscape：读 '[' / 'O'<br/>→ 方向键/Home/End；孤立 ESC=keyEsc"]
+    C -->|"\r \n"| K1["keyEnter"]
+    C -->|"0x03 / 0x04"| K2["keyCtrlC / keyCtrlD"]
+    C -->|"0x12 / 0x15 / 0x10 / 0x0e"| K3["Ctrl-R / Ctrl-U / ↑(Ctrl-P) / ↓(Ctrl-N)"]
+    C -->|"&lt; 0x80 可打印"| K4["runeEvent(b)"]
+    C -->|"&gt;= 0x80"| U["decodeUTF8：按首字节续读 2~4 字节"]
+  </div>
+  <p><strong>可取消阻塞读</strong>：<code>rawInput</code> 内部缓冲 + 一字节回退（<code>unread</code>，供 ESC 歧义判定归还）。<code>readByte</code> 循环里每次先查 <code>ctx.Err()</code> 再 <code>fill()</code>；因 VTIME 超时返回 0 字节时 Go 会附带 <code>io.EOF</code>——这是伪 EOF，<code>fill</code> 特判忽略（只有真实错误才冒泡），从而实现「阻塞读也能被 ctx 取消」。</p>
+  <pre><span class="code-label">editor_keys.go · fill()</span><code>m, err := r.f.Read(r.buf[:])
+<span class="k">if</span> m &gt; <span class="n">0</span> { r.n, r.i = m, <span class="n">0</span>; <span class="k">return</span> <span class="k">true</span>, <span class="k">nil</span> }
+<span class="k">if</span> err == io.EOF || err == <span class="k">nil</span> { <span class="k">return</span> <span class="k">false</span>, <span class="k">nil</span> } <span class="c">// VTIME 超时，非真 EOF</span>
+<span class="k">return</span> <span class="k">false</span>, err</code></pre>
+</section>
+
+<!-- ========== 3 编辑 ========== -->
+<section id="edit">
+  <h2><span class="num">3</span>行编辑与 CJK 宽字符</h2>
+  <p>纯状态机 <code>editorCore</code>（与 I/O 解耦，便于喂 keyEvent 序列单测）维护行缓冲 <code>[]rune</code> 与光标：插入/退格、光标左右移、<kbd>Home</kbd>/<kbd>End</kbd> 跳首尾、<kbd>Ctrl-U</kbd> 清行。渲染时按<strong>显示宽度</strong>而非 rune 数定位光标——中文/全角占 2 列，靠 <code>displayWidth</code> + <code>runeDisplayWidth</code> 计算，避免 CJK 输入时光标错位。</p>
+  <table>
+    <thead><tr><th>按键</th><th>动作</th><th>按键</th><th>动作</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>← →</kbd></td><td>光标移动</td><td><kbd>Ctrl-U</kbd></td><td>清空整行</td></tr>
+      <tr><td><kbd>Home</kbd>/<kbd>Ctrl-A</kbd></td><td>行首</td><td><kbd>Backspace</kbd></td><td>删除前一字符</td></tr>
+      <tr><td><kbd>End</kbd>/<kbd>Ctrl-E</kbd></td><td>行尾</td><td><kbd>↑ ↓</kbd></td><td>历史浏览 / 下拉导航</td></tr>
+      <tr><td><kbd>Tab</kbd>/<kbd>Enter</kbd></td><td>选中候选 / 提交</td><td><kbd>Ctrl-R</kbd></td><td>反向搜索历史</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== 4 @ 补全 ========== -->
+<section id="at">
+  <h2><span class="num">4</span>@ 文件补全：候选来源与模糊排序</h2>
+  <p>输入 <code>@</code> 触发文件补全下拉，边打字边过滤。候选来源 <code>Provider</code> 优先 <code>git ls-files</code>（跟踪 + <code>--others --exclude-standard</code> 未跟踪），失败或非 git 仓库回退 <code>filepath.WalkDir</code>（跳过 <code>.git/.cogent/node_modules</code>，2 万条上限）；结果按 <strong>5 秒 TTL</strong> 缓存，之后每次击键只在内存过滤，不再 spawn git。</p>
+  <div class="term"><span class="dim">you&gt;</span> 修改 @inte<span class="cur"> </span>
+  <span class="hl">internal/tui/stream.go</span>
+  internal/tui/editor_core.go
+  internal/types/types.go
+  <span class="dim">  … (窗口至多 5 行，↑↓ 滚动)</span></div>
+  <p>过滤走四级<strong>模糊排序</strong>（rank 越小越靠前，再按路径长度、字典序稳定排序）：</p>
+  <div class="grid cols4">
+    <div class="card"><h4>0 · 前缀</h4><p>整路径以 query 开头</p></div>
+    <div class="card"><h4>1 · 段前缀</h4><p>basename 以 query 开头</p></div>
+    <div class="card"><h4>2 · 子串</h4><p>路径包含 query</p></div>
+    <div class="card"><h4>3 · 子序列</h4><p>按序但不连续命中</p></div>
+  </div>
+  <p>词法层 <code>token.go</code> 纯函数负责：<code>ParseAtToken</code> 从光标回扫定位 <code>@</code> token 起点与 partial；选中后 <code>ApplyChoice</code> 保留 <code>@</code> 前缀写回相对路径。全部纯函数，无终端依赖，单测友好。</p>
+</section>
+
+<!-- ========== 5 斜杠 ========== -->
+<section id="slash">
+  <h2><span class="num">5</span>/ 斜杠命令补全</h2>
+  <p>行首输入 <code>/</code> 触发命令补全（优先级高于 @）。命令来自单一注册表 <code>builtinCommands</code>——它同时是补全下拉与 <code>/help</code> 的<strong>唯一事实来源</strong>。<code>ParseSlashToken</code> 仅在「行以 <code>/</code> 开头且光标在首个空格之前」时激活；光标进入参数区即停止补全命令名。</p>
+  <div class="term"><span class="dim">you&gt;</span> /
+<span class="hl">/help     显示可用命令</span>
+  /undo     撤销上一轮改动
+  /model    显示当前模型
+  /clear    清空当前会话上下文
+  /compact  压缩当前会话上下文</div>
+  <table>
+    <thead><tr><th>命令</th><th>处理（slashcmd.go / repl.go）</th></tr></thead>
+    <tbody>
+      <tr><td><code>/help</code></td><td>复用注册表打印命令清单</td></tr>
+      <tr><td><code>/undo</code></td><td><code>eng.Undo</code> 撤销上一轮（含工作区快照回滚）</td></tr>
+      <tr><td><code>/model</code></td><td>打印当前 <code>COGENT_MODEL</code></td></tr>
+      <tr><td><code>/clear</code> · <code>/compact</code></td><td>占位（暂未实现，给出提示）</td></tr>
+      <tr><td><code>/exit</code></td><td>由 inputLoop 直接处理退出</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== 6 历史 ========== -->
+<section id="history">
+  <h2><span class="num">6</span>命令历史与 reverse-i-search</h2>
+  <p><code>history.Store</code> 内存维护有序条目（最早在前），并<strong>落盘</strong>到 <code>.cogent/history</code>（0600 权限、上限 1000 条、忽略空行与紧邻重复）。<kbd>↑</kbd>/<kbd>↓</kbd> 浏览历史（首次上翻前暂存当前编辑行，翻到底回到暂存行）；<kbd>Ctrl-R</kbd> 进入 <strong>reverse-i-search</strong> 子模式，边打边从末尾向前增量匹配，再按 Ctrl-R 跳更早命中。</p>
+  <div class="term"><span class="dim">(reverse-i-search)</span>`test': go <span class="hl">test</span> ./...<span class="cur"> </span></div>
+  <p>反向搜索由 <code>SearchBackward(query, from)</code> 支撑：从自末尾第 <code>from</code> 条起向更早找首个包含 <code>query</code> 的条目，返回命中行与索引。<kbd>Enter</kbd> 采纳命中行、<kbd>Esc</kbd>/<kbd>Ctrl-G</kbd> 取消并恢复原行。</p>
+</section>
+
+<!-- ========== 7 下拉渲染 ========== -->
+<section id="dropdown">
+  <h2><span class="num">7</span>下拉框渲染：相对光标移动</h2>
+  <p>下拉画在输入行下方。早期用 DECSC/DECRC（保存/恢复绝对光标）在终端底部滚动时会失效导致残留。现改为<strong>相对光标移动</strong>：<code>lineEditor</code> 记录上次渲染的下拉行数 <code>drawnDropdownLines</code>，每次重绘先 <code>ESC[nA</code> 上移回输入行、<code>\r</code> + 跳过提示符宽度、<code>ESC[0J</code> 清到屏末，再从行首重绘输入 + 下拉（每行加 <code>ESC[2K</code> 防残留），最后把光标按显示宽度放回。可见窗口 <code>maxVisibleSuggest=5</code>，选中项超窗自动滚动。</p>
+  <pre><span class="code-label">editor_render.go · drawLine</span><code><span class="k">if</span> le.drawnDropdownLines &gt; <span class="n">0</span> { fmt.Fprintf(&amp;b, <span class="s">"\x1b[%dA"</span>, le.drawnDropdownLines) } <span class="c">// 上移回输入行</span>
+b.WriteString(<span class="s">"\r"</span>); fmt.Fprintf(&amp;b, <span class="s">"\x1b[%dC"</span>, le.promptWidth)          <span class="c">// 跳过 "you> "</span>
+b.WriteString(<span class="s">"\x1b[0J"</span>)                                             <span class="c">// 清到屏末，保留提示符</span></code></pre>
+  <div class="callout ok"><b>提示符感知：</b>重绘跳过 <code>promptWidth</code>（"you&gt; "=4 列）再清屏，不会擦掉提示符前缀。</div>
+</section>
+
+<!-- ========== 8 Ctrl-C & 菜单 ========== -->
+<section id="ctrlc">
+  <h2><span class="num">8</span>双击 Ctrl-C 退出、Ctrl-D 与单选菜单</h2>
+  <h3>空行双击 Ctrl-C 才退出</h3>
+  <p>参考 readline/bash：<strong>有文本或下拉激活</strong>时 <kbd>Ctrl-C</kbd> 只清行 + 关下拉；<strong>空行</strong>首次 Ctrl-C 进入待确认态（下方显示灰色 <code>(press Ctrl-C again to exit)</code>），<code>ctrlCTimeout=800ms</code> 内二次才真正 <code>statusInterrupt</code>。任何非 Ctrl-C 按键惰性清除待确认态。空行 <kbd>Ctrl-D</kbd> 返回 EOF。</p>
+  <div class="mermaid">
+stateDiagram-v2
+    [*] --> 编辑中
+    编辑中 --> 编辑中: 有文本时 Ctrl-C（清行）
+    编辑中 --> 待确认: 空行 Ctrl-C（提示）
+    待确认 --> 退出: 800ms 内再次 Ctrl-C
+    待确认 --> 编辑中: 任意其他键（清除待确认）
+    编辑中 --> 退出: 空行 Ctrl-D (EOF)
+  </div>
+  <h3>单选菜单 menu.go</h3>
+  <p>独立的 raw 单选菜单：<code>menuModel</code> 维护选项与选中项，<kbd>↑</kbd>/<kbd>↓</kbd> 循环移动、<kbd>Enter</kbd> 确认、<kbd>Esc</kbd>/<kbd>Ctrl-G</kbd> 取消、<kbd>Ctrl-C</kbd> 中断；用 DECSC/DECRC 复位重绘、高亮选中项，非 TTY 返回 <code>menuUnavailable</code> 让调用方回退文本交互。</p>
+  <div class="term">  read_file
+<span class="hl">&gt; edit_file</span>
+  bash</div>
+</section>
+
+<!-- ========== 9 状态栏 ========== -->
+<section id="status">
+  <h2><span class="num">9</span>状态栏与成本计量</h2>
+  <p>每次输入提示前打印一行常驻<strong>状态栏</strong>：当前模型、累计输入/输出 token、估算美元成本。</p>
+  <div class="term"><span class="dim">[deepseek-v4-pro | tok in:12040 out:3110 | $0.0342]</span>
+<span class="dim">you&gt;</span> <span class="cur"> </span></div>
+  <p>数据来自 <code>costMeter</code>——它<strong>装饰 <code>observe.Meter</code></strong>：拦截 <code>cogent.tokens</code> 计数，按模型单价表（可用 <code>COGENT_PRICE_&lt;MODEL&gt;_{INPUT,OUTPUT}</code> 环境变量覆盖）累计美元，其余指标原样转发；同时实现 <code>loop.CostMeter(SpentUSD)</code>，驱动 <code>goal/loop</code> 的 <code>--max-cost</code> 护栏。<code>CostProvider</code> 装饰 <code>observe.Provider</code> 使 <code>Meter()</code> 返回它，装配阶段 <code>prov = NewCostProvider(prov)</code> 织入整条链。</p>
+  <pre><span class="code-label">cost.go</span><code><span class="k">func</span> (m *costMeter) <span class="f">Count</span>(name <span class="t">string</span>, delta <span class="t">int64</span>, attrs ...observe.Attr) {
+    <span class="k">if</span> name == tokensMetricName &amp;&amp; delta &gt; <span class="n">0</span> { m.<span class="f">accrue</span>(delta, attrs) } <span class="c">// 按 token.kind/llm.model 累计 $</span>
+    m.inner.<span class="f">Count</span>(name, delta, attrs...)                                <span class="c">// 原样转发</span>
+}</code></pre>
+</section>
+
+<!-- ========== 10 流式渲染 ========== -->
+<section id="stream">
+  <h2><span class="num">10</span>流式渲染：从「一股脑」到「分区折叠」</h2>
+  <p>这是本轮改造的重点。重构前，工具的几百行结果、入参 JSON、子 Agent 事件顺序刷屏；改造后每次工具调用只占两行——<span style="color:var(--accent)">● 工具名 参数</span> + <span style="color:var(--ok)">⎿ 状态</span>，正文与工具块留白分区。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 920 470" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, Menlo, Consolas, monospace">
+      <rect x="10" y="10" width="435" height="450" rx="10" fill="#05070b" stroke="#3a2530"/>
+      <rect x="10" y="10" width="435" height="26" rx="10" fill="#1a1015"/>
+      <circle cx="28" cy="23" r="5" fill="#F87171"/><circle cx="46" cy="23" r="5" fill="#FBBF24"/><circle cx="64" cy="23" r="5" fill="#4ADE80"/>
+      <text x="230" y="27" fill="#93A1B3" font-size="12" text-anchor="middle">Before · 一股脑刷屏</text>
+      <g font-size="11.5">
+        <text x="24" y="58" fill="#c9d1d9">cogent&gt; 我来读取并修改这个文件。</text>
+        <text x="24" y="80" fill="#6b7689">[tool] read_file</text>
+        <text x="24" y="96" fill="#5b6472">  input: {"path":"internal/x.go"}</text>
+        <text x="24" y="114" fill="#7a828f">package x</text>
+        <text x="24" y="128" fill="#7a828f">import ( "fmt"; "os"; "strings" )</text>
+        <text x="24" y="142" fill="#7a828f">func A() { ... }</text>
+        <text x="24" y="156" fill="#7a828f">... (还有 480 行原样刷屏) ...</text>
+        <text x="24" y="176" fill="#6b7689">[tool] bash</text>
+        <text x="24" y="192" fill="#5b6472">  input: {"command":"go test ./..."}</text>
+        <text x="24" y="206" fill="#7a828f">=== RUN TestA ... (200 行日志)</text>
+        <text x="24" y="226" fill="#6b7689">[tool] task (子 Agent)</text>
+        <text x="24" y="242" fill="#7a828f">&gt; 子 Agent 逐事件也打到主终端</text>
+        <text x="24" y="256" fill="#7a828f">&gt; read_file / grep / 思考 全刷出来</text>
+        <text x="24" y="270" fill="#7a828f">&gt; ...嵌套混乱，分不清层级...</text>
+        <text x="24" y="296" fill="#c9d1d9">cogent&gt; 综上，我已完成修改。</text>
+        <text x="24" y="360" fill="#F87171">信号被噪音淹没：</text>
+        <text x="24" y="380" fill="#93A1B3">要在几百行里找"它做了什么"</text>
+        <text x="24" y="400" fill="#93A1B3">和"结论"——认知负担极高。</text>
+      </g>
+      <rect x="475" y="10" width="435" height="450" rx="10" fill="#05070b" stroke="#1f3a34"/>
+      <rect x="475" y="10" width="435" height="26" rx="10" fill="#0e1a17"/>
+      <circle cx="493" cy="23" r="5" fill="#F87171"/><circle cx="511" cy="23" r="5" fill="#FBBF24"/><circle cx="529" cy="23" r="5" fill="#4ADE80"/>
+      <text x="695" y="27" fill="#93A1B3" font-size="12" text-anchor="middle">After · 分区折叠（类 Claude Code）</text>
+      <g font-size="12">
+        <text x="489" y="60" fill="#c9d1d9">cogent&gt; 我来读取并修改这个文件。</text>
+        <text x="489" y="92" fill="#5EEAD4">● read_file internal/x.go</text>
+        <text x="507" y="110" fill="#93A1B3">⎿ </text><text x="525" y="110" fill="#4ADE80">✓</text><text x="540" y="110" fill="#93A1B3">486 lines</text>
+        <text x="489" y="142" fill="#5EEAD4">● edit_file internal/x.go</text>
+        <text x="507" y="160" fill="#93A1B3">⎿ </text><text x="525" y="160" fill="#4ADE80">✓</text><text x="545" y="160" fill="#4ADE80">+12</text><text x="575" y="160" fill="#F87171">-3</text>
+        <text x="489" y="192" fill="#5EEAD4">● bash go test ./...</text>
+        <text x="507" y="210" fill="#93A1B3">⎿ </text><text x="525" y="210" fill="#4ADE80">✓</text><text x="540" y="210" fill="#93A1B3">214 lines</text>
+        <text x="489" y="242" fill="#5EEAD4">● task 探索调用链</text>
+        <text x="507" y="260" fill="#93A1B3">⎿ </text><text x="525" y="260" fill="#4ADE80">✓</text><text x="540" y="260" fill="#93A1B3">38 lines　（子 Agent 收敛）</text>
+        <text x="489" y="298" fill="#5EEAD4">● bash go vet ./...</text>
+        <text x="507" y="316" fill="#93A1B3">⎿ </text><text x="525" y="316" fill="#F87171">✗ vet: undefined: foo (+2 more)</text>
+        <text x="489" y="352" fill="#c9d1d9">cogent&gt; 综上，我已完成修改。</text>
+        <text x="489" y="400" fill="#4ADE80">信号一目了然：</text>
+        <text x="489" y="420" fill="#93A1B3">5 步操作 = 10 行；正文独立成段，</text>
+        <text x="489" y="440" fill="#93A1B3">成功/失败/增删一眼可见。</text>
+      </g>
+    </svg>
+    <div class="cap">图 10 · 同一轮回复：左「一股脑」vs 右「分区折叠」。</div>
+  </div>
+
+  <h3>inTool 状态机</h3>
+  <p><code>streamRenderer</code> 维护 <code>inTool</code> 标记「工具已开始、结果未到」区间：<code>EventToolStart</code> flush 正文 + 空行分区 + 打印 <code>● Summarize(name,input)</code> 并置位；区间内 <code>EventText</code>（进度/子 Agent 文本）<strong>抑制不刷屏</strong>；<code>EventToolResult</code> 打印单行 <code>⎿ 状态</code> 并复位。首个可见输出前有 <code>thinking…</code> spinner；正文经 <code>StreamMarkdown</code> 逐行渲染（标题加粗、围栏变暗、行内 code 着色）。</p>
+  <pre><span class="code-label">stream.go</span><code><span class="k">func</span> (r *streamRenderer) <span class="f">writeText</span>(text <span class="t">string</span>) {
+    <span class="k">if</span> text == <span class="s">""</span> { <span class="k">return</span> }
+    <span class="k">if</span> r.inTool { <span class="k">return</span> }              <span class="c">// ← 抑制工具区间内的进度/子 Agent 刷屏</span>
+    r.beginOutput(); fmt.Fprint(r.w, r.md.<span class="f">Write</span>(text))
+}</code></pre>
+
+  <h3>结果状态与折叠策略</h3>
+  <table>
+    <thead><tr><th>结果形态</th><th>渲染</th><th>实现</th></tr></thead>
+    <tbody>
+      <tr><td>含 Diff</td><td><span class="badge b-ok">✓ +A -B</span></td><td><code>diffStat</code> 统计增删（忽略头部）</td></tr>
+      <tr><td>错误</td><td><span class="badge b-deny">✗ 前3行 (+N more)</span></td><td><code>collapseError</code></td></tr>
+      <tr><td>多行成功</td><td><span class="badge b-ok">✓ N lines</span></td><td>只报规模</td></tr>
+      <tr><td>单行成功</td><td><span class="badge b-ok">✓ 内容(截72列)</span></td><td><code>render.Truncate</code></td></tr>
+      <tr><td>空</td><td><span class="badge b-ok">✓ done</span></td><td>如写文件成功</td></tr>
+    </tbody>
+  </table>
+  <p><code>Summarize(name, input)</code> 按工具类型抽关键参数成一行（read/write/edit→path、grep→pattern、bash→command、task→description），并<strong>被 HITL 提示复用</strong>——单一事实来源。非 TTY 走 <code>handlePlain</code> 纯文本路径（<code>[tool]/[result]</code>），管道零污染。</p>
+</section>
+
+<!-- ========== 11 HITL ========== -->
+<section id="hitl">
+  <h2><span class="num">11</span>权限 HITL（human-in-the-loop）</h2>
+  <p>写/执行类工具（write_file/edit_file/bash + 全部 MCP 外部工具）经 <code>Guard</code> 触发权限中断，由 <code>cliPrompter</code> 读 stdin 决策：</p>
+  <div class="term"><span class="dim">[permission]</span> <span class="cy">write_file internal/x.go</span>
+  approve / always / edit / reject? [a/A/e/r] <span class="cur"> </span></div>
+  <table>
+    <thead><tr><th>输入</th><th>动作</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>a</kbd> / approve / y</td><td>本次批准</td></tr>
+      <tr><td><kbd>A</kbd> / always</td><td>本会话内该工具<strong>自动批准</strong>（存入 allowlist，不再询问）</td></tr>
+      <tr><td><kbd>e</kbd> / edit</td><td>输入修正后 JSON 入参（非法 JSON 降级为拒绝）</td></tr>
+      <tr><td>其他 / reject</td><td>拒绝并可附一句给模型的改道指引</td></tr>
+    </tbody>
+  </table>
+  <p>提示复用 <code>Summarize</code>——不再打印完整入参 JSON（降低噪音与泄露面）。无人值守场景（<code>COGENT_YES=1</code>）用 <code>yesPrompter</code> 一律批准，危险命令仍由 sandbox 确定性拦截兜底。<code>cliPrompter</code> 的 allowlist 有互斥锁保护，支持并发 Ask（<code>-race</code> 验证）。</p>
+</section>
+
+<!-- ========== 12 REPL ========== -->
+<section id="repl">
+  <h2><span class="num">12</span>REPL 循环与 per-turn SIGINT</h2>
+  <p><code>repl.go</code> 的 <code>inputLoop</code> 是多轮对话的心脏：打印状态栏 + <code>you&gt;</code>、读一行、路由（exit/斜杠命令/普通输入）、流式渲染本轮回复。它<strong>独占管理 SIGINT</strong>：先 <code>signal.Reset(SIGINT)</code> 解除 main.go 顶层 <code>NotifyContext</code> 的监听（防止其 cancel 顶层 ctx 导致整体退出），再用本地 channel 接管——模型执行时 SIGINT 仅 cancel 当前 turn（打印 <code>[interrupted]</code> 后 REPL 继续），等待输入时由 raw 模式双击 Ctrl-C 决定退出。</p>
+  <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant R as inputLoop (repl.go)
+    participant E as engine.Engine
+    participant S as streamRenderer
+    participant T as 终端
+    U->>R: raw 行编辑器读入一行
+    R->>E: eng.Run(ctx, line)
+    activate E
+    E-->>S: EventText 正文增量
+    S->>T: StreamMarkdown 渲染
+    E-->>S: EventToolStart{read_file}
+    S->>T: ● read_file x.go （inTool=true）
+    E-->>S: EventText 工具进度
+    S--xT: inTool 抑制，不刷屏
+    E-->>S: EventToolResult{486 行}
+    S->>T: ⎿ ✓ 486 lines （inTool=false）
+    E-->>S: EventDone
+    deactivate E
+    S->>T: flush + 换行
+    U-->>R: (模型执行中) Ctrl-C
+    R->>E: cancel 本轮 turnCtx
+    R->>T: [interrupted]（REPL 继续）
+  </div>
+  <p class="cap">图 12 · 一轮回复的事件流被 inTool 状态机分区折叠；SIGINT 仅中断当轮。</p>
+</section>
+
+<!-- ========== 13 回退 ========== -->
+<section id="fallback">
+  <h2><span class="num">13</span>非 TTY 回退与外层循环渲染</h2>
+  <p><code>NewTTYInputReader</code> 先判 <code>IsTerminal</code>：是终端才启用 raw 行编辑器；否则（管道/脚本/测试）用后台 <code>bufio.Scanner</code> 逐行读取。即便进了终端却发现 raw 不可用（受限 pty），<code>readLine</code> 返回三态 <code>usable=false</code>，<code>next</code> 会<strong>一次性懒回退</strong>到逐行读取，而非让 REPL 秒退。这保证脚本与交互场景行为一致。</p>
+  <p><code>loopview.go</code> 的 <code>RunLoopView</code> 服务 <code>goal/loop</code>：透传内层 engine 的文本/工具事件（复用同一套分区折叠渲染），单独呈现轮次标题、<code>[verify]</code> 判定与终局归因；内层错误只记 stderr、不打断外层带反馈续跑。</p>
+  <div class="callout"><b>三态返回的意义：</b><code>readLine</code> 区分「用户主动退出（ok=false, usable=true）」与「环境不支持 raw（usable=false）」，避免把「不支持 raw」误判成 EOF 而秒退——这是此前 <code>cogent run</code> 一秒退出 bug 的根因修复。</div>
+</section>
+
+<!-- ========== 14 收尾 ========== -->
+<section id="wrap">
+  <h2><span class="num">14</span>收尾：一个包，十四项能力</h2>
+  <div class="grid cols2">
+    <div class="card"><h4>交互能力</h4><p>Raw 行编辑 · @/​/ 双补全 · 历史与反向搜索 · 单选菜单 · CJK 宽字符 · 双击 Ctrl-C · 权限 HITL。</p></div>
+    <div class="card"><h4>呈现能力</h4><p>spinner · 流式 Markdown · 工具折叠 ●/⎿ · 正文/工具分区 · 结果强折叠 · 状态栏 + 成本 · 非 TTY 纯文本。</p></div>
+  </div>
+  <div class="key">全部收敛在 <b>internal/tui</b>（扁平主包 + render/completion/history 子包），依赖单向无环；<code>cmd/cogent</code> 只做命令定义与运行时装配，经 <code>RunREPL</code>/<code>RunLoopView</code> 等入口驱动。<code>go build ./... / go vet / go test -race</code> 全绿，非 TTY 管道 <code>exit</code> 干净退出。</div>
+  <footer>cogent · TUI 全功能教学 · 生成于 2026-07-03 · 图示：SVG（Cooked/Raw、stream 对比）+ Mermaid（依赖 flowchart / 解码 flowchart / Ctrl-C stateDiagram / REPL sequenceDiagram）</footer>
+</section>
+
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: "dark",
+    themeVariables: {
+      background: "#161C28", primaryColor: "#1A2130", primaryBorderColor: "#28324a",
+      primaryTextColor: "#E6EDF3", lineColor: "#5EEAD4",
+      actorBkg: "#1A2130", actorBorder: "#5EEAD4", actorTextColor: "#E6EDF3",
+      signalColor: "#93A1B3", signalTextColor: "#c4cdd9",
+      noteBkgColor: "#0e1a17", noteTextColor: "#93A1B3", noteBorderColor: "#1f3a34"
+    },
+    sequence: { mirrorActors: false, showSequenceNumbers: false },
+    flowchart: { curve: "basis" }
+  });
+</script>
+</body>
+</html>

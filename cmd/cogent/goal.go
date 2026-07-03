@@ -15,7 +15,7 @@ import (
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/sandbox"
 	"github.com/alaindong/cogent/internal/session"
-	"github.com/alaindong/cogent/internal/types"
+	"github.com/alaindong/cogent/internal/tui"
 	"github.com/alaindong/cogent/internal/verify"
 	"github.com/alaindong/cogent/internal/worktree"
 )
@@ -91,8 +91,8 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	wd, _ := os.Getwd()
-	in := newTTYInputReader(os.Stdin, wd)
-	prompter := newPrompter(in)
+	in := tui.NewTTYInputReader(os.Stdin, wd)
+	prompter := tui.NewPrompter(in)
 	sid := session.NewSessionID()
 	if opts.worktree && !opts.allowDirty {
 		if err := ensureCleanWorktree(ctx, wd); err != nil {
@@ -123,7 +123,7 @@ func runGoalCmd(ctx context.Context, opts goalOptions) error {
 	if err != nil {
 		return fmt.Errorf("run goal: %w", err)
 	}
-	runErr = renderLoopEvents(ctx, events)
+	runErr = tui.RunLoopView(ctx, events)
 	if errors.Is(runErr, context.Canceled) {
 		return nil
 	}
@@ -180,75 +180,5 @@ func printGoalBanner(sid string, opts goalOptions) {
 		} else {
 			fmt.Println("  exec   : maker/reviewer (双角色：实现者改 + 独立审查者审，通过才落盘)")
 		}
-	}
-}
-
-// renderLoopEvents 消费外层循环事件流并渲染到 stdout；ctx 取消时安全收尾。
-func renderLoopEvents(ctx context.Context, events <-chan loop.LoopEvent) error {
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("\n[interrupted]")
-			return ctx.Err()
-		case ev, ok := <-events:
-			if !ok {
-				return nil
-			}
-			if err := printLoopEvent(ev); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-// printLoopEvent 渲染单个外层事件：透传内层文本/工具事件，单独呈现轮次、判定与终局。
-// 内层错误不中断外层渲染（外层会带反馈续跑），仅打印到 stderr。
-func printLoopEvent(ev loop.LoopEvent) error {
-	switch ev.Type {
-	case loop.LoopIterationStart:
-		fmt.Printf("\n=== iteration %d ===\ncogent> ", ev.Iteration+1)
-	case loop.LoopInner:
-		return printInnerEvent(ev.Inner)
-	case loop.LoopVerify:
-		if ev.Report != nil {
-			printVerifyReport(*ev.Report)
-		}
-	case loop.LoopFinished:
-		if ev.Result != nil {
-			printLoopResult(*ev.Result)
-		}
-	}
-	return nil
-}
-
-// printInnerEvent 透传内层 engine 事件；错误事件降级为告警，不冒泡中断外层循环。
-func printInnerEvent(inner *types.StreamEvent) error {
-	if inner == nil {
-		return nil
-	}
-	if inner.Type == types.EventError {
-		if inner.Err != nil {
-			fmt.Fprintln(os.Stderr, "\n[inner error]", inner.Err)
-		}
-		return nil
-	}
-	return printEvent(*inner)
-}
-
-// printVerifyReport 渲染一次独立判定的结论。
-func printVerifyReport(r verify.Report) {
-	status := "NOT PASSED"
-	if r.Passed {
-		status = "PASSED"
-	}
-	fmt.Printf("\n[verify] %s — %s\n", status, r.Summary)
-}
-
-// printLoopResult 渲染目标循环的终局归因。
-func printLoopResult(r loop.LoopResult) {
-	fmt.Printf("\n=== loop finished: %s after %d iteration(s) in %s ===\n",
-		r.Outcome.String(), r.Iterations, r.Elapsed.Round(time.Millisecond))
-	if r.Outcome != loop.OutcomeAchieved && strings.TrimSpace(r.LastReport.Summary) != "" {
-		fmt.Printf("  last verification: %s\n", r.LastReport.Summary)
 	}
 }

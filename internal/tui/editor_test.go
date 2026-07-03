@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -146,11 +146,16 @@ func TestEditor_Backspace(t *testing.T) {
 	}
 }
 
-// TestEditor_CtrlCAndCtrlD 验证 Ctrl-C 中断、空行 Ctrl-D 结束。
+// TestEditor_CtrlCAndCtrlD 验证空行双击 Ctrl-C 中断、空行 Ctrl-D 结束。
 func TestEditor_CtrlCAndCtrlD(t *testing.T) {
 	e := newTestCore()
+	// 空行首次 Ctrl-C 仅进入待确认态（不退出，与 readline/bash 行为一致）。
+	if got := e.handleKey(ev(keyCtrlC)); got != statusContinue {
+		t.Fatalf("first ctrl-c status=%v want continue (pending)", got)
+	}
+	// 时间窗内二次 Ctrl-C 才真正中断。
 	if got := e.handleKey(ev(keyCtrlC)); got != statusInterrupt {
-		t.Fatalf("ctrl-c status=%v want interrupt", got)
+		t.Fatalf("second ctrl-c status=%v want interrupt", got)
 	}
 	if got := e.handleKey(ev(keyCtrlD)); got != statusEOF {
 		t.Fatalf("empty ctrl-d status=%v want eof", got)

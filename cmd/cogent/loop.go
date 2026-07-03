@@ -15,6 +15,7 @@ import (
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/progress"
 	"github.com/alaindong/cogent/internal/session"
+	"github.com/alaindong/cogent/internal/tui"
 )
 
 // defaultLoopInterval 是未配置 --interval 且非文件监听时的默认心跳间隔。
@@ -94,8 +95,8 @@ func runLoopCmd(ctx context.Context, opts loopOptions) error {
 	defer func() { _ = prov.Shutdown(context.Background()) }()
 
 	wd, _ := os.Getwd()
-	in := newTTYInputReader(os.Stdin, wd)
-	prompter := newPrompter(in)
+	in := tui.NewTTYInputReader(os.Stdin, wd)
+	prompter := tui.NewPrompter(in)
 	sid := session.NewSessionID()
 
 	orch, cleanup, err := buildOrchestrator(ctx, prov, prompter, opts.mode, sid, wd, opts.review, opts.worktree, opts.maxSteps)

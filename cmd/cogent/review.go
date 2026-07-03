@@ -16,6 +16,7 @@ import (
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/permission"
 	"github.com/alaindong/cogent/internal/sandbox"
+	"github.com/alaindong/cogent/internal/tui"
 	"github.com/alaindong/cogent/internal/verify"
 	"github.com/alaindong/cogent/internal/worktree"
 )
@@ -280,7 +281,7 @@ func buildOrchestrator(
 	noop := func() {}
 	// 装饰 provider 注入成本计量：拦截 cogent.tokens 累计美元成本，并作为 loop.CostMeter 接入护栏，
 	// 使 --max-cost 真正生效（修复发现⑤：成本护栏此前是空接线）。
-	costProv := newCostProvider(prov)
+	costProv := tui.NewCostProvider(prov)
 	prov = costProv
 	if review || useWorktree {
 		pipeline, err := pipelineFor(prov, prompter, workRoot, useWorktree, maxSteps)
@@ -288,7 +289,7 @@ func buildOrchestrator(
 			return nil, noop, err
 		}
 		orch, err := loop.New(loop.Deps{
-			Pipeline: pipeline, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.meter,
+			Pipeline: pipeline, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.CostMeter(),
 		})
 		if err != nil {
 			return nil, noop, fmt.Errorf("init loop: %w", err)
@@ -305,7 +306,7 @@ func buildOrchestrator(
 		return nil, noop, err
 	}
 	orch, err := loop.New(loop.Deps{
-		Engine: eng, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.meter,
+		Engine: eng, Tracer: prov.Tracer(), Meter: prov.Meter(), Cost: costProv.CostMeter(),
 	})
 	if err != nil {
 		_ = mgr.Close()

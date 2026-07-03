@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"math"
@@ -94,7 +94,7 @@ func TestCostProvider_MeterIsCostMeter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("observe.New: %v", err)
 	}
-	cp := newCostProvider(prov)
+	cp := NewCostProvider(prov)
 	// 经装饰 provider 的 Meter 计数 token 后，成本应可读取（即便底层是 no-op）。
 	cp.Meter().Count(tokensMetricName, 1_000_000, tokenCount("output", "deepseek-chat")...)
 	if got := cp.meter.SpentUSD(); !approxEqual(got, defaultModelPrices["deepseek-chat"].outputPerMTok) {

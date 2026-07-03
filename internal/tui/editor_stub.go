@@ -1,6 +1,6 @@
 //go:build !darwin && !linux
 
-package main
+package tui
 
 // isTerminalFD 在不支持的平台上一律返回 false，使输入退回非 TTY 逐行读取。
 func isTerminalFD(uintptr) bool { return false }
