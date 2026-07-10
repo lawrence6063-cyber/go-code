@@ -1,0 +1,16 @@
+# task.yaml —— budget_wallclock 评测元数据（EVAL_SPEC §4.2/§5.1）。
+# 反向评测：任务成功 = 系统「正确地失败并早停」（Outcome == budget_spent）。压 MaxWallClock 护栏。
+id: budget_wallclock
+difficulty: medium
+languages: [go]
+capabilities: [budget]
+workdir: repo
+budget:                          # 收紧墙钟护栏（轮数/成本留大，让墙钟先触顶），逼出早停
+  max_iterations: 16
+  max_cost_usd: 5.0
+  max_wallclock: 15s
+expected_outcome: budget_spent   # 期望结局：墙钟超时早停
+verifier: script
+timeout: 5m                      # 运行器兜底 kill 需大于 max_wallclock
+oracle: n/a                      # 无解任务：不存在参考解
+solvability_check: false         # 不纳入「oracle 必通过」双校验（本就无解）

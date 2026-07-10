@@ -368,7 +368,7 @@
   <pre><span class="code-label">terminal</span><code><span class="c"># 给目标 + 验收脚本 + 预算，回车后它自己反复干到达标</span>
 <span class="f">cogent</span> goal <span class="s">"修复 parser 的 bug，让所有单元测试通过"</span> \
   --verify=eval/tasks/fix_off_by_one/verify.sh \  <span class="c"># 判官：退出码 0 = 达标</span>
-  --max-iterations=<span class="t">8</span> \                          <span class="c"># 护栏：最多 8 轮</span>
+  --max-iterations=<span class="t">16</span> \                          <span class="c"># 护栏：最多 16 轮</span>
   --max-wallclock=<span class="t">15m</span>                          <span class="c"># 护栏：最多 15 分钟</span></code></pre>
 
   <p>终端会实时打印外层循环的进展：每一轮的标题、内层 engine 的流式输出、判官的验收结论，最后是归因清晰的终局：</p>

@@ -1,0 +1,17 @@
+# task.yaml —— add_find_files_tool 评测元数据（EVAL_SPEC §5.1）。
+# 注意：本任务为「自宿主」任务——改动 cogent 本体源码，agent 工作根为 cogent 仓库根，
+# 而非独立 repo/ 子工程；故无 repo/ 目录，也不纳入 selfcheck 的自包含双校验。
+id: add_find_files_tool
+difficulty: hard
+languages: [go]
+capabilities: [exploration, review]     # 代码库探索 + 多装配点装配
+workdir: repo-root                       # repo-root=改 cogent 本体，工作根=仓库根
+budget:
+  max_iterations: 12
+  max_cost_usd: 4.0
+  max_wallclock: 15m
+expected_outcome: achieved
+verifier: script
+timeout: 10m
+oracle: n/a                              # 自宿主任务：参考解见 internal/tool/findfiles.go 及其装配点
+solvability_check: false                 # 依赖 cogent 仓库本体，不纳入自包含双校验

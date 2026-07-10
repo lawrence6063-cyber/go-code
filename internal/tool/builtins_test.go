@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,50 @@ func TestReadFile(t *testing.T) {
 	res, _ = tl.Call(context.Background(), mustJSON(t, map[string]string{"path": "../escape"}), nil)
 	if !res.IsError {
 		t.Error("expected escape to error")
+	}
+}
+
+// TestReadFile_OffsetLimit 覆盖 P1 增强：按行范围流式读取大文件的中段/尾段。
+func TestReadFile_OffsetLimit(t *testing.T) {
+	dir := t.TempDir()
+	lines := make([]string, 10)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line%d", i+1)
+	}
+	path := filepath.Join(dir, "big.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tl := NewReadFile(dir)
+
+	// 从第 3 行起读 2 行。
+	res, _ := tl.Call(context.Background(), mustJSON(t, map[string]any{"path": "big.txt", "offset": 3, "limit": 2}), nil)
+	if res.IsError {
+		t.Fatalf("range read failed: %+v", res)
+	}
+	if !strings.Contains(res.Content, "line3") || !strings.Contains(res.Content, "line4") || strings.Contains(res.Content, "line5") {
+		t.Errorf("range read content = %q, want lines 3-4 only", res.Content)
+	}
+	if !strings.Contains(res.Content, "[showing lines 3-4]") {
+		t.Errorf("range read content missing range marker: %q", res.Content)
+	}
+
+	// 只传 limit，从头读 3 行。
+	res, _ = tl.Call(context.Background(), mustJSON(t, map[string]any{"path": "big.txt", "limit": 3}), nil)
+	if res.IsError || !strings.Contains(res.Content, "line1") || strings.Contains(res.Content, "line4") {
+		t.Errorf("limit-only read got %+v, want lines 1-3", res)
+	}
+
+	// offset 超出文件行数：无匹配但不报错。
+	res, _ = tl.Call(context.Background(), mustJSON(t, map[string]any{"path": "big.txt", "offset": 100}), nil)
+	if res.IsError {
+		t.Errorf("out-of-range offset should not error, got %+v", res)
+	}
+
+	// 未传 offset/limit 仍走 legacy 全文读，行为不变。
+	res, _ = tl.Call(context.Background(), mustJSON(t, map[string]string{"path": "big.txt"}), nil)
+	if res.IsError || !strings.Contains(res.Content, "line1") || !strings.Contains(res.Content, "line10") {
+		t.Errorf("legacy full read regressed: %+v", res)
 	}
 }
 
@@ -87,6 +132,55 @@ func TestEditFile(t *testing.T) {
 	}
 }
 
+// TestEditFile_BatchAtomic 覆盖 P1 增强：一次调用传入多组 edits 按顺序原子应用；
+// 任一组失败则整体不落盘（文件保持原样）。
+func TestEditFile_BatchAtomic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "code.go")
+	original := "func main() {\n\tfoo()\n\tbar()\n}\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tl := NewEditFile(dir)
+
+	// 成功场景：两条编辑按顺序应用，第二条匹配第一条修改后的文本。
+	in := map[string]any{
+		"path": "code.go",
+		"edits": []map[string]string{
+			{"old_string": "foo()", "new_string": "foo(1)"},
+			{"old_string": "bar()", "new_string": "bar(2)"},
+		},
+	}
+	res, _ := tl.Call(context.Background(), mustJSON(t, in), nil)
+	if res.IsError {
+		t.Fatalf("batch edit failed: %+v", res)
+	}
+	got, _ := os.ReadFile(path)
+	if !strings.Contains(string(got), "foo(1)") || !strings.Contains(string(got), "bar(2)") {
+		t.Errorf("batch edit not fully applied: %q", got)
+	}
+
+	// 失败场景：第二条 old_string 不唯一（出现 0 次），整体不落盘。
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in = map[string]any{
+		"path": "code.go",
+		"edits": []map[string]string{
+			{"old_string": "foo()", "new_string": "foo(1)"},
+			{"old_string": "NOPE", "new_string": "x"},
+		},
+	}
+	res, _ = tl.Call(context.Background(), mustJSON(t, in), nil)
+	if !res.IsError {
+		t.Error("expected batch edit to fail when any edit's old_string is not unique")
+	}
+	got, _ = os.ReadFile(path)
+	if string(got) != original {
+		t.Errorf("failed batch edit must not partially write file, got %q", got)
+	}
+}
+
 func TestListDir(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0o644)
@@ -123,7 +217,7 @@ func TestGrep(t *testing.T) {
 func TestBash_DangerousBlockedAndRun(t *testing.T) {
 	dir := t.TempDir()
 	sb := sandbox.New(sandbox.Config{WorkRoot: dir, Enabled: true})
-	tl := NewBash(sb, testTracer())
+	tl := NewBash(sb, dir, testTracer())
 	// 危险命令 CheckPermission 应 Deny。
 	dec, _ := tl.CheckPermission(context.Background(), mustJSON(t, map[string]string{"command": "rm -rf /"}))
 	if dec.Behavior != permission.BehaviorDeny {
@@ -143,5 +237,34 @@ func TestBash_DangerousBlockedAndRun(t *testing.T) {
 	res, _ = tl.Call(context.Background(), mustJSON(t, map[string]string{"command": "rm -rf /"}), nil)
 	if !res.IsError {
 		t.Error("dangerous command should be blocked in Call")
+	}
+}
+
+// TestBash_ControlPlaneCommandBlocked 验证 P0 修复：bash 不能再借重定向/rm 绕开
+// write_file/edit_file 已有的控制面写保护（.cogent/.git）。
+func TestBash_ControlPlaneCommandBlocked(t *testing.T) {
+	dir := t.TempDir()
+	sb := sandbox.New(sandbox.Config{WorkRoot: dir, Enabled: true})
+	tl := NewBash(sb, dir, testTracer())
+
+	cases := []string{
+		"echo evil > .cogent/skills/x/SKILL.md",
+		"rm -rf .cogent",
+		"mv secret.txt .git/hooks/pre-commit",
+	}
+	for _, cmd := range cases {
+		dec, _ := tl.CheckPermission(context.Background(), mustJSON(t, map[string]string{"command": cmd}))
+		if dec.Behavior != permission.BehaviorDeny {
+			t.Errorf("CheckPermission(%q) behavior = %v, want deny", cmd, dec.Behavior)
+		}
+		res, _ := tl.Call(context.Background(), mustJSON(t, map[string]string{"command": cmd}), nil)
+		if !res.IsError {
+			t.Errorf("Call(%q) should be blocked, got %+v", cmd, res)
+		}
+	}
+	// 普通命令不受影响。
+	dec, _ := tl.CheckPermission(context.Background(), mustJSON(t, map[string]string{"command": "echo hi > out.txt"}))
+	if dec.Behavior != permission.BehaviorAsk {
+		t.Errorf("normal redirect behavior = %v, want ask", dec.Behavior)
 	}
 }

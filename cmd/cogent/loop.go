@@ -75,7 +75,7 @@ func newLoopCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&useWorktree, "worktree", false, "双角色落盘用 git worktree 暂存（通过才 Merge，物理隔离；隐含 --review）")
 	cmd.Flags().StringVar(&watch, "watch", "", "监听该目录的文件变更触发（留空则用 --interval 定时触发）")
 	cmd.Flags().DurationVar(&interval, "interval", defaultLoopInterval, "定时触发间隔（如 10m）")
-	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 8）")
+	cmd.Flags().IntVar(&maxIter, "max-iterations", 0, "外层循环最大轮数（0 = 保守默认 16）")
 	cmd.Flags().Float64Var(&maxCost, "max-cost", 0, "累计 LLM 成本上限（美元，0 = 不限）")
 	cmd.Flags().DurationVar(&wall, "max-wallclock", 0, "单次目标循环墙钟上限（如 15m，0 = 不限）")
 	cmd.Flags().IntVar(&maxSteps, "max-steps", 0, "单轮 ReAct 最大轮数（0 = 走 COGENT_MAX_REACT_STEPS env 或默认 50）")

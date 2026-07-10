@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cogent 交互式 TUI · 教学与数据流详解</title>
+<style>
+  :root{
+    --bg:#FBFAF7; --panel:#FFFFFF; --ink:#2B2A28; --ink-soft:#55524D; --muted:#8A857D;
+    --line:#E9E5DD; --accent:#B45309; --accent-soft:#FBEFE0;
+    --in:#2563EB; --proc:#B45309; --out:#059669; --store:#6B7280; --ext:#7C3AED;
+    --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --font-mono:"SF Mono","JetBrains Mono","Fira Code",Consolas,Menlo,monospace;
+    --font-display:"Georgia","Songti SC",serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);
+    line-height:1.75;font-size:15.5px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 28px 120px}
+  header.hero{margin-bottom:48px;padding-bottom:28px;border-bottom:2px solid var(--line)}
+  .kicker{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:14px}
+  h1{font-family:var(--font-display);font-size:38px;line-height:1.2;margin:0 0 16px;font-weight:700;letter-spacing:.01em}
+  .lede{font-size:17px;color:var(--ink-soft);margin:0}
+  h2{font-family:var(--font-display);font-size:25px;margin:54px 0 18px;padding-top:10px;font-weight:700}
+  h3{font-size:18px;margin:34px 0 10px;font-weight:700;color:var(--ink)}
+  h2 .num{font-family:var(--font-mono);font-size:15px;color:var(--accent);margin-right:10px;font-weight:400}
+  p{margin:12px 0}
+  code{font-family:var(--font-mono);font-size:.88em;background:#F4F1EA;border:1px solid var(--line);
+    padding:1.5px 6px;border-radius:5px;color:#7A3E0A}
+  strong{color:var(--ink);font-weight:700}
+  .fig{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 20px 14px;
+    margin:26px 0;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+  .fig svg{display:block;width:100%;height:auto}
+  .fig .cap{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:6px 0 4px;font-size:12px;font-family:var(--font-mono);color:var(--ink-soft)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .note{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;
+    padding:14px 18px;margin:20px 0;font-size:14.5px}
+  .note b{color:#7A3E0A}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card h4{margin:0 0 8px;font-size:15px;color:var(--accent)}
+  .card p{margin:6px 0;font-size:14px;color:var(--ink-soft)}
+  ul{margin:12px 0;padding-left:22px}
+  li{margin:7px 0}
+  .filemap{font-family:var(--font-mono);font-size:13px;background:#2B2A28;color:#E8E4DC;border-radius:12px;
+    padding:20px 22px;margin:22px 0;overflow-x:auto;line-height:1.7}
+  .filemap .c{color:#8A857D}
+  .filemap .k{color:#E0A96D}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--font-mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  td code{white-space:nowrap}
+  .toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 24px;margin:30px 0}
+  .toc ol{margin:6px 0;padding-left:20px}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--accent)}
+  .tag{display:inline-block;font-family:var(--font-mono);font-size:11.5px;background:#F4F1EA;border:1px solid var(--line);
+    color:var(--ink-soft);padding:2px 9px;border-radius:20px;margin:2px 3px}
+  .foot{margin-top:70px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);text-align:center}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}h1{font-size:30px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">Cogent · Terminal UI · Deep Dive</div>
+  <h1>交互式 TUI 是怎么跑起来的</h1>
+  <p class="lede">从一次按键，到自主 Agent 的可见、可控、可信——用数据流拆解 Cogent 的手写终端交互层。</p>
+  <div style="margin-top:18px">
+    <span class="tag">raw 模式行编辑</span><span class="tag">状态机可测</span><span class="tag">@ / 斜杠补全</span>
+    <span class="tag">Ctrl-R 反查</span><span class="tag">流式渲染防撕裂</span><span class="tag">Diff 着色</span>
+    <span class="tag">HITL 权限中断</span><span class="tag">非 TTY 降级</span>
+  </div>
+</header>
+
+<div class="toc">
+  <strong style="font-family:var(--font-display);font-size:16px">目录</strong>
+  <ol>
+    <li><a href="#overview">一张图看懂：三大数据流域</a></li>
+    <li><a href="#map">模块地图：谁负责什么</a></li>
+    <li><a href="#input">输入链路：一次按键的旅程</a></li>
+    <li><a href="#core">核心：editorCore 状态机为什么能被单测</a></li>
+    <li><a href="#complete">补全与历史：@ 文件 / 斜杠命令 / Ctrl-R</a></li>
+    <li><a href="#output">输出链路：事件流如何变成会呼吸的终端</a></li>
+    <li><a href="#hitl">HITL 链路：危险操作的人工闸门</a></li>
+    <li><a href="#draw">渲染细节：为什么"只前进、不回改光标"</a></li>
+    <li><a href="#takeaway">设计取舍与面试要点</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1. OVERVIEW ============ -->
+<h2 id="overview"><span class="num">01</span>一张图看懂：三大数据流域</h2>
+<p>整个 TUI 可以拆成三条相互独立又首尾相接的数据流。理解了这三条，就理解了全部：</p>
+<ul>
+  <li><strong style="color:var(--in)">输入域</strong>：用户按键 → 解析 → 状态机 → 补全/历史 → 重绘可编辑区，最终吐出一整行文本。</li>
+  <li><strong style="color:var(--out)">输出域</strong>：引擎把执行过程编码成事件流，渲染器把它变成流式文字、彩色 Diff、加载动画。</li>
+  <li><strong style="color:var(--ext)">HITL 域</strong>：当工具要做危险操作，执行被中断、把决策权交回人手，再按裁决续跑。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 860 400" font-family="var(--font-mono)" font-size="13">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#8A857D"/>
+    </marker>
+  </defs>
+  <!-- user -->
+  <circle cx="60" cy="200" r="34" fill="#F4F1EA" stroke="#8A857D" stroke-width="1.5"/>
+  <text x="60" y="196" text-anchor="middle" font-size="20">🧑‍💻</text>
+  <text x="60" y="218" text-anchor="middle" fill="#55524D">用户</text>
+
+  <!-- INPUT domain -->
+  <rect x="140" y="40" width="250" height="150" rx="12" fill="#EEF3FE" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="265" y="64" text-anchor="middle" fill="#2563EB" font-weight="bold">输入域 · lineEditor</text>
+  <rect x="160" y="78" width="95" height="34" rx="7" fill="#fff" stroke="#2563EB"/>
+  <text x="207" y="99" text-anchor="middle" fill="#1E3A8A">decodeKey</text>
+  <rect x="275" y="78" width="95" height="34" rx="7" fill="#fff" stroke="#2563EB"/>
+  <text x="322" y="99" text-anchor="middle" fill="#1E3A8A">editorCore</text>
+  <rect x="160" y="128" width="95" height="34" rx="7" fill="#fff" stroke="#2563EB"/>
+  <text x="207" y="149" text-anchor="middle" fill="#1E3A8A">补全/历史</text>
+  <rect x="275" y="128" width="95" height="34" rx="7" fill="#fff" stroke="#2563EB"/>
+  <text x="322" y="149" text-anchor="middle" fill="#1E3A8A">drawLine</text>
+
+  <!-- ENGINE -->
+  <rect x="450" y="160" width="150" height="80" rx="12" fill="#FBEFE0" stroke="#B45309" stroke-width="1.5"/>
+  <text x="525" y="192" text-anchor="middle" fill="#B45309" font-weight="bold">Goal Loop</text>
+  <text x="525" y="212" text-anchor="middle" fill="#7A3E0A">引擎 / 工具</text>
+
+  <!-- OUTPUT domain -->
+  <rect x="660" y="40" width="170" height="150" rx="12" fill="#E9F7F1" stroke="#059669" stroke-width="1.5"/>
+  <text x="745" y="64" text-anchor="middle" fill="#059669" font-weight="bold">输出域</text>
+  <rect x="678" y="78" width="134" height="34" rx="7" fill="#fff" stroke="#059669"/>
+  <text x="745" y="99" text-anchor="middle" fill="#065F46">streamRenderer</text>
+  <rect x="678" y="128" width="134" height="34" rx="7" fill="#fff" stroke="#059669"/>
+  <text x="745" y="149" text-anchor="middle" fill="#065F46">Markdown/Diff</text>
+
+  <!-- HITL domain -->
+  <rect x="660" y="250" width="170" height="110" rx="12" fill="#F3ECFD" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="745" y="274" text-anchor="middle" fill="#7C3AED" font-weight="bold">HITL 域</text>
+  <rect x="678" y="288" width="134" height="34" rx="7" fill="#fff" stroke="#7C3AED"/>
+  <text x="745" y="309" text-anchor="middle" fill="#5B21B6">cliPrompter</text>
+  <text x="745" y="344" text-anchor="middle" fill="#5B21B6" font-size="11">a / A / e / r</text>
+
+  <!-- arrows -->
+  <line x1="94" y1="188" x2="138" y2="150" stroke="#8A857D" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="100" y="150" fill="#8A857D" font-size="11">按键</text>
+  <line x1="390" y1="150" x2="448" y2="185" stroke="#8A857D" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="398" y="150" fill="#8A857D" font-size="11">整行</text>
+  <line x1="600" y1="180" x2="658" y2="130" stroke="#8A857D" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="606" y="150" fill="#8A857D" font-size="11">事件流</text>
+  <line x1="660" y1="150" x2="392" y2="120" stroke="#059669" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text x="470" y="112" fill="#059669" font-size="11">渲染回终端</text>
+  <line x1="600" y1="215" x2="658" y2="300" stroke="#8A857D" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="604" y="270" fill="#8A857D" font-size="11">中断</text>
+  <line x1="726" y1="288" x2="590" y2="235" stroke="#7C3AED" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text x="628" y="258" fill="#7C3AED" font-size="11">裁决</text>
+  <path d="M694 288 Q560 240 94 205" fill="none" stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+  <text x="360" y="238" fill="#7C3AED" font-size="11">问人：批准/编辑/拒绝</text>
+</svg>
+<div class="legend">
+  <span><i class="dot" style="background:#2563EB"></i>输入</span>
+  <span><i class="dot" style="background:#B45309"></i>引擎处理</span>
+  <span><i class="dot" style="background:#059669"></i>输出渲染</span>
+  <span><i class="dot" style="background:#7C3AED"></i>HITL 人工中断</span>
+  <span>实线=数据前进　虚线=回流</span>
+</div>
+<div class="cap">图 1 · 三大数据流域总览</div>
+</div>
+
+<!-- ============ 2. MAP ============ -->
+<h2 id="map"><span class="num">02</span>模块地图：谁负责什么</h2>
+<p>TUI 的实现横跨 <code>cmd/cogent</code>（终端 I/O 与胶水）和 <code>internal</code>（可复用、可单测的纯逻辑）两层。刻意的分层是为了让最难测的终端部分尽量薄。</p>
+
+<div class="filemap">
+cmd/cogent/
+├── lineeditor.go        <span class="c"># 行编辑器：editorCore 状态机 + lineEditor 终端渲染（883 行）</span>
+├── lineeditor_raw.go    <span class="c"># enterRaw / restore：进出终端 raw 模式</span>
+├── lineeditor_ioctl_<span class="k">darwin</span>.go <span class="c"># termios ioctl 常量（macOS）</span>
+├── lineeditor_ioctl_<span class="k">linux</span>.go  <span class="c"># termios ioctl 常量（Linux）</span>
+├── streamview.go        <span class="c"># streamRenderer：消费事件流 + spinner + 结果折叠</span>
+├── menu.go              <span class="c"># runMenu：raw 单选菜单组件（DECSC/DECRC 重绘）</span>
+├── prompter.go          <span class="c"># inputReader 统一输入 + cliPrompter 权限 HITL</span>
+├── statusbar.go         <span class="c"># statusBar：模型 / token / 成本常驻栏</span>
+└── slashcmd.go          <span class="c"># 斜杠命令注册与分发</span>
+internal/
+├── completion/          <span class="c"># @ 文件 / 斜杠补全：候选来源、解析、模糊排序</span>
+│   ├── provider.go      <span class="c"># git ls-files + 5s TTL 缓存 + 模糊分级排序</span>
+│   ├── token.go         <span class="c"># ParseAtToken / ParseSlashToken：光标处提取补全触发词</span>
+│   └── command.go       <span class="c"># 内建命令候选</span>
+├── history/history.go   <span class="c"># 命令历史：内存 + .cogent/history 落盘 + 反向搜索</span>
+└── render/              <span class="c"># 纯渲染函数（无 I/O、易测）</span>
+    ├── stream.go        <span class="c"># StreamMarkdown：有状态流式 Markdown-lite 渲染</span>
+    ├── diff.go          <span class="c"># ColorizeDiff：unified diff 语义着色</span>
+    └── render.go        <span class="c"># ANSI 着色原语（Bold/Cyan/Green…）</span>
+</div>
+
+<div class="note">
+<b>设计原则：</b>把「与终端耦合的部分」（raw 模式、ioctl、光标控制）压到最薄，把「可以纯逻辑推演的部分」（按键→状态、候选排序、diff 着色）全部下沉到 <code>internal</code> 里做成无 I/O 的纯函数/状态机。<strong>耦合越薄，能被单测覆盖的比例越高。</strong>
+</div>
+
+<!-- ============ 3. INPUT ============ -->
+<h2 id="input"><span class="num">03</span>输入链路：一次按键的旅程</h2>
+<p>当你在提示符 <code>you&gt;</code> 后敲下一个键，它会经历这样一条流水线，直到你按下回车、整行被提交：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 470" font-family="var(--font-mono)" font-size="12.5">
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#2563EB"/>
+    </marker>
+    <marker id="a2g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#6B7280"/>
+    </marker>
+  </defs>
+  <!-- keystroke -->
+  <rect x="30" y="30" width="130" height="46" rx="9" fill="#F4F1EA" stroke="#6B7280"/>
+  <text x="95" y="50" text-anchor="middle" fill="#2B2A28">键盘字节</text>
+  <text x="95" y="66" text-anchor="middle" fill="#8A857D" font-size="11">stdin (raw)</text>
+
+  <rect x="210" y="30" width="140" height="46" rx="9" fill="#EEF3FE" stroke="#2563EB"/>
+  <text x="280" y="50" text-anchor="middle" fill="#1E3A8A">decodeKey</text>
+  <text x="280" y="66" text-anchor="middle" fill="#2563EB" font-size="10.5">字节→keyEvent</text>
+
+  <rect x="400" y="30" width="150" height="46" rx="9" fill="#EEF3FE" stroke="#2563EB"/>
+  <text x="475" y="50" text-anchor="middle" fill="#1E3A8A" font-weight="bold">editorCore</text>
+  <text x="475" y="66" text-anchor="middle" fill="#2563EB" font-size="10.5">handleKey 状态机</text>
+
+  <!-- mode branch -->
+  <rect x="600" y="18" width="230" height="72" rx="9" fill="#fff" stroke="#2563EB" stroke-dasharray="3 2"/>
+  <text x="715" y="38" text-anchor="middle" fill="#2563EB" font-size="11">按子模式分派</text>
+  <text x="715" y="57" text-anchor="middle" fill="#1E3A8A" font-size="11">modeNormal → handleNormalKey</text>
+  <text x="715" y="74" text-anchor="middle" fill="#1E3A8A" font-size="11">modeSearch → handleSearchKey</text>
+
+  <!-- normal-mode actions -->
+  <rect x="60" y="150" width="150" height="58" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="135" y="172" text-anchor="middle" fill="#1E3A8A">字符/退格</text>
+  <text x="135" y="190" text-anchor="middle" fill="#8A857D" font-size="10.5">insert / backspace</text>
+  <text x="135" y="203" text-anchor="middle" fill="#8A857D" font-size="10.5">→ refresh()</text>
+
+  <rect x="240" y="150" width="150" height="58" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="315" y="172" text-anchor="middle" fill="#1E3A8A">↑ / ↓</text>
+  <text x="315" y="190" text-anchor="middle" fill="#8A857D" font-size="10.5">下拉选择</text>
+  <text x="315" y="203" text-anchor="middle" fill="#8A857D" font-size="10.5">或 历史导航</text>
+
+  <rect x="420" y="150" width="150" height="58" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="495" y="172" text-anchor="middle" fill="#1E3A8A">Tab / Enter</text>
+  <text x="495" y="190" text-anchor="middle" fill="#8A857D" font-size="10.5">有下拉→accept()</text>
+  <text x="495" y="203" text-anchor="middle" fill="#8A857D" font-size="10.5">否则→提交</text>
+
+  <rect x="600" y="150" width="150" height="58" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="675" y="172" text-anchor="middle" fill="#1E3A8A">Ctrl-R</text>
+  <text x="675" y="190" text-anchor="middle" fill="#8A857D" font-size="10.5">进入 search</text>
+  <text x="675" y="203" text-anchor="middle" fill="#8A857D" font-size="10.5">增量反查</text>
+
+  <!-- refresh -> completion -->
+  <rect x="120" y="266" width="180" height="56" rx="9" fill="#EEF3FE" stroke="#2563EB"/>
+  <text x="210" y="288" text-anchor="middle" fill="#1E3A8A">refresh()</text>
+  <text x="210" y="306" text-anchor="middle" fill="#2563EB" font-size="10.5">ParseAt/Slash Token</text>
+
+  <rect x="360" y="256" width="180" height="36" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="450" y="279" text-anchor="middle" fill="#1E3A8A" font-size="11">/ → 命令补全 CommandProvider</text>
+  <rect x="360" y="300" width="180" height="36" rx="9" fill="#fff" stroke="#2563EB"/>
+  <text x="450" y="323" text-anchor="middle" fill="#1E3A8A" font-size="11">@ → 文件补全 Provider.Filter</text>
+
+  <rect x="600" y="266" width="220" height="56" rx="9" fill="#F4F1EA" stroke="#6B7280"/>
+  <text x="710" y="286" text-anchor="middle" fill="#374151" font-size="11">git ls-files（含 --others）</text>
+  <text x="710" y="305" text-anchor="middle" fill="#8A857D" font-size="10.5">5s TTL 缓存 · 模糊分级排序</text>
+
+  <!-- draw + submit -->
+  <rect x="230" y="378" width="180" height="52" rx="9" fill="#EEF3FE" stroke="#2563EB"/>
+  <text x="320" y="400" text-anchor="middle" fill="#1E3A8A">drawLine()</text>
+  <text x="320" y="418" text-anchor="middle" fill="#2563EB" font-size="10.5">重绘输入区+下拉</text>
+
+  <rect x="470" y="378" width="200" height="52" rx="9" fill="#E9F7F1" stroke="#059669"/>
+  <text x="570" y="400" text-anchor="middle" fill="#065F46">Enter 提交整行</text>
+  <text x="570" y="418" text-anchor="middle" fill="#059669" font-size="10.5">history.Append → .cogent/history</text>
+
+  <!-- arrows -->
+  <line x1="160" y1="53" x2="208" y2="53" stroke="#2563EB" stroke-width="1.4" marker-end="url(#a2)"/>
+  <line x1="350" y1="53" x2="398" y2="53" stroke="#2563EB" stroke-width="1.4" marker-end="url(#a2)"/>
+  <line x1="550" y1="53" x2="598" y2="53" stroke="#2563EB" stroke-width="1.4" marker-end="url(#a2)"/>
+  <!-- core down to actions -->
+  <line x1="460" y1="90" x2="150" y2="148" stroke="#6B7280" stroke-width="1.1" marker-end="url(#a2g)"/>
+  <line x1="470" y1="90" x2="320" y2="148" stroke="#6B7280" stroke-width="1.1" marker-end="url(#a2g)"/>
+  <line x1="490" y1="90" x2="500" y2="148" stroke="#6B7280" stroke-width="1.1" marker-end="url(#a2g)"/>
+  <line x1="510" y1="90" x2="670" y2="148" stroke="#6B7280" stroke-width="1.1" marker-end="url(#a2g)"/>
+  <!-- refresh -->
+  <line x1="135" y1="208" x2="200" y2="264" stroke="#2563EB" stroke-width="1.3" marker-end="url(#a2)"/>
+  <line x1="300" y1="294" x2="358" y2="284" stroke="#2563EB" stroke-width="1.2" marker-end="url(#a2)"/>
+  <line x1="300" y1="300" x2="358" y2="316" stroke="#2563EB" stroke-width="1.2" marker-end="url(#a2)"/>
+  <line x1="540" y1="318" x2="598" y2="300" stroke="#2563EB" stroke-width="1.2" marker-end="url(#a2)"/>
+  <!-- to draw -->
+  <line x1="210" y1="322" x2="300" y2="376" stroke="#2563EB" stroke-width="1.3" marker-end="url(#a2)"/>
+  <path d="M710 322 Q720 360 672 396" fill="none" stroke="#6B7280" stroke-width="1.1" stroke-dasharray="3 2" marker-end="url(#a2g)"/>
+  <line x1="410" y1="404" x2="468" y2="404" stroke="#059669" stroke-width="1.4" marker-end="url(#a2)"/>
+  <!-- loop back draw -> render each keystroke -->
+  <path d="M320 378 Q300 360 300 322" fill="none" stroke="#2563EB" stroke-width="1" stroke-dasharray="2 2"/>
+  <text x="150" y="352" fill="#2563EB" font-size="10.5">每次按键后重绘</text>
+</svg>
+<div class="cap">图 2 · 输入链路：从 stdin 字节到提交整行</div>
+</div>
+
+<p>几个关键点：</p>
+<ul>
+  <li><strong>解码与逻辑分离</strong>：<code>decodeKey</code> 只负责把原始字节（含 ESC 转义序列如方向键）翻译成语义化的 <code>keyEvent</code>；真正的行为决策全在 <code>editorCore</code>。</li>
+  <li><strong>两个子模式</strong>：正常编辑 <code>modeNormal</code> 与反查 <code>modeSearch</code>，<code>handleKey</code> 先按模式分派，逻辑互不污染。</li>
+  <li><strong>惰性重算补全</strong>：任何改动行内容的按键（插入/退格/移动光标/历史切换）都会调 <code>refresh()</code>，它检查光标处是不是 <code>/</code> 或 <code>@</code> 触发词，决定拉哪种候选。</li>
+  <li><strong>回车的二义性</strong>：下拉激活时回车是「采纳候选」，否则才是「提交整行」——一个键两种语义，靠 <code>e.active</code> 区分。</li>
+</ul>
+
+<!-- ============ 4. CORE ============ -->
+<h2 id="core"><span class="num">04</span>核心：editorCore 状态机为什么能被单测</h2>
+<p>这是整个 TUI 最有含金量的设计。终端交互天然难测——一旦代码里混进了 <code>os.Stdin.Read</code> 和光标转义码，你就只能靠人肉敲键盘验证。Cogent 的做法是把「状态」和「I/O」彻底切开：</p>
+
+<div class="grid">
+  <div class="card">
+    <h4>editorCore（纯逻辑）</h4>
+    <p>持有 <code>line</code> / <code>cursor</code> / <code>sugg</code> / <code>mode</code> / <code>histIdx</code> 等全部状态。它<strong>不碰终端</strong>——输入是一个 <code>keyEvent</code>，输出是状态变化 + 一个 <code>editorStatus</code>（继续/提交/中断/EOF）。</p>
+  </div>
+  <div class="card">
+    <h4>lineEditor（薄 I/O 壳）</h4>
+    <p>负责进 raw 模式、读字节、调 <code>decodeKey</code>、把 core 的状态<strong>画到终端</strong>（drawLine）。它几乎不含判断逻辑，只是搬运工。</p>
+  </div>
+</div>
+
+<div class="note">
+<b>可测性收益：</b>因为 <code>editorCore.handleKey</code> 的签名是 <code>keyEvent → editorStatus</code>（纯函数式），单测可以直接<strong>喂一串按键事件序列，断言最终的 line/cursor/下拉状态</strong>，完全不需要真实终端。连「双击 Ctrl-C 800ms 内退出」这种时间相关逻辑，也通过可注入的 <code>nowFunc</code> 时钟做到确定性测试。这就是为什么简历里敢写「状态机与 I/O 解耦、可纯逻辑单测」。
+</div>
+
+<p>状态机的一个精巧细节是<strong>历史浏览的暂存机制</strong>：当你按 ↑ 开始翻历史，第一次会把当前正在编辑的行 <code>stash</code> 起来；一路翻到底再按 ↓ 越过最近一条时，会把 <code>stash</code> 还回来——你的半截输入不会丢。这类"符合直觉"的体验，全是状态机里显式管理出来的。</p>
+
+<!-- ============ 5. COMPLETION ============ -->
+<h2 id="complete"><span class="num">05</span>补全与历史：@ 文件 / 斜杠命令 / Ctrl-R</h2>
+
+<h3>@ 文件补全：不为每次击键付出代价</h3>
+<p>输入 <code>@src/ma</code> 时，<code>ParseAtToken</code> 从光标处向前提取出触发词 <code>src/ma</code>，交给 <code>completion.Provider.Filter</code>。候选来源的关键设计在于<strong>缓存</strong>：</p>
+<ul>
+  <li>优先用 <code>git ls-files</code>（含 <code>--others --exclude-standard</code>，即跟踪 + 未跟踪但不含 gitignore），失败或非 git 仓库时回退目录遍历（上限 <code>maxWalkFiles=20000</code> 条防拖慢巨型仓库）。</li>
+  <li><strong>5 秒 TTL 缓存</strong>（<code>cacheTTL=5s</code>）：期内复用内存清单，只在内存里做过滤——<strong>避免每敲一个字母就 spawn 一次 git 子进程</strong>。这是热路径上的性能意识。</li>
+  <li>匹配按分级排序：<code>前缀 &lt; 路径段前缀 &lt; 子串 &lt; 子序列</code>，同级再按路径长度、字典序稳定排序。所以 <code>mai</code> 会让 <code>main.go</code> 排在 <code>internal/domain.go</code> 前面。</li>
+</ul>
+
+<h3>Ctrl-R 反向增量搜索</h3>
+<p>按 <code>Ctrl-R</code> 进入 <code>modeSearch</code>，之后每敲一个字符就调 <code>history.SearchBackward</code> 从最近往前找首个包含查询串的历史；再按 <code>Ctrl-R</code> 跳到更早的命中。<code>Esc</code>/<code>Ctrl-G</code> 取消并恢复原行，<code>Enter</code> 采纳命中行。这套交互是 bash/zsh 老用户的肌肉记忆，直接照搬体验。</p>
+
+<h3>历史落盘：控制面里的私有数据</h3>
+<div class="fig">
+<svg viewBox="0 0 860 150" font-family="var(--font-mono)" font-size="12.5">
+  <defs>
+    <marker id="a3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#059669"/>
+    </marker>
+  </defs>
+  <rect x="30" y="52" width="150" height="46" rx="9" fill="#E9F7F1" stroke="#059669"/>
+  <text x="105" y="80" text-anchor="middle" fill="#065F46">提交整行</text>
+  <rect x="240" y="42" width="200" height="66" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="340" y="66" text-anchor="middle" fill="#065F46">history.Append</text>
+  <text x="340" y="85" text-anchor="middle" fill="#8A857D" font-size="10.5">忽略空行 · 去邻重</text>
+  <text x="340" y="99" text-anchor="middle" fill="#8A857D" font-size="10.5">上限 maxEntries=1000</text>
+  <rect x="500" y="30" width="150" height="40" rx="9" fill="#EEF3FE" stroke="#2563EB"/>
+  <text x="575" y="55" text-anchor="middle" fill="#1E3A8A">内存有序表</text>
+  <rect x="500" y="82" width="330" height="46" rx="9" fill="#F4F1EA" stroke="#6B7280"/>
+  <text x="665" y="102" text-anchor="middle" fill="#374151">.cogent/history（append 落盘）</text>
+  <text x="665" y="119" text-anchor="middle" fill="#8A857D" font-size="10.5">目录 0700 / 文件 0600 · 仅当前用户可读写</text>
+  <line x1="180" y1="75" x2="238" y2="75" stroke="#059669" stroke-width="1.4" marker-end="url(#a3)"/>
+  <line x1="440" y1="60" x2="498" y2="52" stroke="#059669" stroke-width="1.3" marker-end="url(#a3)"/>
+  <line x1="440" y1="88" x2="498" y2="100" stroke="#059669" stroke-width="1.3" marker-end="url(#a3)"/>
+</svg>
+<div class="cap">图 3 · 历史落盘：内存表 + append-only 文件</div>
+</div>
+<p>历史文件放在 <code>.cogent/</code> 控制面目录，权限收紧到 <code>0600/0700</code>（你的历史命令可能含敏感路径，不该让同机其他用户读到）。写入是尽力而为的 append——落盘失败也不影响交互继续。</p>
+
+<!-- ============ 6. OUTPUT ============ -->
+<h2 id="output"><span class="num">06</span>输出链路：事件流如何变成会呼吸的终端</h2>
+<p>提交整行后，引擎开始执行，并把过程编码成一串 <code>types.StreamEvent</code>（文本增量、工具开始、工具结果、上下文压缩、完成、错误）。<code>streamRenderer</code> 逐个消费、渲染：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 320" font-family="var(--font-mono)" font-size="12.5">
+  <defs>
+    <marker id="a4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#059669"/>
+    </marker>
+  </defs>
+  <!-- engine -->
+  <rect x="30" y="130" width="130" height="60" rx="10" fill="#FBEFE0" stroke="#B45309"/>
+  <text x="95" y="156" text-anchor="middle" fill="#B45309" font-weight="bold">引擎</text>
+  <text x="95" y="176" text-anchor="middle" fill="#7A3E0A" font-size="11">StreamEvent 流</text>
+
+  <!-- renderer -->
+  <rect x="220" y="120" width="160" height="80" rx="10" fill="#E9F7F1" stroke="#059669"/>
+  <text x="300" y="150" text-anchor="middle" fill="#065F46" font-weight="bold">streamRenderer</text>
+  <text x="300" y="170" text-anchor="middle" fill="#059669" font-size="10.5">rich? handleRich</text>
+  <text x="300" y="184" text-anchor="middle" fill="#059669" font-size="10.5">: handlePlain</text>
+
+  <!-- branches -->
+  <rect x="450" y="20" width="180" height="44" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="540" y="40" text-anchor="middle" fill="#065F46" font-size="11">EventText</text>
+  <text x="540" y="56" text-anchor="middle" fill="#8A857D" font-size="10">StreamMarkdown.Write</text>
+
+  <rect x="450" y="76" width="180" height="44" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="540" y="96" text-anchor="middle" fill="#065F46" font-size="11">EventToolStart</text>
+  <text x="540" y="112" text-anchor="middle" fill="#8A857D" font-size="10">Flush + 青色工具名</text>
+
+  <rect x="450" y="132" width="180" height="44" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="540" y="152" text-anchor="middle" fill="#065F46" font-size="11">EventToolResult</text>
+  <text x="540" y="168" text-anchor="middle" fill="#8A857D" font-size="10">Diff着色 / 折叠(20行)</text>
+
+  <rect x="450" y="188" width="180" height="44" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="540" y="208" text-anchor="middle" fill="#065F46" font-size="11">EventCompacted</text>
+  <text x="540" y="224" text-anchor="middle" fill="#8A857D" font-size="10">[context compacted]</text>
+
+  <rect x="450" y="244" width="180" height="44" rx="9" fill="#fff" stroke="#059669"/>
+  <text x="540" y="264" text-anchor="middle" fill="#065F46" font-size="11">EventDone / Error</text>
+  <text x="540" y="280" text-anchor="middle" fill="#8A857D" font-size="10">Flush 收尾</text>
+
+  <!-- spinner -->
+  <rect x="220" y="228" width="160" height="50" rx="10" fill="#F4F1EA" stroke="#6B7280"/>
+  <text x="300" y="250" text-anchor="middle" fill="#374151" font-size="11">spinner ⠋⠙⠹</text>
+  <text x="300" y="266" text-anchor="middle" fill="#8A857D" font-size="10">首个输出前 thinking…</text>
+
+  <!-- terminal -->
+  <rect x="690" y="120" width="140" height="80" rx="10" fill="#2B2A28"/>
+  <text x="760" y="150" text-anchor="middle" fill="#E8E4DC" font-size="12">终端</text>
+  <text x="760" y="172" text-anchor="middle" fill="#8A857D" font-size="10">彩色 · 流式</text>
+
+  <!-- arrows -->
+  <line x1="160" y1="160" x2="218" y2="160" stroke="#059669" stroke-width="1.5" marker-end="url(#a4)"/>
+  <line x1="380" y1="140" x2="448" y2="44" stroke="#059669" stroke-width="1.2" marker-end="url(#a4)"/>
+  <line x1="380" y1="150" x2="448" y2="98" stroke="#059669" stroke-width="1.2" marker-end="url(#a4)"/>
+  <line x1="380" y1="160" x2="448" y2="154" stroke="#059669" stroke-width="1.2" marker-end="url(#a4)"/>
+  <line x1="380" y1="172" x2="448" y2="210" stroke="#059669" stroke-width="1.2" marker-end="url(#a4)"/>
+  <line x1="380" y1="182" x2="448" y2="266" stroke="#059669" stroke-width="1.2" marker-end="url(#a4)"/>
+  <path d="M630 154 Q680 150 688 152" fill="none" stroke="#059669" stroke-width="1.4" marker-end="url(#a4)"/>
+  <path d="M300 228 Q300 210 300 202" fill="none" stroke="#6B7280" stroke-width="1.1" stroke-dasharray="3 2" marker-end="url(#a4)"/>
+</svg>
+<div class="cap">图 4 · 输出链路：事件流 → 分支渲染 → 终端</div>
+</div>
+
+<h3>流式 Markdown：只前进、不回改光标</h3>
+<p><code>StreamMarkdown</code> 是有状态的行渲染器：文本块到达时先缓冲，<strong>只有凑齐一整行（遇到 <code>\n</code>）才输出该行的 ANSI 渲染结果</strong>，不完整的行尾留到下次。它跨块维护代码围栏 <code>```</code> 状态，且<strong>只向前写、从不回退光标去重绘已输出内容</strong>。</p>
+<div class="note">
+<b>为什么这么设计？</b>流式场景下，如果一边收字符一边回改已渲染区域，会和终端自身的换行/滚动打架，造成<strong>闪烁与撕裂</strong>。「凑整行 + 只前进」用最简单的方式规避了这类竞争——代价是行内 Markdown 要等整行到齐才上色，但这在体感上完全可接受。这是"懂终端渲染的坑"才会做的取舍。
+</div>
+
+<h3>Diff 着色与结果折叠</h3>
+<p>工具返回若带 diff，走 <code>ColorizeDiff</code> 按语义上色：<span style="color:#059669">+ 新增绿</span>、<span style="color:#DC2626">- 删除红</span>、<span style="color:#0891B2">@@ hunk 头青</span>、文件头加粗、上下文灰；超过 <code>maxDiffLines=2000</code> 行则降级为纯文本，避免超大 diff 拖慢渲染热路径。普通文本结果超过 <code>maxResultLines=20</code> 行会折叠并提示剩余行数，防刷屏。</p>
+
+<!-- ============ 7. HITL ============ -->
+<h2 id="hitl"><span class="num">07</span>HITL 链路：危险操作的人工闸门</h2>
+<p>自主 Agent 敢用的前提，是危险操作能被人拦下。当工具执行触发权限中断，控制权会交回给 <code>cliPrompter</code>——它和 REPL 复用同一个 <code>inputReader</code>（避免多处并发读 stdin 打架）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 250" font-family="var(--font-mono)" font-size="12.5">
+  <defs>
+    <marker id="a5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7C3AED"/>
+    </marker>
+  </defs>
+  <rect x="30" y="100" width="140" height="50" rx="10" fill="#FBEFE0" stroke="#B45309"/>
+  <text x="100" y="122" text-anchor="middle" fill="#B45309">工具请求执行</text>
+  <text x="100" y="139" text-anchor="middle" fill="#7A3E0A" font-size="10.5">permission.Interrupt</text>
+
+  <rect x="220" y="95" width="150" height="60" rx="10" fill="#F3ECFD" stroke="#7C3AED"/>
+  <text x="295" y="120" text-anchor="middle" fill="#5B21B6" font-weight="bold">cliPrompter.Ask</text>
+  <text x="295" y="139" text-anchor="middle" fill="#7C3AED" font-size="10.5">打印入参 + reason</text>
+
+  <!-- four choices -->
+  <rect x="440" y="10" width="180" height="40" rx="8" fill="#fff" stroke="#7C3AED"/>
+  <text x="530" y="34" text-anchor="middle" fill="#5B21B6" font-size="11">a / approve → 批准一次</text>
+  <rect x="440" y="60" width="180" height="40" rx="8" fill="#fff" stroke="#7C3AED"/>
+  <text x="530" y="84" text-anchor="middle" fill="#5B21B6" font-size="11">A / always → 本会话免问</text>
+  <rect x="440" y="110" width="180" height="40" rx="8" fill="#fff" stroke="#7C3AED"/>
+  <text x="530" y="134" text-anchor="middle" fill="#5B21B6" font-size="11">e / edit → 改 JSON 入参</text>
+  <rect x="440" y="160" width="180" height="40" rx="8" fill="#fff" stroke="#7C3AED"/>
+  <text x="530" y="184" text-anchor="middle" fill="#5B21B6" font-size="11">r / reject → 拒绝 + 指引</text>
+
+  <rect x="680" y="95" width="150" height="60" rx="10" fill="#FBEFE0" stroke="#B45309"/>
+  <text x="755" y="120" text-anchor="middle" fill="#B45309">Resolution</text>
+  <text x="755" y="139" text-anchor="middle" fill="#7A3E0A" font-size="10.5">回引擎续跑/改道</text>
+
+  <line x1="170" y1="125" x2="218" y2="125" stroke="#7C3AED" stroke-width="1.5" marker-end="url(#a5)"/>
+  <line x1="370" y1="115" x2="438" y2="30" stroke="#7C3AED" stroke-width="1.1" marker-end="url(#a5)"/>
+  <line x1="370" y1="120" x2="438" y2="80" stroke="#7C3AED" stroke-width="1.1" marker-end="url(#a5)"/>
+  <line x1="370" y1="130" x2="438" y2="130" stroke="#7C3AED" stroke-width="1.1" marker-end="url(#a5)"/>
+  <line x1="370" y1="138" x2="438" y2="180" stroke="#7C3AED" stroke-width="1.1" marker-end="url(#a5)"/>
+  <line x1="620" y1="30" x2="700" y2="98" stroke="#7C3AED" stroke-width="1" marker-end="url(#a5)"/>
+  <line x1="620" y1="80" x2="695" y2="108" stroke="#7C3AED" stroke-width="1" marker-end="url(#a5)"/>
+  <line x1="620" y1="130" x2="678" y2="128" stroke="#7C3AED" stroke-width="1" marker-end="url(#a5)"/>
+  <line x1="620" y1="180" x2="695" y2="146" stroke="#7C3AED" stroke-width="1" marker-end="url(#a5)"/>
+</svg>
+<div class="cap">图 5 · HITL 权限中断：四态裁决</div>
+</div>
+
+<ul>
+  <li><strong>会话级 always</strong>：选 <code>A</code> 后该工具名进入 <code>allow</code> 表，本会话内不再询问（<code>mu</code> 互斥保护，因为 Guard 可能并发调用 Ask）。</li>
+  <li><strong>edit 兜底</strong>：选 <code>e</code> 可直接改工具的 JSON 入参；若输入非法 JSON，<strong>降级为拒绝并附说明</strong>，不会把坏参数塞给工具。</li>
+  <li><strong>reject 带指引</strong>：拒绝时可写一句给模型的 guidance，回流后模型据此改道，而非死循环。</li>
+  <li><strong>无人值守</strong>：设 <code>COGENT_YES</code> 时切到 <code>yesPrompter</code> 一律自动批准——爆炸半径由 sandbox 命令拦截、worktree/diff 隔离兜底，所以自动批准仍然可控。</li>
+</ul>
+
+<div class="note">
+<b>补充：</b><code>menu.go</code> 的 <code>runMenu</code> 是一个独立的 raw 单选菜单组件（↑↓ 循环、Enter 确认、Esc/Ctrl-G 取消、非 TTY 返回 unavailable 回退文本），用 DECSC/DECRC 保存恢复光标做原地重绘，可用于需要单选交互的场景；而权限 HITL 走的是上面 <code>cliPrompter</code> 的 <code>a/A/e/r</code> 文本决策路径。两者是同一套 raw 交互能力的不同出口。
+</div>
+
+<!-- ============ 8. DRAW ============ -->
+<h2 id="draw"><span class="num">08</span>渲染细节：为什么"只前进、不回改光标"</h2>
+<p>行编辑器的 <code>drawLine</code> 用的是<strong>相对光标移动</strong>（上移 N 行回到输入行 → 跳过提示符 → 清到屏末 → 重绘输入 + 下拉），而<strong>不是</strong> DECSC/DECRC（保存/恢复光标绝对位置）。原因很实际：</p>
+<ul>
+  <li>当输出把终端顶到<strong>滚动</strong>时，绝对光标位置会失效，DECSC 存的坐标就错位了；相对移动始终相对"当前光标"，天然抗滚动。</li>
+  <li><code>drawnDropdownLines</code> 记录上次画了几行下拉，这次据此精确上移回退清除——避免残影。</li>
+</ul>
+<p>下拉窗口也有约束：候选最多拉 <code>maxSuggest=15</code> 个，但同屏只显示 <code>maxVisibleSuggest=5</code> 行，<code>adjustWindow</code> 保证选中项始终落在可见窗口内。这些是把交互做"顺滑"的琐碎但必要的功夫。</p>
+
+<h3>非 TTY 优雅降级</h3>
+<p>整套 raw 交互只在真终端启用。管道、脚本、测试场景下（非 TTY），<code>inputReader</code> 走后台 <code>Scanner</code> 逐行读取，<code>streamRenderer</code> 走 <code>handlePlain</code> 纯文本路径——<strong>行为与旧版一致，保证管道/CI 零回归</strong>。甚至"能读 termios 却拒绝进 raw"的受限终端，也会在首次读键时一次性懒回退到逐行模式，而不是让整个 REPL 秒退。</p>
+
+<!-- ============ 9. TAKEAWAY ============ -->
+<h2 id="takeaway"><span class="num">09</span>设计取舍与面试要点</h2>
+<table>
+  <tr><th>决策</th><th>取舍 / 理由</th></tr>
+  <tr><td>手写行编辑器，不套 TUI 框架</td><td>要的是「状态机可测 + 与引擎无缝集成」，也借此把 raw 模式/termios 吃透；框架反而带来不可控的黑盒。</td></tr>
+  <tr><td>editorCore 与 I/O 解耦</td><td>让最难测的终端交互，能用「喂按键序列、断言状态」的纯逻辑单测覆盖——这是最值钱的一点。</td></tr>
+  <tr><td>流式渲染只前进、不回改光标</td><td>规避流式重绘与终端滚动的竞争（撕裂/闪烁），代价是行内样式延迟到整行到齐。</td></tr>
+  <tr><td>补全 git ls-files + 5s TTL 缓存</td><td>避免每次击键 spawn 子进程，热路径性能意识。</td></tr>
+  <tr><td>相对光标而非 DECSC/DECRC</td><td>抗终端滚动，绝对坐标在滚动后会失效。</td></tr>
+  <tr><td>全链路非 TTY 降级</td><td>管道/CI/测试零回归，raw 不可用时懒回退不秒退。</td></tr>
+</table>
+
+<div class="note">
+<b>面试怎么讲（30 秒收敛）：</b>「我没套 TUI 框架，手写了一套<strong>行编辑状态机与终端 I/O 解耦</strong>的交互层，所以连 raw 模式行编辑器都能写纯逻辑单测覆盖；流式渲染刻意<strong>只前进不回改光标</strong>来防重绘撕裂。」然后主动把话题拐回引擎：「这套<strong>可见（流式/Diff）、可控（HITL 中断）、可算（token/成本栏）</strong>的交互，本质是为了让前面那套自主执行引擎<strong>敢在真实仓库上跑</strong>——TUI 是让自主 Agent 从『能跑』跨到『敢用』的收尾。」
+</div>
+
+<div class="foot">
+  Cogent · Interactive TUI Deep Dive — 基于 commit <code>af68e2d "add tui"</code> 源码梳理
+</div>
+
+</div>
+</body>
+</html>

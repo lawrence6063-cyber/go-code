@@ -16,6 +16,11 @@ import (
 // ErrDangerousCommand 表示命令命中危险模式被确定性拦截（无论是否启用沙箱均生效）。
 var ErrDangerousCommand = errors.New("dangerous command blocked")
 
+// ErrControlPlaneCommand 表示命令的写入目标落在受保护的控制面路径（.cogent/.git），
+// 无论是否启用沙箱均生效——与 write_file/edit_file 的控制面拦截形成同等强度的兜底，
+// 堵住此前 bash 可绕开控制面写保护的缺口。
+var ErrControlPlaneCommand = errors.New("command targets control-plane path")
+
 // defaultExecTimeout 是未配置 Timeout 时单条命令的执行超时。
 const defaultExecTimeout = 30 * time.Second
 
@@ -83,6 +88,9 @@ func (s *sandbox) ShouldSandbox(command string) bool {
 func (s *sandbox) Exec(ctx context.Context, command string) (ExecResult, error) {
 	if s.isDangerous(command) {
 		return ExecResult{ExitCode: -1}, ErrDangerousCommand
+	}
+	if IsControlPlaneCommandTarget(s.cfg.WorkRoot, command) {
+		return ExecResult{ExitCode: -1}, ErrControlPlaneCommand
 	}
 	tctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
 	defer cancel()

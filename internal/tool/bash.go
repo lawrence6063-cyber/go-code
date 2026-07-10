@@ -21,13 +21,15 @@ const maxBashOutput = 32 * 1024
 // bashTool 经 sandbox 在工作目录内执行 shell 命令；默认非只读、权限 ask、危险命令直接拒绝。
 type bashTool struct {
 	Defaults
-	sb     sandbox.Sandbox
-	tracer observe.Tracer
+	sb       sandbox.Sandbox
+	workRoot string
+	tracer   observe.Tracer
 }
 
-// NewBash 用沙箱与 tracer 构造 bash 工具。
-func NewBash(sb sandbox.Sandbox, tracer observe.Tracer) Tool {
-	return &bashTool{sb: sb, tracer: tracer}
+// NewBash 用沙箱、工作根目录与 tracer 构造 bash 工具；workRoot 用于 CheckPermission 阶段
+// 提前识别控制面写入目标（与 sandbox.Exec 内的执行期兜底形成纵深，二者共用同一套判定）。
+func NewBash(sb sandbox.Sandbox, workRoot string, tracer observe.Tracer) Tool {
+	return &bashTool{sb: sb, workRoot: workRoot, tracer: tracer}
 }
 
 func (t *bashTool) Name() string { return "bash" }
@@ -39,7 +41,8 @@ func (t *bashTool) InputSchema() json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"shell command to execute"}},"required":["command"]}`)
 }
 
-// CheckPermission 危险命令直接拒绝，其余走默认 ask（与沙箱内的确定性拦截形成双重兜底）。
+// CheckPermission 危险命令与控制面写入目标直接拒绝，其余走默认 ask
+// （与 sandbox.Exec 内的确定性拦截形成双重兜底）。
 func (t *bashTool) CheckPermission(_ context.Context, input json.RawMessage) (permission.Decision, error) {
 	cmd, err := parseCommand(input)
 	if err != nil {
@@ -47,6 +50,9 @@ func (t *bashTool) CheckPermission(_ context.Context, input json.RawMessage) (pe
 	}
 	if sandbox.IsDangerousCommand(cmd) {
 		return permission.Decision{Behavior: permission.BehaviorDeny, Reason: "dangerous command blocked"}, nil
+	}
+	if sandbox.IsControlPlaneCommandTarget(t.workRoot, cmd) {
+		return permission.Decision{Behavior: permission.BehaviorDeny, Reason: "command targets control-plane path"}, nil
 	}
 	return permission.Decision{Behavior: permission.BehaviorAsk}, nil
 }
@@ -62,6 +68,9 @@ func (t *bashTool) Call(ctx context.Context, input json.RawMessage, _ ProgressSi
 	end(execErr)
 	if errors.Is(execErr, sandbox.ErrDangerousCommand) {
 		return types.ToolResult{Content: "dangerous command blocked", IsError: true}, nil
+	}
+	if errors.Is(execErr, sandbox.ErrControlPlaneCommand) {
+		return types.ToolResult{Content: "command targets control-plane path, blocked", IsError: true}, nil
 	}
 	if execErr != nil {
 		return types.ToolResult{Content: fmt.Sprintf("sandbox exec: %v", execErr), IsError: true}, nil

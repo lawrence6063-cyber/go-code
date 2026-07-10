@@ -135,7 +135,7 @@ go run ./cmd/cogent goal "修复 foo 包的空指针 bug 并保证测试通过" 
 ```
 
 - **独立判定不变量**：验收判定器（`verify` 包）与写代码的 Agent 解耦，**执行体无法篡改判定结果**；判定过程异常一律 fail-closed 视为未通过。
-- **三重预算护栏**（`loop.Budget`）：`--max-iterations` / `--max-cost`（美元）/ `--max-wallclock`，任一触顶即停。**未显式设置也会用保守默认（8 轮 / $5 / 15 分钟），绝不无限烧钱。**
+- **三重预算护栏**（`loop.Budget`）：`--max-iterations` / `--max-cost`（美元）/ `--max-wallclock`，任一触顶即停。**未显式设置也会用保守默认（16 轮 / $10 / 60 分钟），绝不无限烧钱。**
 - **结局归因**：`achieved`（唯一成功）/ `budget-spent` / `canceled` / `fatal`，终局打印迭代数、耗时与最后一次判定摘要。
 - 加 `--review` / `--worktree` 可让每轮用双角色 + 隔离落盘（见下）。
 

@@ -1,0 +1,30 @@
+--- a/eval/tasks/feedback_convergence/repo/numkit.go
++++ b/eval/tasks/feedback_convergence/repo/numkit.go
+@@ -7,13 +7,12 @@
+ var ErrEmpty = errors.New("empty input")
+ 
+ // Max 返回切片中的最大值；空切片返回 ErrEmpty。
+-// 缺陷：以 0 作为初值，全负数切片会错误返回 0。
+ func Max(xs []int) (int, error) {
+ 	if len(xs) == 0 {
+ 		return 0, ErrEmpty
+ 	}
+-	max := 0
+-	for _, x := range xs {
++	max := xs[0]
++	for _, x := range xs[1:] {
+ 		if x > max {
+ 			max = x
+ 		}
+@@ -22,8 +21,10 @@
+ }
+ 
+ // Mean 返回向零截断的算术平均；空切片返回 ErrEmpty。
+-// 缺陷：未处理空切片，len(xs)==0 时会触发除零 panic。
+ func Mean(xs []int) (int, error) {
++	if len(xs) == 0 {
++		return 0, ErrEmpty
++	}
+ 	sum := 0
+ 	for _, x := range xs {
+ 		sum += x

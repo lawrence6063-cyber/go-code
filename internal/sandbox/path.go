@@ -79,6 +79,60 @@ func evalSymlinks(path string) string {
 	}
 }
 
+// controlPlaneCommandVerbs 是常见的会修改文件系统的命令首词，其非 flag 参数需要过控制面校验。
+var controlPlaneCommandVerbs = map[string]bool{
+	"rm": true, "mv": true, "cp": true, "touch": true, "mkdir": true, "tee": true, "sed": true,
+}
+
+// IsControlPlaneCommandTarget 报告 command（含复合命令的任一子命令）是否会写入/修改受保护的
+// 控制面路径（.cogent/.git）。这是启发式的 token 级判定，不做完整 shell 语法解析——只识别
+// 两类高频模式：① 输出重定向（>/>>）后的路径 token；② 常见改动文件系统的命令
+// （rm/mv/cp/touch/mkdir/tee/sed）的非 flag 参数。与 dangerousFragments 同一哲学：
+// 宁可误拦（把非路径 token 也过一遍校验）不可漏放，堵住 write_file/edit_file 已拦截、
+// 但 bash 尚未拦截的控制面写入绕过缺口。
+func IsControlPlaneCommandTarget(workRoot, command string) bool {
+	for _, sub := range splitComposite(command) {
+		for _, target := range candidateWriteTargets(sub) {
+			if IsControlPlaneWrite(workRoot, target) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// candidateWriteTargets 从单条子命令中提取可能的写入目标 token：重定向目标 + 改动类命令的
+// 非 flag 参数。允许把非路径的普通参数也当作候选一并校验，误判后果只是多算一次
+// IsControlPlaneWrite（几乎总是 false），不会造成漏放。
+func candidateWriteTargets(sub string) []string {
+	fields := strings.Fields(sub)
+	if len(fields) == 0 {
+		return nil
+	}
+	var out []string
+	for i, f := range fields {
+		switch {
+		case f == ">" || f == ">>":
+			if i+1 < len(fields) {
+				out = append(out, fields[i+1])
+			}
+		case strings.HasPrefix(f, ">>") && len(f) > 2:
+			out = append(out, f[2:])
+		case strings.HasPrefix(f, ">") && len(f) > 1:
+			out = append(out, f[1:])
+		}
+	}
+	if controlPlaneCommandVerbs[fields[0]] {
+		for _, f := range fields[1:] {
+			if f == "" || strings.HasPrefix(f, "-") {
+				continue // 跳过 flag，如 -rf/-i
+			}
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // IsControlPlaneWrite 报告对 target 的写入是否触碰受保护的控制面（含越界，越界一律视为禁止）。
 func IsControlPlaneWrite(workRoot, target string) bool {
 	abs, err := ValidatePath(workRoot, target)
@@ -121,10 +175,13 @@ func IsDangerousCommand(command string) bool {
 	return isPipeToShell(command)
 }
 
-// splitComposite 按 shell 复合分隔符（&& || ; 换行）拆分命令为子命令序列。
+// splitComposite 按 shell 复合分隔符（&& || ; 换行 管道）拆分命令为子命令序列；
+// 管道 "|" 必须在 "||" 之后替换，避免把 "||" 误拆成两段。拆分越细，dangerousFragments/
+// IsControlPlaneWrite 等子串级检测越不会漏放（如 "echo x | tee .git/config" 需要拆出
+// "tee .git/config" 才能命中改动类命令识别），对既有检测语义只会更严格、不会更宽松。
 func splitComposite(command string) []string {
 	repl := command
-	for _, sep := range []string{"&&", "||", ";", "\n"} {
+	for _, sep := range []string{"&&", "||", ";", "\n", "|"} {
 		repl = strings.ReplaceAll(repl, sep, "\x00")
 	}
 	return strings.Split(repl, "\x00")

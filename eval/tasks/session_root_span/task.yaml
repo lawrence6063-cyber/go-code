@@ -1,0 +1,16 @@
+# task.yaml —— session_root_span 评测元数据（EVAL_SPEC §5.1）。
+# 自宿主任务：为 cogent 执行内核补 cogent.session 根 span，工作根=仓库根，无独立 repo/。
+id: session_root_span
+difficulty: hard
+languages: [go]
+capabilities: [exploration, runtime]     # 架构 gap 补全 + 注入式 trace 运行期验收
+workdir: repo-root
+budget:
+  max_iterations: 12
+  max_cost_usd: 4.0
+  max_wallclock: 15m
+expected_outcome: achieved
+verifier: script
+timeout: 10m
+oracle: n/a                              # 自宿主任务：参考解见 internal/engine 中 cogent.session span 落地
+solvability_check: false

@@ -36,7 +36,7 @@ type Budget struct {
 
 // DefaultBudget 返回保守默认护栏：宁可早停，不可失控烧钱（fail-closed）。
 func DefaultBudget() Budget {
-	return Budget{MaxIterations: 8, MaxCostUSD: 5, MaxWallClock: 15 * time.Minute}
+	return Budget{MaxIterations: 16, MaxCostUSD: 10, MaxWallClock: 60 * time.Minute}
 }
 
 // Outcome 是目标循环的结局枚举。

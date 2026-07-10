@@ -293,11 +293,11 @@
   <h2><span class="num">6</span>怎么跑起来</h2>
   <pre><span class="code-label">terminal</span><code><span class="c"># 双角色模式：maker 改 + reviewer 独立审，通过才落盘</span>
 <span class="f">cogent</span> goal <span class="s">"给 user 服务加限流中间件"</span> --review \
-  --verify=./verify_ratelimit.sh --max-iterations=<span class="t">8</span>
+  --verify=./verify_ratelimit.sh --max-iterations=<span class="t">16</span>
 
 <span class="c"># 守护进程：每 10 分钟醒一次，自动跑目标循环，进度写 progress.md</span>
 <span class="f">cogent</span> loop --interval=<span class="s">10m</span> --goal-file=.cogent/goal.md \
-  --verify=./verify.sh --review --max-iterations=<span class="t">8</span>
+  --verify=./verify.sh --review --max-iterations=<span class="t">16</span>
 
 <span class="c"># 或：盯着目录文件变更触发（CI 一红就修）</span>
 <span class="f">cogent</span> loop --watch=<span class="s">.</span> --verify=./verify.sh

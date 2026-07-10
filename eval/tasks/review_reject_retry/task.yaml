@@ -1,0 +1,15 @@
+# task.yaml —— review_reject_retry 评测元数据（EVAL_SPEC §4.4/§5.1）。
+id: review_reject_retry
+difficulty: medium
+languages: [go]
+capabilities: [review]
+workdir: repo
+budget:
+  max_iterations: 8
+  max_cost_usd: 2.0
+  max_wallclock: 8m
+expected_outcome: achieved
+verifier: script
+timeout: 5m
+oracle: oracle/fix.patch
+solvability_check: true

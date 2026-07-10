@@ -1,0 +1,15 @@
+# task.yaml —— fix_concurrent_counter 评测元数据（EVAL_SPEC §5.1）。
+id: fix_concurrent_counter
+difficulty: easy
+languages: [go]
+capabilities: [convergence, runtime]   # runtime：需 -race 运行期竞态检测
+workdir: repo
+budget:
+  max_iterations: 6
+  max_cost_usd: 1.0
+  max_wallclock: 5m
+expected_outcome: achieved
+verifier: script
+timeout: 3m
+oracle: oracle/fix.patch
+solvability_check: true

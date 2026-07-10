@@ -336,8 +336,8 @@ func TestNew_NilEngine(t *testing.T) {
 
 func TestDefaultBudget(t *testing.T) {
 	b := DefaultBudget()
-	if b.MaxIterations != 8 || b.MaxCostUSD != 5 || b.MaxWallClock != 15*time.Minute {
-		t.Errorf("DefaultBudget = %+v, want 8/5/15m", b)
+	if b.MaxIterations != 16 || b.MaxCostUSD != 10 || b.MaxWallClock != 60*time.Minute {
+		t.Errorf("DefaultBudget = %+v, want 16/10/60m", b)
 	}
 }
 

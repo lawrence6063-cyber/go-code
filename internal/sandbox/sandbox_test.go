@@ -85,6 +85,26 @@ func TestExec_DangerousCommandBlocked(t *testing.T) {
 	}
 }
 
+// TestExec_ControlPlaneCommandBlocked 验证 sandbox.Exec 层的执行期兜底：即便
+// CheckPermission 层被绕过，命令目标落在控制面（.cogent/.git）时仍在执行前被拒绝。
+func TestExec_ControlPlaneCommandBlocked(t *testing.T) {
+	dir := t.TempDir()
+	sb := New(Config{WorkRoot: dir, Enabled: true})
+	cases := []string{
+		"echo evil > .cogent/skills/x/SKILL.md",
+		"rm -rf .cogent",
+	}
+	for _, cmd := range cases {
+		if _, err := sb.Exec(context.Background(), cmd); !errors.Is(err, ErrControlPlaneCommand) {
+			t.Errorf("Exec(%q) err = %v, want ErrControlPlaneCommand", cmd, err)
+		}
+	}
+	// 普通命令不受影响。
+	if _, err := sb.Exec(context.Background(), "echo hi > out.txt"); err != nil {
+		t.Errorf("unexpected err for normal redirect: %v", err)
+	}
+}
+
 func TestExec_Timeout(t *testing.T) {
 	dir := t.TempDir()
 	sb := New(Config{WorkRoot: dir, Enabled: true, Timeout: 50 * time.Millisecond})

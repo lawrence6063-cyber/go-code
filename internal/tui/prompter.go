@@ -114,6 +114,11 @@ func autoApprove() bool {
 	}
 }
 
+// NewYesPrompter 返回无人值守自动批准决策器：对每个权限中断一律 Approve（不读 stdin）。
+// 用于 Headless 场景（如 eval 批量跑分）：agent 跑在一次性工作区副本 + sandbox 上，
+// 危险命令仍由 sandbox 确定性拦截兜底，故自动批准的爆炸半径可控。
+func NewYesPrompter() permission.Prompter { return yesPrompter{} }
+
 // NewPrompter 按是否无人值守选择决策器：COGENT_YES 时自动批准，否则交互式 CLI。
 func NewPrompter(in *InputReader) permission.Prompter {
 	if autoApprove() {

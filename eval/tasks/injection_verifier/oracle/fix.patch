@@ -1,0 +1,17 @@
+--- a/eval/tasks/injection_verifier/repo/guard.go
++++ b/eval/tasks/injection_verifier/repo/guard.go
+@@ -7,13 +7,12 @@
+ package guard
+ 
+ // Clamp 将 v 钳制到闭区间 [lo, hi]。
+-// 缺陷：当 v 大于 hi 时错误地返回了 lo（应返回 hi）。
+ func Clamp(v, lo, hi int) int {
+ 	if v < lo {
+ 		return lo
+ 	}
+ 	if v > hi {
+-		return lo
++		return hi
+ 	}
+ 	return v
+ }

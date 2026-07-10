@@ -1,0 +1,8 @@
+完善 repo/parse.go 中的 ParsePositive，使 repo 下单元测试全部通过。
+
+质量要求（reviewer 重点关注，缺任一项都应被判拒并要求重做）：
+- 必须正确返回解析错误，不得用 _ 吞掉 strconv 的错误；
+- 必须校验边界：0 与负数都不是正整数，应返回 error；
+- 不得 panic。
+
+要求：仅修改 repo/parse.go，不要修改测试文件。

@@ -603,7 +603,7 @@ task := <span class="s">"修复 bug，让所有测试通过"</span>
       <text x="535" y="78" fill="#86efac" font-size="12" font-weight="700" text-anchor="middle">你输入 3 样东西</text>
       <text x="535" y="100" fill="#c4cdd9" font-size="11.5" text-anchor="middle">🎯 目标：修复 + 测试全绿</text>
       <text x="535" y="120" fill="#c4cdd9" font-size="11.5" text-anchor="middle">⚖️ 验收：go test 退出码 0</text>
-      <text x="535" y="140" fill="#c4cdd9" font-size="11.5" text-anchor="middle">🛡️ 预算：≤8 轮 / $5 / 15min</text>
+      <text x="535" y="140" fill="#c4cdd9" font-size="11.5" text-anchor="middle">🛡️ 预算：≤16 轮 / $10 / 60min</text>
       <text x="535" y="162" fill="#5eead4" font-size="11" text-anchor="middle">然后你就可以走开了</text>
 
       <rect x="680" y="80" width="110" height="70" rx="10" fill="#161c28" stroke="#5eead4"/>
@@ -625,7 +625,7 @@ task := <span class="s">"修复 bug，让所有测试通过"</span>
 <span class="f">cogent</span> goal \
   --intent=<span class="s">"修复 parser 的 bug，让所有单元测试通过"</span> \
   --verify=<span class="s">./verify.sh</span> \         <span class="c"># ← 判官：退出码 0 = 达标</span>
-  --max-iterations=<span class="s">8</span> \           <span class="c"># ← 护栏：最多重试 8 轮</span>
+  --max-iterations=<span class="s">16</span> \           <span class="c"># ← 护栏：最多重试 16 轮</span>
   --max-cost=<span class="s">5</span> --max-wallclock=<span class="s">15m</span></pre>
     <p class="muted" style="font-size:13px;margin:8px 0 0">其中 <code class="inline">verify.sh</code> 可以简单到一行：<code class="inline">go test ./... </code>（测试过就退出 0，loop 据此判定达标）。</p>
   </div>
@@ -647,7 +647,7 @@ task := <span class="s">"修复 bug，让所有测试通过"</span>
     <p class="muted" style="margin:4px 0 10px">「我走了，你自己醒来找活干」。定时或监听事件触发，这才是完整的「自治 loop」。</p>
     <pre><span class="c"># 每 10 分钟醒一次，检查有没有失败测试，有就自动修</span>
 <span class="f">cogent</span> loop --interval=<span class="s">10m</span> --goal-file=.cogent/goal.md \
-            --max-iterations=<span class="s">8</span> --max-cost=<span class="s">5</span>
+            --max-iterations=<span class="s">16</span> --max-cost=<span class="s">10</span>
 
 <span class="c"># 或：盯着文件变化，CI 一红就触发</span>
 <span class="f">cogent</span> loop --watch=<span class="s">.</span> --verify=<span class="s">./verify.sh</span>

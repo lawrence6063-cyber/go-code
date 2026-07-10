@@ -1,6 +1,9 @@
 # 运行期数据（会话 transcript 与 trace span）
 /data/
 
+# 评测跑分归档（报告 + 工作区副本 + trace，体积大且可重生成，不入库）
+/eval-artifacts/
+
 # 环境变量与密钥（仅从 env 读取，严禁入库）
 .env
 .env.local

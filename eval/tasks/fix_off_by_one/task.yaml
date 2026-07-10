@@ -1,0 +1,15 @@
+# task.yaml —— fix_off_by_one 评测元数据（EVAL_SPEC §5.1）。
+id: fix_off_by_one
+difficulty: easy                 # easy | medium | hard
+languages: [go]                  # 任务涉及的语言标签
+capabilities: [convergence]      # 六维度标签：convergence/budget/injection/review/runtime/exploration
+workdir: repo                    # repo=自包含子工程（agent 工作根为本目录 repo/）
+budget:                          # 覆盖 loop.Budget 默认值（可选）
+  max_iterations: 6
+  max_cost_usd: 1.0
+  max_wallclock: 5m
+expected_outcome: achieved       # achieved | budget_spent | canceled
+verifier: script                 # script（退出码）| llm_judge（语义）
+timeout: 3m
+oracle: oracle/fix.patch         # 参考解 patch：git apply 后 verify.sh 必通过
+solvability_check: true          # 纳入 bin/eval_selfcheck.sh 双校验（初始必失败/oracle 必通过）

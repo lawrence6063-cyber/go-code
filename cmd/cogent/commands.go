@@ -86,6 +86,14 @@ func envInt(key string, def int) int {
 	return def
 }
 
+// sandboxEnabled 报告 agent 命令执行是否施加受限环境（COGENT_SANDBOX_ENABLED，默认 true）。
+// 默认 true 保持 run/goal/loop 的纵深防御姿态；eval 批量跑分在一次性隔离工作区副本上运行，
+// 显式置 false 以继承宿主 PATH/Go 工具链（否则 go test 因受限 env 跑不通）——危险命令拦截 +
+// WorkRoot 约束 + 超时在 Enabled=false 下仍生效，爆炸半径可控。
+func sandboxEnabled() bool {
+	return envBool("COGENT_SANDBOX_ENABLED", true)
+}
+
 // resolveMaxSteps 按优先级解析 ReAct 最大轮数：--max-steps flag (>0) > COGENT_MAX_REACT_STEPS env > 默认 50。
 func resolveMaxSteps(flagVal int) int {
 	if flagVal > 0 {
@@ -115,7 +123,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newRunCmd(), newResumeCmd(), newGoalCmd(), newLoopCmd(), newMCPCmd())
+	root.AddCommand(newRunCmd(), newResumeCmd(), newGoalCmd(), newLoopCmd(), newEvalCmd(), newMCPCmd())
 	return root
 }
 
@@ -376,9 +384,9 @@ func buildSpawner(llmc llm.Client, prov observe.Provider, workRoot string) tool.
 	})
 }
 
-// buildToolPool 装配工具池：只读内建工具（含 task 派发工具）直接入池；写/执行类与全部
-// MCP 外部工具经 Guard 包裹注入权限闸门与 HITL。MCP 工具排在内建之后传入，借 NewPool
-// 的先到先得实现“内建优先”去重，防止外部同名工具劫持内建工具。
+// buildToolPool 装配工具池：只读内建工具（含 task 派发工具、todo_write 任务清单）直接入池；
+// 写/执行类、出网类与全部 MCP 外部工具经 Guard 包裹注入权限闸门与 HITL。MCP 工具排在内建
+// 之后传入，借 NewPool 的先到先得实现“内建优先”去重，防止外部同名工具劫持内建工具。
 func buildToolPool(
 	workRoot string,
 	prompter permission.Prompter,
@@ -388,16 +396,19 @@ func buildToolPool(
 ) tool.Pool {
 	policy := permission.StaticPolicy{}
 	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
-	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: true})
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: sandboxEnabled()})
 	tools := []tool.Tool{
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
 		tool.NewFindFiles(workRoot),
-		tool.NewTask(spawner), // 只读派发工具：把探索子任务交给隔离子 Agent
+		tool.NewTask(spawner),                     // 只读派发工具：把探索子任务交给隔离子 Agent
+		tool.NewDiagnostics(sb, workRoot, tracer), // 只读验证工具：CheckPermission 本身即 Allow
+		tool.NewTodoWrite(),                       // 纯进程内状态：CheckPermission 本身即 Allow，无需 Guard
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
-		guard(tool.NewBash(sb, tracer)),
+		guard(tool.NewBash(sb, workRoot, tracer)),
+		guard(tool.NewWebFetch(tracer)), // 真实出网通道：即便不写本地文件也经人在环确认
 	}
 	for _, mt := range mcpTools {
 		tools = append(tools, guard(mt)) // 外部不可信：统一过 permission/HITL
@@ -415,18 +426,21 @@ func buildReviewerPool(workRoot string) tool.Pool {
 	)
 }
 
-// buildMakerPool 装配实现者工具池：只读 + 写/执行类（经 Guard 过权限闸门），供 maker 改代码。
+// buildMakerPool 装配实现者工具池：只读 + 写/执行类（经 Guard 过权限闸门），供 maker 改代码；
+// 新增 diagnostics 便于 maker 改完代码后低摩擦自查格式/静态检查/编译错误。
 func buildMakerPool(workRoot string, prompter permission.Prompter, tracer observe.Tracer) tool.Pool {
 	policy := permission.StaticPolicy{}
 	guard := func(t tool.Tool) tool.Tool { return tool.NewGuard(t, policy, prompter, tracer) }
-	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: true})
+	sb := sandbox.New(sandbox.Config{WorkRoot: workRoot, Enabled: sandboxEnabled()})
 	return tool.NewPool(
 		tool.NewReadFile(workRoot),
 		tool.NewListDir(workRoot),
 		tool.NewGrep(workRoot),
 		tool.NewFindFiles(workRoot),
+		tool.NewDiagnostics(sb, workRoot, tracer),
 		guard(tool.NewWriteFile(workRoot)),
 		guard(tool.NewEditFile(workRoot)),
-		guard(tool.NewBash(sb, tracer)),
+		guard(tool.NewBash(sb, workRoot, tracer)),
+		guard(tool.NewWebFetch(tracer)),
 	)
 }

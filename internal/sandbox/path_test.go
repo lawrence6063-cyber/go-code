@@ -96,6 +96,38 @@ func TestIsControlPlaneWrite(t *testing.T) {
 	}
 }
 
+// TestIsControlPlaneCommandTarget 覆盖 P0 修复：识别重定向与常见改动类命令对控制面
+// 路径（.cogent/.git）的写入意图，堵住 bash 绕开 write_file/edit_file 控制面保护的缺口。
+func TestIsControlPlaneCommandTarget(t *testing.T) {
+	root := "/work/repo"
+	tests := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"redirect to cogent", "echo evil > .cogent/skills/x/SKILL.md", true},
+		{"append redirect no space", "echo evil >>.cogent/x", true},
+		{"redirect no space", "echo evil >.cogent/x", true},
+		{"rm cogent dir", "rm -rf .cogent", true},
+		{"mv into git hooks", "mv secret.txt .git/hooks/pre-commit", true},
+		{"cp into cogent", "cp payload .cogent/skills/x", true},
+		{"tee into git config", "echo x | tee .git/config", true},
+		{"sed inplace on cogent file", "sed -i 's/a/b/' .cogent/MEMORY.md", true},
+		{"composite any deny", "echo hi && rm -rf .cogent", true},
+		{"normal redirect", "echo hi > out.txt", false},
+		{"normal rm", "rm -rf ./build", false},
+		{"normal command", "ls -la", false},
+		{"mkdir normal", "mkdir sub", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsControlPlaneCommandTarget(root, tt.cmd); got != tt.want {
+				t.Errorf("IsControlPlaneCommandTarget(%q) = %v, want %v", tt.cmd, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsDangerousCommand(t *testing.T) {
 	tests := []struct {
 		name string

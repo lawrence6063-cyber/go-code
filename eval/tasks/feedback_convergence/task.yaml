@@ -1,0 +1,15 @@
+# task.yaml —— feedback_convergence 评测元数据（EVAL_SPEC §4.1/§5.1）。
+id: feedback_convergence
+difficulty: medium
+languages: [go]
+capabilities: [convergence]
+workdir: repo
+budget:
+  max_iterations: 8
+  max_cost_usd: 2.0
+  max_wallclock: 8m
+expected_outcome: achieved
+verifier: script
+timeout: 5m
+oracle: oracle/fix.patch
+solvability_check: true
