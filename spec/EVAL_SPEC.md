@@ -1,9 +1,9 @@
 # Cogent · Loop Engine 分层评测方案 — EVAL_SPEC
 
-> 版本 0.4（评测体系重设计）｜代号 `cogent-eval`｜主语言 **Golang**
+> 版本 0.8（评测体系重设计）｜代号 `cogent-eval`｜主语言 **Golang**
 > 定位：把 `cogent` 当前「4 个 Go 任务、单轮 `go test` 判定」的**弱评测**，升级为对标 GitHub 主流基准（SWE-bench / Terminal-Bench 2.0 / aider polyglot）、**覆盖 loop engine 六大能力维度**的分层评测方案。
 > 关系：承接 [`DEV_SPEC.md`](DEV_SPEC.md) §8.8（评测集雏形与指标）与 [`LOOP_SPEC.md`](LOOP_SPEC.md) §7.4（`verify.sh` 升级为 `ScriptVerifier` 接回主循环），在其上叠加「多维度分层 + 主流基准适配 + Headless 批量跑分」。
-> 性质：本文档为**设计产出**（文中 Go 接口均为签名级草案）；其中 **E0 / E1 阶段已按 §8 落地到 `eval/` 目录**（`task.yaml` + oracle + 可解性双校验脚本 + 六维度自包含种子任务），**E2 Headless 运行器已按 §5.4/§6 落地到 `internal/eval/`**（`native.Adapter` 加载器 + 顺序 `Runner` + 判定矩阵 + 指标聚合 + Markdown/JSON 报告 + `cogent eval run` 子命令，评测层仅 import 内核、不被内核 import）。主流基准 Adapter（E3–E5）与 `eval compare`、并发/归档仍按里程碑推进。
+> 性质：本文档为**设计产出**（文中 Go 接口均为签名级草案）；其中 **E0 / E1 阶段已按 §8 落地到 `eval/` 目录**（`task.yaml` + oracle + 可解性双校验脚本 + 六维度自包含种子任务），**E2 Headless 运行器已按 §5.4/§6 落地到 `internal/eval/`**（`native.Adapter` 加载器 + 顺序/并发 `Runner` + 判定矩阵 + 指标聚合 + Markdown/JSON 报告 + `eval run`/`eval compare` 子命令，评测层仅 import 内核、不被内核 import），**E4-2 `polyglot.Adapter` 已落地并六语言端到端验证**（§5.2.3 最小可行路径第 1 步：数据集加载 + 工作区隔离 + 测试 pristine + 六语言测试命令 + CLI `--dataset=polyglot` + 单测 + `TestOracleSolutionsPass` 用参考解跑通 go/python/rust/js/java/cpp 全绿）。其余主流基准 Adapter（E3 SWE-bench、E4-1 Terminal-Bench）与运行期 Docker 任务（E1-5）仍按里程碑推进。
 
 ## 目录
 
@@ -707,7 +707,7 @@ cogent eval compare --base base.json --head head.json [--out delta.md] [--fail-o
 | E2-5 | 并发 worker 池（`--n-concurrent`，goleak 无泄漏、ctx 安全收尾） | P1 | M | [x] |
 | E3-1 | `swebench.Adapter`（Lite 子集；`sb-cli` 云端判定优先，免本地 Docker） | P1 | L | [ ] |
 | E4-1 | `terminalbench.Adapter` | P1 | L | [ ] |
-| E4-2 | `polyglot.Adapter`（多语言收敛） | P1 | M | [ ] |
+| E4-2 | `polyglot.Adapter`（多语言收敛） | P1 | M | [x] |
 | E5-1 | 规模化到目标任务数 + 首份基线报告 | P2 | L | [ ] |
 | E5-2 | 夜间 CI 跑分（非门禁，质量基线） | P2 | M | [ ] |
 
@@ -716,7 +716,7 @@ cogent eval compare --base base.json --head head.json [--out delta.md] [--fail-o
 - [x] native 可解任务全部具备 `task.yaml` + oracle，且通过「初始必失败 / oracle 必通过」双校验（`eval_selfcheck.sh` 6/6）。
 - [x] 六维度各有可跑任务（预算三子任务 + 注入双载荷齐备），`cogent eval run` 能产出含核心指标的 Markdown/JSON 报告。
 - [x] 判定矩阵实现「预算类反向评测（`budget_spent` 且未超轮）」与「注入类只认退出码」；`Runaway Rate=0` / `Injection Resist Rate=100%` 的具体数值待真实 LLM 跑分回填。
-- [ ] 至少一个主流基准 Adapter（SWE-bench Lite 子集）可端到端跑通并出可比结果。
+- [x] 至少一个主流基准 Adapter 端到端跑通：**polyglot.Adapter 已落地并六语言全绿**——用数据集参考解（oracle）走真实 `adapter+verifier` 代码路径，go/python/rust/javascript/java/cpp 各练习判定 PASS（`TestOracleSolutionsPass`，`POLYGLOT_DIR` 门控）。SWE-bench Lite 子集仍待接（E3）。
 - [x] 回归对比可用（`cogent eval compare --fail-on-regress`，退出码 3）；每 case 归档 `result.json`，开启 trace 时落 `<art>/traces`。
 - [x] 工程 DoD 同 v1 §11.2：gofmt/goimports/vet 通过、评测层核心逻辑有单测（fake Executor 免 LLM）、并发路径 goleak 无泄漏、go.mod 零新增依赖、依赖方向不破环。
 
@@ -763,12 +763,13 @@ cogent eval compare --base base.json --head head.json [--out delta.md] [--fail-o
 
 ## 10. 文档状态声明
 
-- 本文档为**设计产出**；截至当前，**E0 / E1 / E2 已落地**：
+- 本文档为**设计产出**；截至当前，**E0 / E1 / E2 已落地，E4-2（polyglot.Adapter）代码级落地**：
   - **E0（native 格式升级）与 E1（六维度自包含种子任务）** 落地到 `eval/`：全部任务补齐 `task.yaml`，自包含任务补 oracle patch，`eval/bin/eval_selfcheck.sh` 可解性双校验实跑 **6/6 全绿**。种子任务覆盖：收敛（`feedback_convergence`）、**预算三子任务**（`budget_iterations`/`budget_cost`/`budget_wallclock`，分压轮数/成本/墙钟护栏，`expected_outcome: budget_spent`）、**注入双载荷**（`injection_verifier` 注释/文档注入 + `injection_test_output` 测试输出注入假 banner）、双角色（`review_reject_retry`）。
-  - **E2（Headless 运行器）** 落地到 `internal/eval/`：`internal/eval/adapter`（`Case`/`Meta`/`Adapter` 抽象）、`internal/eval/adapter/native`（`task.yaml` 手写解析 + 工作区副本隔离 + 按标签筛选，副本排除 `oracle/`）、`internal/eval`（顺序 + 并发 worker 池 `Runner` + §6.5 判定矩阵 + §6.6 指标聚合 + Markdown/JSON 报告 + 逐 case `result.json` 归档 + `Compare` 回归对比）；`cmd/cogent` 注入式 `evalExecutor`（复用 `buildOrchestrator`/`buildVerifier`，drain `RunGoal` 事件流到 `LoopFinished`）+ `cogent eval run` / `cogent eval compare` 子命令。评测层核心逻辑有单测（fake Executor 免真实 LLM），并发路径有 `goleak` 无泄漏断言。守 §5.3 依赖方向：`internal/eval/*` 只 import 内核，engine/agent 装配经 `Executor` 注入，绝不被内核 import。
-- **待推进**：E1-5 运行期 Docker 任务（构建/跑服务/性能）、E3–E5 主流基准 Adapter（SWE-bench / Terminal-Bench / polyglot）。
+  - **E2（Headless 运行器）** 落地到 `internal/eval/`：`internal/eval/adapter`（`Case`/`Meta`/`Adapter` 抽象）、`internal/eval/adapter/native`（`task.yaml` 手写解析 + 工作区副本隔离 + 按标签筛选，副本排除 `oracle/`）、`internal/eval`（顺序 + 并发 worker 池 `Runner` + §6.5 判定矩阵 + §6.6 指标聚合 + Markdown/JSON 报告 + 逐 case `result.json` 归档 + `Compare` 回归对比）；`cmd/cogent` 注入式 `evalExecutor`（复用 `buildOrchestrator`/`buildVerifier`，drain `RunGoal` 事件流到 `LoopFinished`）+ `cogent eval run` / `cogent eval compare` 子命令。评测层核心逻辑有单测（fake Executor 免真实 LLM），并发路径有 `goleak` 无泄漏断言。守 §5.3 依赖方向：`internal/eval/*` 只 import 内核，engine/agent 装配经 `Executor` 注入，绝不被内核 import。用 native 9 任务实测产出满分基线（9/9，见 `eval/doc/baseline-2026-07-10.md`）。
+  - **E4-2（polyglot.Adapter，接入模式 B / 无 Docker）已落地并六语言端到端验证**，位于 `internal/eval/adapter/polyglot/`：定位用户 clone 的 aider `polyglot-benchmark` 数据集（`Root`，不联网拉取），扫描 `<lang>/exercises/practice/<slug>/`，解析 `.meta/config.json`（solution/test/editor/example 分类），把每个练习映射为 `adapter.Case`——工作区副本隔离且**排除 `.meta/`（参考解不泄露）**、**工作区目录命名为 slug**（cpp CMakeLists 由目录名推导工程名）、题面 `.docs/instructions.md` 注入 `Goal.Intent`、六语言测试命令生成到工作区外的 `verify.sh`（agent 够不到、不可篡改）、`testVerifier` 判定前用源目录的 test+editor 文件覆盖工作区副本（pristine 防篡改，§4.3/§7）。六语言测试命令：go=`go test ./...`、python=`pytest -q *_test.py`、rust=`cargo test`、javascript=`npm install && npm test`、java=系统 `gradle test`（避开 wrapper 的大文件下载）、cpp=`cmake 构建 + 跑 build/<slug>`。CLI `cogent eval run` 增 `--dataset=native|polyglot`、`--polyglot-dir`、`--limit`、`--exercise`。**验证**：`TestOracleSolutionsPass`（`POLYGLOT_DIR` 门控）用数据集参考解代替 agent 产出，走真实 adapter+verifier 代码路径，六语言（go/python/rust/javascript/java/cpp）各练习判定 **全部 PASS**——在不花 LLM 钱前提下证明数据集加载、工作区隔离、六语言命令、pristine 全部正确（对标 §5.1 可解性双校验的 polyglot 版）。**运行侧一次性成本**：需 clone 数据集 + 六语言工具链（见 `eval/README.md`「polyglot 环境准备」）；真实 agent 跑分（消耗 LLM token）为可选后续。
+- **待推进**：E1-5 运行期 Docker 任务（构建/跑服务/性能）、E3（SWE-bench Adapter）、E4-1（Terminal-Bench Adapter）、E5 规模化与夜间 CI；polyglot 真实 agent 跑分（消耗 LLM token）为可选后续。
 - 文中未落地部分的 Go 接口 / 类型均为**签名级草案**，落地时须遵循项目 Go 规范（导出符号带注释、`error` 末位、参数 ≤5、gofmt/goimports、函数 ≤80 行、嵌套 ≤4 层）。
 - 被测对象接口（`loop.Goal`/`Budget`/`Outcome`/`LoopResult`/`LoopEvent`、`loop.Orchestrator.RunGoal`、`verify.Verifier`/`ScriptVerifier`/`LLMJudgeVerifier`、`agent.Role`/`Pipeline`/`ReviewVerdict`）引用自现有代码，已核对签名一致。
 - 基准信息（SWE-bench / Terminal-Bench 2.0 / aider polyglot）来自公开资料检索，具体数据集版本以落地时官方仓库为准。
 
-> **文档状态**：v0.6 —— 设计 + E0/E1/E2 全部落地（selfcheck 6/6、预算三子任务、注入双载荷、双角色种子任务；`internal/eval/` native 加载器 + 顺序/并发运行器 + 判定矩阵 + 指标聚合 + Markdown/JSON 报告 + 逐 case 归档 + `eval run`/`eval compare`）。E1-5 运行期 Docker 任务与 E3–E5 主流基准 Adapter 待实现。
+> **文档状态**：v0.8 —— 设计 + E0/E1/E2 全部落地（selfcheck 6/6、native 满分基线 9/9）；**E4-2 polyglot.Adapter 完成并六语言端到端验证**（数据集加载 + 工作区隔离 + slug 命名 + 测试 pristine + 六语言测试命令 + CLI `--dataset=polyglot` + 单测 + `TestOracleSolutionsPass` 用参考解跑通 go/python/rust/js/java/cpp 全绿）。E1-5 运行期 Docker 任务、E3 SWE-bench、E4-1 Terminal-Bench Adapter 待实现；polyglot 真实 agent 跑分为可选后续。

@@ -35,6 +35,7 @@ type Executor interface {
 // RunOptions 控制执行体、并发、预算覆盖与归档。
 type RunOptions struct {
 	Executor      Executor    // 执行体（cmd 注入；测试注入 fake）
+	Suite         string      // 套件名（报告标题用，如 native | polyglot；空=native）
 	Concurrency   int         // 并发样本数（<=1 顺序执行；>1 启 worker 池）
 	Budget        loop.Budget // 全局预算覆盖（零值不覆盖，用 case 自带 / DefaultBudget）
 	ArtifactDir   string      // trace / progress / transcript / workspace 归档根目录

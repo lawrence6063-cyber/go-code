@@ -23,8 +23,12 @@ type Report struct {
 
 // buildReport 从逐样本结果与运行选项聚合出 Report。
 func buildReport(results []CaseResult, opts RunOptions) Report {
+	suite := strings.TrimSpace(opts.Suite)
+	if suite == "" {
+		suite = "native"
+	}
 	return Report{
-		Suite:       "native",
+		Suite:       suite,
 		Concurrency: opts.Concurrency,
 		GeneratedAt: time.Now().UTC(),
 		Total:       len(results),

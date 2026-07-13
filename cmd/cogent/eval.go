@@ -16,6 +16,7 @@ import (
 	"github.com/alaindong/cogent/internal/eval"
 	"github.com/alaindong/cogent/internal/eval/adapter"
 	"github.com/alaindong/cogent/internal/eval/adapter/native"
+	"github.com/alaindong/cogent/internal/eval/adapter/polyglot"
 	"github.com/alaindong/cogent/internal/loop"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/session"
@@ -24,14 +25,18 @@ import (
 
 // evalRunOptions 聚合 eval run 子命令的运行选项。
 type evalRunOptions struct {
-	tasksDir    string        // 评测集目录（默认 eval/tasks）
+	dataset     string        // 评测套件：native（默认）| polyglot
+	tasksDir    string        // native 评测集目录（默认 eval/tasks）
+	polyglotDir string        // polyglot 数据集根目录（--dataset=polyglot 时必填）
+	exercises   []string      // polyglot 只跑指定练习 slug（可空）
+	limit       int           // polyglot 每语言取样上限（0=不限）
 	filter      native.Filter // 标签筛选（id / 维度 / 难度 / 语言）
 	budget      loop.Budget   // 全局预算覆盖（零值不覆盖）
 	artifactDir string        // 归档根目录
 	out         string        // 报告输出路径（.md；同时写同名 .json）
 	model       string        // 覆盖模型（省成本用便宜模型）
 	maxSteps    int           // 单轮 ReAct 最大轮数
-	concurrency int           // 并发样本数（首版顺序执行）
+	concurrency int           // 并发样本数
 	dryRun      bool          // 只加载并打印 case 列表，不跑
 }
 
@@ -50,7 +55,10 @@ func newEvalCmd() *cobra.Command {
 // newEvalRunCmd 构造 eval run 子命令及其 flag（对齐 EVAL_SPEC §6.8）。
 func newEvalRunCmd() *cobra.Command {
 	var (
-		tasksDir                string
+		dataset                 string
+		tasksDir, polyglotDir   string
+		exercises               string
+		limit                   int
 		id, caps, diffs, langs  string
 		maxIter                 int
 		maxCost                 float64
@@ -61,14 +69,18 @@ func newEvalRunCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "跑 native 评测集（按标签筛选），产出基线报告",
+		Short: "跑评测集（native 或 polyglot，按标签筛选），产出基线报告",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if strings.TrimSpace(artifactDir) == "" {
 				artifactDir = filepath.Join("eval-artifacts", time.Now().UTC().Format("20060102-150405"))
 			}
 			return runEvalCmd(cmd.Context(), evalRunOptions{
-				tasksDir: tasksDir,
+				dataset:     dataset,
+				tasksDir:    tasksDir,
+				polyglotDir: polyglotDir,
+				exercises:   splitCSV(exercises),
+				limit:       limit,
 				filter: native.Filter{
 					IDs:          splitCSV(id),
 					Capabilities: splitCSV(caps),
@@ -86,8 +98,12 @@ func newEvalRunCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&tasksDir, "tasks-dir", filepath.Join("eval", "tasks"), "评测集目录")
-	f.StringVar(&id, "id", "", "只跑指定任务 id（可逗号分隔）")
+	f.StringVar(&dataset, "dataset", "native", "评测套件：native | polyglot")
+	f.StringVar(&tasksDir, "tasks-dir", filepath.Join("eval", "tasks"), "native 评测集目录")
+	f.StringVar(&polyglotDir, "polyglot-dir", "", "polyglot 数据集根目录（--dataset=polyglot 时必填）")
+	f.StringVar(&exercises, "exercise", "", "polyglot 只跑指定练习 slug（可逗号分隔）")
+	f.IntVar(&limit, "limit", 0, "polyglot 每语言取样上限（0 = 不限）")
+	f.StringVar(&id, "id", "", "只跑指定任务 id（可逗号分隔，native）")
 	f.StringVar(&caps, "capability", "", "按维度标签筛选（可逗号分隔）")
 	f.StringVar(&diffs, "difficulty", "", "按难度筛选（easy|medium|hard，可逗号分隔）")
 	f.StringVar(&langs, "language", "", "按语言筛选（可逗号分隔）")
@@ -98,7 +114,7 @@ func newEvalRunCmd() *cobra.Command {
 	f.StringVar(&out, "out", "", "报告输出路径（.md；同时写同名 .json；默认写入 artifact-dir/report.md）")
 	f.StringVar(&model, "model", "", "覆盖模型（省成本用便宜模型）")
 	f.IntVar(&maxSteps, "max-steps", 0, "单轮 ReAct 最大轮数（0 = 走 env/默认）")
-	f.IntVar(&concurrency, "n-concurrent", 1, "并发样本数（首版顺序执行）")
+	f.IntVar(&concurrency, "n-concurrent", 1, "并发样本数")
 	f.BoolVar(&dryRun, "dry-run", false, "只加载并打印 case 列表，不跑")
 	return cmd
 }
@@ -111,18 +127,17 @@ func runEvalCmd(ctx context.Context, opts evalRunOptions) error {
 	if opts.dryRun {
 		return evalDryRun(opts)
 	}
-	// eval 跑在一次性隔离工作区副本上：放宽 agent 沙箱以继承宿主 Go 工具链（否则 go test
+	// eval 跑在一次性隔离工作区副本上：放宽 agent 沙箱以继承宿主工具链（否则 go test/pytest 等
 	// 在受限 env 下跑不通、agent 陷入修环境泥潭直到超时）。用户显式设置则尊重其选择。
 	if os.Getenv("COGENT_SANDBOX_ENABLED") == "" {
 		_ = os.Setenv("COGENT_SANDBOX_ENABLED", "false")
 	}
-	adp := native.Adapter{
-		TasksDir:     opts.tasksDir,
-		WorkspaceDir: evalWorkspaceDir(opts.artifactDir),
-		Filter:       opts.filter,
+	adp, suite, err := buildEvalAdapter(opts)
+	if err != nil {
+		return err
 	}
 	if err := adp.Prepare(ctx); err != nil {
-		return fmt.Errorf("prepare native suite: %w", err)
+		return fmt.Errorf("prepare %s suite: %w", suite, err)
 	}
 	cases, err := adp.Cases(ctx)
 	if err != nil {
@@ -131,9 +146,10 @@ func runEvalCmd(ctx context.Context, opts evalRunOptions) error {
 	if len(cases) == 0 {
 		return errors.New("no cases matched the given filters")
 	}
-	fmt.Printf("cogent eval — running %d case(s), artifact-dir=%s\n", len(cases), opts.artifactDir)
+	fmt.Printf("cogent eval — suite=%s running %d case(s), artifact-dir=%s\n", suite, len(cases), opts.artifactDir)
 	report, err := eval.NewRunner().Run(ctx, cases, eval.RunOptions{
 		Executor:    evalExecutor{mode: engine.ModeAuto, maxSteps: opts.maxSteps},
+		Suite:       suite,
 		Concurrency: opts.concurrency,
 		Budget:      opts.budget,
 		ArtifactDir: opts.artifactDir,
@@ -145,6 +161,30 @@ func runEvalCmd(ctx context.Context, opts evalRunOptions) error {
 	return writeReport(report, opts.artifactDir, opts.out)
 }
 
+// buildEvalAdapter 按 --dataset 选择并装配 Adapter，返回 (adapter, suite 名)。
+func buildEvalAdapter(opts evalRunOptions) (adapter.Adapter, string, error) {
+	ws := evalWorkspaceDir(opts.artifactDir)
+	switch strings.ToLower(strings.TrimSpace(opts.dataset)) {
+	case "", "native":
+		return native.Adapter{TasksDir: opts.tasksDir, WorkspaceDir: ws, Filter: opts.filter}, "native", nil
+	case "polyglot":
+		if strings.TrimSpace(opts.polyglotDir) == "" {
+			return nil, "", errors.New("--polyglot-dir is required for --dataset=polyglot")
+		}
+		return polyglot.Adapter{
+			Root:         opts.polyglotDir,
+			WorkspaceDir: ws,
+			Filter: polyglot.Filter{
+				Languages: opts.filter.Languages,
+				Exercises: opts.exercises,
+				Limit:     opts.limit,
+			},
+		}, "polyglot", nil
+	default:
+		return nil, "", fmt.Errorf("unknown --dataset %q (want native | polyglot)", opts.dataset)
+	}
+}
+
 // evalWorkspaceDir 返回工作区副本根目录，置于 os.TempDir() 下（脱离 cogent git 仓库）：
 // 避免 agent 的 GitSnapshotter（git add -A）作用到父仓库、go 工具链下载污染仓库树。
 func evalWorkspaceDir(artifactDir string) string {
@@ -153,14 +193,44 @@ func evalWorkspaceDir(artifactDir string) string {
 
 // evalDryRun 只加载并打印匹配的任务列表（校验 Adapter / 筛选），不建副本、不跑 agent。
 func evalDryRun(opts evalRunOptions) error {
+	switch strings.ToLower(strings.TrimSpace(opts.dataset)) {
+	case "polyglot":
+		return evalDryRunPolyglot(opts)
+	default:
+		return evalDryRunNative(opts)
+	}
+}
+
+// evalDryRunNative 打印命中筛选的 native 任务列表。
+func evalDryRunNative(opts evalRunOptions) error {
 	specs, err := native.Load(opts.tasksDir, opts.filter)
 	if err != nil {
 		return fmt.Errorf("load specs: %w", err)
 	}
-	fmt.Printf("cogent eval --dry-run — %d task(s) matched:\n", len(specs))
+	fmt.Printf("cogent eval --dry-run (native) — %d task(s) matched:\n", len(specs))
 	for _, s := range specs {
 		fmt.Printf("  - %-24s difficulty=%-6s caps=%v langs=%v workdir=%s\n",
 			s.YAML.ID, s.YAML.Difficulty, s.YAML.Capabilities, s.YAML.Languages, s.YAML.Workdir)
+	}
+	return nil
+}
+
+// evalDryRunPolyglot 打印命中筛选的 polyglot 练习列表（校验数据集路径与筛选）。
+func evalDryRunPolyglot(opts evalRunOptions) error {
+	if strings.TrimSpace(opts.polyglotDir) == "" {
+		return errors.New("--polyglot-dir is required for --dataset=polyglot")
+	}
+	specs, err := polyglot.Load(opts.polyglotDir, polyglot.Filter{
+		Languages: opts.filter.Languages,
+		Exercises: opts.exercises,
+		Limit:     opts.limit,
+	})
+	if err != nil {
+		return fmt.Errorf("load polyglot specs: %w", err)
+	}
+	fmt.Printf("cogent eval --dry-run (polyglot) — %d exercise(s) matched:\n", len(specs))
+	for _, s := range specs {
+		fmt.Printf("  - %s/%s\n", s.Language, s.Slug)
 	}
 	return nil
 }
