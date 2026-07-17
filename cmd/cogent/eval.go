@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,9 @@ import (
 	"github.com/alaindong/cogent/internal/eval/adapter"
 	"github.com/alaindong/cogent/internal/eval/adapter/native"
 	"github.com/alaindong/cogent/internal/eval/adapter/polyglot"
+	"github.com/alaindong/cogent/internal/eval/adapter/swebench"
+	"github.com/alaindong/cogent/internal/eval/adapter/terminalbench"
+	"github.com/alaindong/cogent/internal/eval/scaffold"
 	"github.com/alaindong/cogent/internal/loop"
 	"github.com/alaindong/cogent/internal/observe"
 	"github.com/alaindong/cogent/internal/session"
@@ -25,19 +29,22 @@ import (
 
 // evalRunOptions 聚合 eval run 子命令的运行选项。
 type evalRunOptions struct {
-	dataset     string        // 评测套件：native（默认）| polyglot
-	tasksDir    string        // native 评测集目录（默认 eval/tasks）
-	polyglotDir string        // polyglot 数据集根目录（--dataset=polyglot 时必填）
-	exercises   []string      // polyglot 只跑指定练习 slug（可空）
-	limit       int           // polyglot 每语言取样上限（0=不限）
-	filter      native.Filter // 标签筛选（id / 维度 / 难度 / 语言）
-	budget      loop.Budget   // 全局预算覆盖（零值不覆盖）
-	artifactDir string        // 归档根目录
-	out         string        // 报告输出路径（.md；同时写同名 .json）
-	model       string        // 覆盖模型（省成本用便宜模型）
-	maxSteps    int           // 单轮 ReAct 最大轮数
-	concurrency int           // 并发样本数
-	dryRun      bool          // 只加载并打印 case 列表，不跑
+	dataset          string        // 评测套件：native（默认）| polyglot | swebench | terminalbench
+	tasksDir         string        // native 评测集目录（默认 eval/tasks）
+	polyglotDir      string        // polyglot 数据集根目录（--dataset=polyglot 时必填）
+	swebenchFile     string        // swebench 数据集 JSONL 文件（--dataset=swebench 时必填）
+	swebenchRepos    string        // swebench 本地仓库镜像根目录（--dataset=swebench 时必填）
+	terminalbenchDir string        // terminal-bench 数据集根目录（--dataset=terminalbench 时必填）
+	exercises        []string      // polyglot 只跑指定练习 slug（可空）
+	limit            int           // polyglot/swebench/terminalbench 取样上限（0=不限）
+	filter           native.Filter // 标签筛选（id / 维度 / 难度 / 语言）
+	budget           loop.Budget   // 全局预算覆盖（零值不覆盖）
+	artifactDir      string        // 归档根目录
+	out              string        // 报告输出路径（.md；同时写同名 .json）
+	model            string        // 覆盖模型（省成本用便宜模型）
+	maxSteps         int           // 单轮 ReAct 最大轮数
+	concurrency      int           // 并发样本数
+	dryRun           bool          // 只加载并打印 case 列表，不跑
 }
 
 // newEvalCmd 构造 eval 子命令：Headless 批量跑分运行器（EVAL_SPEC §6）。
@@ -49,38 +56,44 @@ func newEvalCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newEvalRunCmd())
 	cmd.AddCommand(newEvalCompareCmd())
+	cmd.AddCommand(newEvalScaffoldSelectCmd())
 	return cmd
 }
 
 // newEvalRunCmd 构造 eval run 子命令及其 flag（对齐 EVAL_SPEC §6.8）。
 func newEvalRunCmd() *cobra.Command {
 	var (
-		dataset                 string
-		tasksDir, polyglotDir   string
-		exercises               string
-		limit                   int
-		id, caps, diffs, langs  string
-		maxIter                 int
-		maxCost                 float64
-		maxWall                 time.Duration
-		artifactDir, out, model string
-		maxSteps, concurrency   int
-		dryRun                  bool
+		dataset                     string
+		tasksDir, polyglotDir       string
+		swebenchFile, swebenchRepos string
+		terminalbenchDir            string
+		exercises                   string
+		limit                       int
+		id, caps, diffs, langs      string
+		maxIter                     int
+		maxCost                     float64
+		maxWall                     time.Duration
+		artifactDir, out, model     string
+		maxSteps, concurrency       int
+		dryRun                      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "跑评测集（native 或 polyglot，按标签筛选），产出基线报告",
+		Short: "跑评测集（native / polyglot / swebench / terminalbench，按标签筛选），产出基线报告",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if strings.TrimSpace(artifactDir) == "" {
 				artifactDir = filepath.Join("eval-artifacts", time.Now().UTC().Format("20060102-150405"))
 			}
 			return runEvalCmd(cmd.Context(), evalRunOptions{
-				dataset:     dataset,
-				tasksDir:    tasksDir,
-				polyglotDir: polyglotDir,
-				exercises:   splitCSV(exercises),
-				limit:       limit,
+				dataset:          dataset,
+				tasksDir:         tasksDir,
+				polyglotDir:      polyglotDir,
+				swebenchFile:     swebenchFile,
+				swebenchRepos:    swebenchRepos,
+				terminalbenchDir: terminalbenchDir,
+				exercises:        splitCSV(exercises),
+				limit:            limit,
 				filter: native.Filter{
 					IDs:          splitCSV(id),
 					Capabilities: splitCSV(caps),
@@ -98,11 +111,14 @@ func newEvalRunCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&dataset, "dataset", "native", "评测套件：native | polyglot")
+	f.StringVar(&dataset, "dataset", "native", "评测套件：native | polyglot | swebench | terminalbench")
 	f.StringVar(&tasksDir, "tasks-dir", filepath.Join("eval", "tasks"), "native 评测集目录")
 	f.StringVar(&polyglotDir, "polyglot-dir", "", "polyglot 数据集根目录（--dataset=polyglot 时必填）")
+	f.StringVar(&swebenchFile, "swebench-file", "", "swebench 数据集 JSONL 文件（--dataset=swebench 时必填）")
+	f.StringVar(&swebenchRepos, "swebench-repos", "", "swebench 本地仓库镜像根目录（--dataset=swebench 时必填）")
+	f.StringVar(&terminalbenchDir, "terminalbench-dir", "", "terminal-bench 数据集根目录（--dataset=terminalbench 时必填）")
 	f.StringVar(&exercises, "exercise", "", "polyglot 只跑指定练习 slug（可逗号分隔）")
-	f.IntVar(&limit, "limit", 0, "polyglot 每语言取样上限（0 = 不限）")
+	f.IntVar(&limit, "limit", 0, "取样上限（polyglot 为每语言上限，swebench/terminalbench 为总数上限，0 = 不限）")
 	f.StringVar(&id, "id", "", "只跑指定任务 id（可逗号分隔，native）")
 	f.StringVar(&caps, "capability", "", "按维度标签筛选（可逗号分隔）")
 	f.StringVar(&diffs, "difficulty", "", "按难度筛选（easy|medium|hard，可逗号分隔）")
@@ -158,7 +174,43 @@ func runEvalCmd(ctx context.Context, opts evalRunOptions) error {
 	if err != nil {
 		return fmt.Errorf("run suite: %w", err)
 	}
+	if suite == "swebench" {
+		exportSwebenchPredictions(ctx, opts, report.Model)
+	}
 	return writeReport(report, opts.artifactDir, opts.out)
+}
+
+// exportSwebenchPredictions 从各样本工作区抽取 agent 产出的补丁，导出官方 predictions.jsonl
+// （接入模式 A，EVAL_SPEC §5.2.1）：交 sb-cli 云端 / run_evaluation 本地 Docker 判定。尽力而为——
+// 单条抽取失败仅告警不中断（本地模式 B 报告已产出，predictions 是给官方判定的额外产物）。
+func exportSwebenchPredictions(ctx context.Context, opts evalRunOptions, model string) {
+	insts, err := swebench.LoadInstances(opts.swebenchFile, swebench.Filter{InstanceIDs: opts.filter.IDs, Limit: opts.limit})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "swebench predictions: load instances failed: %v\n", err)
+		return
+	}
+	ws := evalWorkspaceDir(opts.artifactDir)
+	preds := make([]swebench.Prediction, 0, len(insts))
+	for _, inst := range insts {
+		workRoot := filepath.Join(ws, sanitizeCaseID(inst.InstanceID), "repo")
+		p, err := swebench.CollectPrediction(ctx, inst, workRoot, model)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "swebench predictions: collect %s failed: %v\n", inst.InstanceID, err)
+			continue
+		}
+		preds = append(preds, p)
+	}
+	out := filepath.Join(opts.artifactDir, "predictions.jsonl")
+	if err := writeToFile(out, func(w io.Writer) error { return swebench.WritePredictions(w, preds) }); err != nil {
+		fmt.Fprintf(os.Stderr, "swebench predictions: write failed: %v\n", err)
+		return
+	}
+	fmt.Printf("swebench predictions: %d patch(es) → %s (feed to sb-cli / run_evaluation)\n", len(preds), out)
+}
+
+// sanitizeCaseID 把 instance_id 里的路径分隔符换成下划线，与 swebench Adapter 的工作区命名一致。
+func sanitizeCaseID(id string) string {
+	return strings.NewReplacer("/", "_", "\\", "_", ":", "_").Replace(id)
 }
 
 // buildEvalAdapter 按 --dataset 选择并装配 Adapter，返回 (adapter, suite 名)。
@@ -180,8 +232,32 @@ func buildEvalAdapter(opts evalRunOptions) (adapter.Adapter, string, error) {
 				Limit:     opts.limit,
 			},
 		}, "polyglot", nil
+	case "swebench":
+		if strings.TrimSpace(opts.swebenchFile) == "" || strings.TrimSpace(opts.swebenchRepos) == "" {
+			return nil, "", errors.New("--swebench-file and --swebench-repos are required for --dataset=swebench")
+		}
+		return swebench.Adapter{
+			DatasetFile:  opts.swebenchFile,
+			ReposDir:     opts.swebenchRepos,
+			WorkspaceDir: ws,
+			Filter:       swebench.Filter{InstanceIDs: opts.filter.IDs, Limit: opts.limit},
+		}, "swebench", nil
+	case "terminalbench":
+		if strings.TrimSpace(opts.terminalbenchDir) == "" {
+			return nil, "", errors.New("--terminalbench-dir is required for --dataset=terminalbench")
+		}
+		return terminalbench.Adapter{
+			DatasetDir:   opts.terminalbenchDir,
+			WorkspaceDir: ws,
+			Filter: terminalbench.Filter{
+				IDs:          opts.filter.IDs,
+				Tags:         opts.filter.Capabilities,
+				Difficulties: opts.filter.Difficulties,
+				Limit:        opts.limit,
+			},
+		}, "terminalbench", nil
 	default:
-		return nil, "", fmt.Errorf("unknown --dataset %q (want native | polyglot)", opts.dataset)
+		return nil, "", fmt.Errorf("unknown --dataset %q (want native | polyglot | swebench | terminalbench)", opts.dataset)
 	}
 }
 
@@ -196,6 +272,10 @@ func evalDryRun(opts evalRunOptions) error {
 	switch strings.ToLower(strings.TrimSpace(opts.dataset)) {
 	case "polyglot":
 		return evalDryRunPolyglot(opts)
+	case "swebench":
+		return evalDryRunSwebench(opts)
+	case "terminalbench":
+		return evalDryRunTerminalbench(opts)
 	default:
 		return evalDryRunNative(opts)
 	}
@@ -231,6 +311,43 @@ func evalDryRunPolyglot(opts evalRunOptions) error {
 	fmt.Printf("cogent eval --dry-run (polyglot) — %d exercise(s) matched:\n", len(specs))
 	for _, s := range specs {
 		fmt.Printf("  - %s/%s\n", s.Language, s.Slug)
+	}
+	return nil
+}
+
+// evalDryRunSwebench 打印命中筛选的 swebench 样本列表（校验数据集文件与筛选）。
+func evalDryRunSwebench(opts evalRunOptions) error {
+	if strings.TrimSpace(opts.swebenchFile) == "" {
+		return errors.New("--swebench-file is required for --dataset=swebench")
+	}
+	insts, err := swebench.LoadInstances(opts.swebenchFile, swebench.Filter{InstanceIDs: opts.filter.IDs, Limit: opts.limit})
+	if err != nil {
+		return fmt.Errorf("load swebench instances: %w", err)
+	}
+	fmt.Printf("cogent eval --dry-run (swebench) — %d instance(s) matched:\n", len(insts))
+	for _, inst := range insts {
+		fmt.Printf("  - %-40s repo=%s base=%.10s\n", inst.InstanceID, inst.Repo, inst.BaseCommit)
+	}
+	return nil
+}
+
+// evalDryRunTerminalbench 打印命中筛选的 terminal-bench 任务列表（校验数据集路径与筛选）。
+func evalDryRunTerminalbench(opts evalRunOptions) error {
+	if strings.TrimSpace(opts.terminalbenchDir) == "" {
+		return errors.New("--terminalbench-dir is required for --dataset=terminalbench")
+	}
+	specs, err := terminalbench.Load(opts.terminalbenchDir, terminalbench.Filter{
+		IDs:          opts.filter.IDs,
+		Tags:         opts.filter.Capabilities,
+		Difficulties: opts.filter.Difficulties,
+		Limit:        opts.limit,
+	})
+	if err != nil {
+		return fmt.Errorf("load terminalbench tasks: %w", err)
+	}
+	fmt.Printf("cogent eval --dry-run (terminalbench) — %d task(s) matched:\n", len(specs))
+	for _, s := range specs {
+		fmt.Printf("  - %-30s difficulty=%-6s tags=%v\n", s.ID, s.YAML.Difficulty, s.YAML.Tags)
 	}
 	return nil
 }
@@ -347,6 +464,101 @@ func emitComparison(cmp eval.Comparison, out string) error {
 		return cmp.WriteMarkdown(os.Stdout)
 	}
 	return writeToFile(out, cmp.WriteMarkdown)
+}
+
+// scaffoldSelectResult 是单实例选择的过程记录（S-M 过程指标：候选数/选中理由/补丁聚焦度）。
+type scaffoldSelectResult struct {
+	InstanceID    string `json:"instance_id"`
+	NumCandidates int    `json:"num_candidates"`
+	Selected      bool   `json:"selected"`    // 是否选出非空补丁
+	Reason        string `json:"reason"`      // 选择理由（Select 返回）
+	PatchBytes    int    `json:"patch_bytes"` // 选中补丁字节数
+}
+
+// scaffoldSelectReport 汇总 scaffold-select 的过程指标，落 <artifact-dir>/scaffold-select-report.json。
+type scaffoldSelectReport struct {
+	Model         string                 `json:"model"`
+	TotalInstance int                    `json:"total_instances"`
+	SelectedCount int                    `json:"selected_instances"`
+	Results       []scaffoldSelectResult `json:"results"`
+}
+
+// newEvalScaffoldSelectCmd 构造 eval scaffold-select 子命令（SCAFFOLD_SPEC §4.1 / S-D）：
+// 从 best-of-N 产物目录读取每实例候选（+可选 Docker 信号），跑纯 Go Selector 选出 final patch，
+// 导出官方 predictions.jsonl，并落一份过程指标报告。选择逻辑不触网络/Docker（守 §3.3）。
+func newEvalScaffoldSelectCmd() *cobra.Command {
+	var artifactDir, out, model string
+	cmd := &cobra.Command{
+		Use:   "scaffold-select",
+		Short: "从 best-of-N 候选 + 可执行信号中选出每实例 final patch，导出 predictions.jsonl（SCAFFOLD_SPEC S-D）",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runScaffoldSelect(artifactDir, out, model)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&artifactDir, "artifact-dir", "", "scaffold 产物根目录（含 candidates/ 与可选 signals/，必填）")
+	f.StringVar(&out, "out", "", "predictions.jsonl 输出路径（默认 <artifact-dir>/predictions.jsonl）")
+	f.StringVar(&model, "model", "", "写入 predictions 的 model_name_or_path（默认取 COGENT_MODEL 或 cogent-scaffold）")
+	return cmd
+}
+
+// runScaffoldSelect 执行选择：加载产物 → 逐实例 Select → 写 predictions.jsonl + 过程报告。
+func runScaffoldSelect(artifactDir, out, model string) error {
+	if strings.TrimSpace(artifactDir) == "" {
+		return errors.New("--artifact-dir is required")
+	}
+	if strings.TrimSpace(model) == "" {
+		if model = os.Getenv("COGENT_MODEL"); strings.TrimSpace(model) == "" {
+			model = "cogent-scaffold"
+		}
+	}
+	insts, err := scaffold.LoadArtifacts(artifactDir)
+	if err != nil {
+		return fmt.Errorf("load scaffold artifacts: %w", err)
+	}
+	if len(insts) == 0 {
+		return fmt.Errorf("no candidates found under %s/candidates", artifactDir)
+	}
+	preds := make([]swebench.Prediction, 0, len(insts))
+	report := scaffoldSelectReport{Model: model, TotalInstance: len(insts)}
+	for _, ic := range insts {
+		patch, reason := scaffold.Select(ic.Candidates)
+		report.Results = append(report.Results, scaffoldSelectResult{
+			InstanceID:    ic.InstanceID,
+			NumCandidates: len(ic.Candidates),
+			Selected:      strings.TrimSpace(patch) != "",
+			Reason:        reason,
+			PatchBytes:    len(patch),
+		})
+		if strings.TrimSpace(patch) == "" {
+			fmt.Fprintf(os.Stderr, "scaffold-select: %s produced no patch (%s)\n", ic.InstanceID, reason)
+			continue
+		}
+		report.SelectedCount++
+		preds = append(preds, swebench.Prediction{
+			InstanceID:      ic.InstanceID,
+			ModelNameOrPath: model,
+			ModelPatch:      patch,
+		})
+	}
+	if strings.TrimSpace(out) == "" {
+		out = filepath.Join(artifactDir, "predictions.jsonl")
+	}
+	if err := writeToFile(out, func(w io.Writer) error { return swebench.WritePredictions(w, preds) }); err != nil {
+		return fmt.Errorf("write predictions: %w", err)
+	}
+	reportPath := filepath.Join(artifactDir, "scaffold-select-report.json")
+	if err := writeToFile(reportPath, func(w io.Writer) error {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(report)
+	}); err != nil {
+		return fmt.Errorf("write scaffold report: %w", err)
+	}
+	fmt.Printf("scaffold-select: %d/%d instance(s) selected → %s\n", report.SelectedCount, report.TotalInstance, out)
+	fmt.Printf("               process report → %s\n", reportPath)
+	return nil
 }
 
 // evalExecutor 复用 buildOrchestrator/buildVerifier 把一条 Case 跑成 LoopResult（EVAL_SPEC §6.2）。

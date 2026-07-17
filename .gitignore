@@ -27,3 +27,7 @@ coverage.txt
 .vscode/
 *.swp
 bin/
+
+# Python 编译缓存
+__pycache__/
+*.pyc

@@ -1,0 +1,32 @@
+diff --git a/eval/tasks/runtime_perf_optimize/repo/dedup.go b/eval/tasks/runtime_perf_optimize/repo/dedup.go
+index 5bd44f6f..12ec03f8 100644
+--- a/eval/tasks/runtime_perf_optimize/repo/dedup.go
++++ b/eval/tasks/runtime_perf_optimize/repo/dedup.go
+@@ -3,21 +3,16 @@ package perfx
+ 
+ // Dedup 返回去重后的切片（保持元素首次出现的顺序）。
+ //
+-// 当前实现是 O(n^2)：对每个元素都线性扫描已收集的结果切片判重。
+-// 在大输入（十万级）下过慢，需优化到线性时间复杂度（提示：用集合记录已见元素）。
++// 用集合记录已见元素，达到线性时间复杂度 O(n)。
+ func Dedup(in []int) []int {
+ 	out := make([]int, 0, len(in))
++	seen := make(map[int]struct{}, len(in))
+ 	for _, v := range in {
+-		found := false
+-		for _, u := range out {
+-			if u == v {
+-				found = true
+-				break
+-			}
+-		}
+-		if !found {
+-			out = append(out, v)
++		if _, ok := seen[v]; ok {
++			continue
+ 		}
++		seen[v] = struct{}{}
++		out = append(out, v)
+ 	}
+ 	return out
+ }

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cogent · SWE-bench Lite 实验报告（N=3 test-time scaling）</title>
+<style>
+  :root{
+    --bg:#0e1116; --card:#171b22; --card2:#1d232c; --line:#2a323d;
+    --fg:#e6edf3; --mut:#9aa7b4; --acc:#4b9fff; --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --grad:linear-gradient(135deg,#1f6feb 0%,#8957e5 100%);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65;font-size:15px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px 80px}
+  header{background:var(--grad);padding:48px 20px 40px;margin-bottom:32px}
+  header .inner{max-width:960px;margin:0 auto;padding:0 20px}
+  h1{margin:0 0 8px;font-size:28px;letter-spacing:.5px}
+  .sub{color:#dbe7ff;opacity:.92;font-size:15px;margin:0}
+  .meta{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .tag{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+    border-radius:20px;padding:3px 12px;font-size:12.5px;color:#fff}
+  h2{font-size:20px;margin:40px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:24px 0 10px;color:#cdd9e5}
+  p{color:var(--fg)}
+  .mut{color:var(--mut)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:8px 0 4px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 16px;text-align:center}
+  .kpi .n{font-size:30px;font-weight:700;line-height:1.1}
+  .kpi .l{font-size:12.5px;color:var(--mut);margin-top:6px}
+  .kpi .n.good{color:var(--good)} .kpi .n.acc{color:var(--acc)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  tr:last-child td{border-bottom:none}
+  tr.total td{font-weight:700;border-top:2px solid var(--line);background:var(--card2)}
+  .bar{position:relative;background:var(--card2);border-radius:6px;height:22px;overflow:hidden;min-width:120px}
+  .bar>span{position:absolute;left:0;top:0;bottom:0;border-radius:6px;
+    display:flex;align-items:center;justify-content:flex-end;padding-right:8px;
+    font-size:11.5px;color:#04130a;font-weight:700}
+  .b-hi{background:var(--good)} .b-mid{background:var(--warn)} .b-lo{background:var(--bad)}
+  .note{border-left:3px solid var(--acc);background:var(--card2);padding:12px 16px;border-radius:0 8px 8px 0;margin:12px 0}
+  .warnbox{border-left:3px solid var(--warn)}
+  .badbox{border-left:3px solid var(--bad)}
+  code{background:#0b0e13;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13px;
+    font-family:"SF Mono",Menlo,Consolas,monospace;color:#c9d5e1}
+  pre{background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow:auto;font-size:12.5px}
+  ul{margin:8px 0;padding-left:22px} li{margin:4px 0}
+  .pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:10px;font-weight:600}
+  .p-good{background:rgba(63,185,80,.15);color:var(--good)}
+  .p-warn{background:rgba(210,153,34,.15);color:var(--warn)}
+  .p-bad{background:rgba(248,81,73,.15);color:var(--bad)}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;margin:6px 0}
+  .step{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+  .arr{color:var(--acc);font-weight:700}
+  footer{color:var(--mut);font-size:12.5px;text-align:center;margin-top:48px;padding-top:20px;border-top:1px solid var(--line)}
+  @media(max-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <h1>SWE-bench Lite 实验报告</h1>
+    <p class="sub">Cogent Agent · test-time scaling（best-of-N + 去重多数投票）有效性验证</p>
+    <div class="meta">
+      <span class="tag">模型 deepseek-v4-pro</span>
+      <span class="tag">数据集 SWE-bench Lite (300)</span>
+      <span class="tag">N=3 · 温度 0.7</span>
+      <span class="tag">纯投票（无测试信号）</span>
+      <span class="tag">官方 Docker 判定</span>
+      <span class="tag">2026-07-17</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2>1. 结论速览</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="n good">64.1%</div><div class="l">Resolved@1<br>（184/287，官方口径）</div></div>
+    <div class="kpi"><div class="n acc">61.3%</div><div class="l">严格口径<br>（184/300）</div></div>
+    <div class="kpi"><div class="n">3</div><div class="l">每实例候选数 N<br>（best-of-3）</div></div>
+    <div class="kpi"><div class="n">0</div><div class="l">判定 error<br>（6 片全绿）</div></div>
+  </div>
+  <div class="note">
+    <b>一句话结论：</b>在 SWE-bench Lite 全量上，用「多候选采样 + 去重多数投票」的 test-time scaling，deepseek-v4-pro 达到
+    <b>Resolved@1 = 64.1%</b>。相对历史 30 实例单发基线（~60%）方向为正，但<b>非同组对照</b>，严谨的净增益需在同一实例集补跑单发 baseline 才能定论（见 §7）。
+  </div>
+
+  <h2>2. 背景与目标</h2>
+  <p>此前 30 实例 A/B 实测发现：对强模型，<b>prompt 级 scaffold 对命中率净零</b>（60% → 60%），只是让补丁更聚焦。诊断是——
+  单发 Pass@1 的上限由<b>单次采样的随机性</b>决定，提示措辞压不过采样噪声。</p>
+  <p>因此本实验验证业内主流（Agentless / mini-SWE-agent）抬 Pass@1 的公因子：
+  <b>多候选补丁 + 可执行/统计信号筛选</b>，而非提示。本轮先验证最低成本的一档：
+  <b>best-of-3 采样 + 归一化去重 + 多数投票</b>（尚未开启复现/回归测试信号）。</p>
+
+  <h2>3. 方法与流程</h2>
+  <div class="flow">
+    <span class="step">issue</span><span class="arr">→</span>
+    <span class="step">cogent 跑 N=3 次（温度 0.7）</span><span class="arr">→</span>
+    <span class="step">3 个候选补丁</span><span class="arr">→</span>
+    <span class="step">归一化去重 + 多数投票（纯 Go Selector）</span><span class="arr">→</span>
+    <span class="step">1 个 final patch</span><span class="arr">→</span>
+    <span class="step">官方 swebench Docker 判定</span>
+  </div>
+  <h3>选择器（Selector）逻辑</h3>
+  <ul>
+    <li><b>归一化去重</b>：剥离 diff 头噪声（index/@@ 行号）、统一空白、文件块排序，让语义等价的补丁归并同组。</li>
+    <li><b>多数投票</b>：取票数最多的补丁组；N=3 时可 2:1 决胜（这正是选 N=3 而非 N=2 的原因——N=2 会 1:1 平票、投票失效）。</li>
+    <li><b>平票破平</b>：复现通过 &gt; 回归不破 &gt; 最小改动（文件/行数少）&gt; 序号，保证确定性。</li>
+  </ul>
+  <div class="note warnbox"><b>合规红线：</b>选择信号<b>绝不</b>使用官方隐藏的 <code>test_patch / FAIL_TO_PASS / PASS_TO_PASS</code>；判定与选择严格分离。本轮为纯投票，全程不涉及任何隐藏判定信息。</div>
+
+  <h2>4. 实验配置</h2>
+  <div class="card">
+    <table>
+      <tr><th>项</th><th>值</th><th>说明</th></tr>
+      <tr><td>模型</td><td>deepseek-v4-pro</td><td>官方端点</td></tr>
+      <tr><td>N（best-of）</td><td>3</td><td>每实例采样 3 个候选</td></tr>
+      <tr><td>采样温度</td><td>0.7</td><td>制造候选多样性（COGENT_TEMPERATURE）</td></tr>
+      <tr><td>测试信号</td><td>关</td><td>本轮纯投票，未开复现/回归（S-B/C）</td></tr>
+      <tr><td>单实例预算</td><td>iter≤12 / cost≤$1 / wall≤15m</td><td>护栏</td></tr>
+      <tr><td>分片</td><td>6 片 × 50</td><td>断点续跑 + 每片判定后自动回收磁盘</td></tr>
+      <tr><td>判定</td><td>官方 run_evaluation</td><td>Colima Docker，隐藏测试判定</td></tr>
+    </table>
+  </div>
+
+  <h2>5. 结果</h2>
+  <div class="card">
+    <table>
+      <tr><th>分片</th><th>仓库构成（主）</th><th>Resolved@1</th><th style="width:38%">占比</th></tr>
+      <tr><td>s1</td><td>astropy + django</td><td class="num">37/49 · 75.5%</td><td><div class="bar"><span class="b-hi" style="width:75.5%">75.5%</span></div></td></tr>
+      <tr><td>s2</td><td>django</td><td class="num">35/49 · 71.4%</td><td><div class="bar"><span class="b-hi" style="width:71.4%">71.4%</span></div></td></tr>
+      <tr><td>s3</td><td>django + matplotlib + flask</td><td class="num">34/48 · 70.8%</td><td><div class="bar"><span class="b-hi" style="width:70.8%">70.8%</span></div></td></tr>
+      <tr><td>s4</td><td>matplotlib + seaborn + flask</td><td class="num">24/49 · 49.0%</td><td><div class="bar"><span class="b-lo" style="width:49%">49.0%</span></div></td></tr>
+      <tr><td>s5</td><td>scikit-learn + sphinx + sympy</td><td class="num">24/46 · 52.2%</td><td><div class="bar"><span class="b-lo" style="width:52.2%">52.2%</span></div></td></tr>
+      <tr><td>s6</td><td>sympy</td><td class="num">30/46 · 65.2%</td><td><div class="bar"><span class="b-mid" style="width:65.2%">65.2%</span></div></td></tr>
+      <tr class="total"><td>合计</td><td>全 Lite</td><td class="num">184/287 · 64.1%</td><td><div class="bar"><span class="b-mid" style="width:64.1%">64.1%</span></div></td></tr>
+    </table>
+    <p class="mut" style="margin:6px 0 0;font-size:13px">注：13 个实例 agent 未产出补丁（submitted 287 &lt; 300），已从官方口径分母剔除；按 300 计则为 61.3%。</p>
+  </div>
+
+  <h2>6. 分析</h2>
+  <h3>6.1 命中率主要由「仓库领域的可定位性/可测性」决定</h3>
+  <table>
+    <tr><th>仓库</th><th>领域</th><th>难度特征</th><th>本轮表现</th></tr>
+    <tr><td>django / flask</td><td>Web 框架</td><td>模块清晰、issue 定位性强、改几行即可</td><td><span class="pill p-good">好修</span></td></tr>
+    <tr><td>astropy</td><td>天文科学计算</td><td>单位/坐标/表格局部逻辑 bug</td><td><span class="pill p-good">好修</span></td></tr>
+    <tr><td>sympy</td><td>符号数学</td><td>体量最大但多为局部符号处理 bug，可定位</td><td><span class="pill p-warn">中等</span></td></tr>
+    <tr><td>scikit-learn / sphinx</td><td>ML / 文档工具</td><td>含数值算法/解析逻辑</td><td><span class="pill p-warn">中等</span></td></tr>
+    <tr><td>matplotlib / seaborn</td><td>可视化</td><td>C 扩展 + 多渲染后端 + 全局状态，改对且不破坏别处极难</td><td><span class="pill p-bad">最难</span></td></tr>
+  </table>
+  <p><b>s4（matplotlib 为主）仅 49%</b> 是全场短板，把均值从 astropy+django 那种「好修子集」的 70%+ 拉下来；<b>sympy（s6）65.2% 反而不差</b>——体量大不等于难修，可定位性才是关键。</p>
+
+  <h3>6.2 「73.5% → 64.1%」的回落说明了什么</h3>
+  <div class="note warnbox">
+    实验中途因磁盘写满，曾只跑完 s1+s2（astropy+django 为主）得到 <b>73.5%（98 实例）</b>——这是<b>偏乐观的子集数</b>。
+    补齐 matplotlib/sympy 等难仓库后回落到 <b>64.1%</b>。这提醒：<b>任何非全量的 SWE-bench 数字都要警惕仓库构成偏差</b>，只有全 300（或官方固定子集）才可对外引用。
+  </div>
+
+  <h2>7. 诚实局限（务必看）</h2>
+  <div class="note badbox">
+    <ul style="margin:0">
+      <li><b>非同组对照，暂不能声称「scaffold 抬了 +X 个百分点」</b>：64.1% 对比的 60% 单发基线来自<b>另一组 30 实例</b>，不是同一批。要严谨结论，需在<b>同一 287/300 实例</b>上跑单发 baseline（<code>N=1</code>）算 ΔResolved@1。</li>
+      <li><b>13 个实例未产出补丁</b>：agent 没改出任何 diff（空补丁被跳过），既影响分母口径，也是可优化点。</li>
+      <li><b>纯投票、未开测试信号</b>：本轮只兑现了「多数投票」这一层；复现/回归测试信号（S-B/C）尚未启用，Pass@3 上限未充分兑现。</li>
+      <li><b>轻微干扰因素</b>：s1–s3 使用的二进制存在上下文压缩缺 Model 的 bug（非致命 WARN，已于 s4 起修复），可能对个别超长实例有极小影响。</li>
+    </ul>
+  </div>
+
+  <h2>8. 工程踩坑与修复（过程可追溯）</h2>
+  <table>
+    <tr><th>问题</th><th>根因</th><th>修复</th></tr>
+    <tr><td>跑到一半磁盘写满，s3–s6 失败</td><td>agent 工作区副本（<code>/var/folders/.../cogent-eval</code>）跨片累积，非 Docker</td><td>driver 加「每片判定后清理镜像+工作区」；清理后 22G→355G</td></tr>
+    <tr><td>脚本秒退 <code>unbound variable</code></td><td><code>set -u</code> 下 <code>$VAR</code> 紧跟中文全角标点被误解析</td><td>全部改 <code>${VAR}</code> 花括号定界</td></tr>
+    <tr><td>清理逻辑又把脚本带崩</td><td><code>docker images|grep|while</code> 在 <code>set -e+pipefail</code> 下 grep 无匹配返回 1</td><td>先 <code>|| true</code> 捕获再循环删</td></tr>
+    <tr><td><code>context compact failed 400</code></td><td>上下文压缩摘要调用漏传 <code>Model</code>，空模型名被 DeepSeek 拒绝</td><td><code>Compact/summarize</code> 显式传 model + 回归测试；每片重建二进制自动生效</td></tr>
+  </table>
+
+  <h2>9. 下一步</h2>
+  <div class="card">
+    <ul>
+      <li><b>A（最高优先）</b>：同 287/300 实例跑单发 <code>N=1</code> baseline，得出可信的 <b>ΔResolved@1</b>，证明 test-time scaling 的净增益。</li>
+      <li><b>B</b>：对未解决的 103 个开 <code>ENABLE_TESTS=1</code>（LLM 自造复现测试 + 自导出回归），把 Pass@3 上限更多兑现为 Pass@1。</li>
+      <li><b>C</b>：排查 13 个「空补丁」实例成因（定位失败 / 迭代不足 / 预算触顶），并修复 summarize 汇总的 <code>I/O on closed file</code> 小瑕疵。</li>
+      <li><b>D</b>：针对 matplotlib/seaborn 短板，试验结构化定位（BM25 注入 top-k 相关文件）收窄上下文。</li>
+    </ul>
+  </div>
+
+  <footer>
+    Cogent · SWE-bench Lite 实验报告 · 生成于 2026-07-17 ·
+    数据来源 <code>eval/doc/swebench-lite-full-n3-result-20260716.md</code> 与各分片官方判定报告
+  </footer>
+</div>
+</body>
+</html>

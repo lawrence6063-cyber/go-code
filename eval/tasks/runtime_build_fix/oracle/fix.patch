@@ -1,0 +1,13 @@
+diff --git a/eval/tasks/runtime_build_fix/repo/main.go b/eval/tasks/runtime_build_fix/repo/main.go
+index 421743b0..715456ef 100644
+--- a/eval/tasks/runtime_build_fix/repo/main.go
++++ b/eval/tasks/runtime_build_fix/repo/main.go
+@@ -8,7 +8,7 @@ func Factorial(n int) int {
+ 	for i := 2; i <= n; i++ {
+ 		result *= i
+ 	}
+-	return
++	return result
+ }
+ 
+ func main() {

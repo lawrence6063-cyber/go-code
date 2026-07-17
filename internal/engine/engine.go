@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +33,24 @@ const (
 	defaultModel          = "deepseek-chat"   // 默认模型名
 	defaultLLMCallTimeout = 120 * time.Second // 单次 LLM 调用的独立超时上限（防首 token 长挂起，OPTIMIZE_SPEC R4）
 )
+
+// temperatureEnvVar 是主循环采样温度的可选覆盖（SCAFFOLD_SPEC §3.3 唯一内核触点）。
+// 未设置或非法时返回 0，llm.Request.Temperature=0 语义为「用提供方默认」，行为与现状完全一致；
+// 设为有效值（如 0.7）供 best-of-N 采样显式控制多样性。范围 [0,2] 之外视为未设。
+const temperatureEnvVar = "COGENT_TEMPERATURE"
+
+// envTemperature 读取 COGENT_TEMPERATURE 并归一化为 llm 采样温度；缺省/非法/越界返回 0（提供方默认）。
+func envTemperature() float32 {
+	v := strings.TrimSpace(os.Getenv(temperatureEnvVar))
+	if v == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(v, 32)
+	if err != nil || f < 0 || f > 2 {
+		return 0
+	}
+	return float32(f)
+}
 
 // systemPrompt 见 prompt.go。
 
@@ -133,6 +153,7 @@ func New(deps Deps) (Engine, error) {
 		workRoot:    deps.WorkRoot,
 		maxSteps:    deps.MaxSteps,
 		llmTimeout:  deps.LLMTimeout,
+		temperature: envTemperature(),
 	}
 	if e.maxSteps <= 0 {
 		e.maxSteps = DefaultMaxSteps
@@ -184,6 +205,7 @@ type engine struct {
 	lastUUID      string // 最近落盘事件的 UUID，用于 append-only 事件链的 ParentUUID
 	maxSteps      int
 	llmTimeout    time.Duration // 单次 LLM 调用超时上限
+	temperature   float32       // 主循环采样温度（COGENT_TEMPERATURE），0 表示用提供方默认
 	used          int           // 最近一次调用的上下文 token 估计，用于压缩判定
 	msgs          []types.Message
 	turnSnapshots []turnSnapshot // 每轮对话开始前的快照栈，支持连续 Undo
@@ -375,7 +397,7 @@ func (e *engine) maybeCompact(ctx context.Context, out chan<- types.StreamEvent)
 	before := used
 	e.meter.Count("cogent.compact.count", 1)
 	cctx, end := e.tracer.Start(ctx, "ctx.compact", observe.Attr{Key: "compact.tokens_before", Value: before})
-	compacted, err := e.ctxmgr.Compact(cctx, e.msgs, e.llm)
+	compacted, err := e.ctxmgr.Compact(cctx, e.msgs, e.llm, e.model)
 	if err != nil {
 		// 压缩失败会触发熔断（后续 ShouldCompact 恒 false），计入 circuit_open 指标并标注 span。
 		e.meter.Count("cogent.compact.circuit_open", 1)
@@ -426,7 +448,7 @@ func (e *engine) streamAssistant(
 	ctx, cancel := context.WithTimeout(ctx, e.effectiveLLMTimeout(ctx))
 	defer cancel()
 
-	deltas, err := e.llm.Stream(ctx, llm.Request{Messages: e.msgs, Tools: e.toolSchemas(), Model: e.model})
+	deltas, err := e.llm.Stream(ctx, llm.Request{Messages: e.msgs, Tools: e.toolSchemas(), Model: e.model, Temperature: e.temperature})
 	if err != nil {
 		return "", nil, fmt.Errorf("llm stream: %w", err)
 	}

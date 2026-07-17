@@ -1,0 +1,15 @@
+# task.yaml —— runtime_build_fix 评测元数据（EVAL_SPEC §4.6 运行期任务 · build）。
+id: runtime_build_fix
+difficulty: easy
+languages: [go]
+capabilities: [runtime]          # runtime：修复无法编译的工程，构建产物存在方可通过
+workdir: repo
+budget:
+  max_iterations: 6
+  max_cost_usd: 1.0
+  max_wallclock: 5m
+expected_outcome: achieved
+verifier: script
+timeout: 3m
+oracle: oracle/fix.patch
+solvability_check: true

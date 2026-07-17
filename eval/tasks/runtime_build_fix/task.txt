@@ -1,0 +1,7 @@
+修复 repo/ 下无法编译的 Go 程序。
+
+repo 是一个可构建为可执行文件的 Go 程序（package main），其中 Factorial 函数存在编译错误，
+导致 `go build` 失败。
+
+要求：仅修改 repo/main.go 使其能够正确编译并构建出可执行文件，且 Factorial 的行为正确
+（返回 n 的阶乘）。不要修改 repo/main_test.go。

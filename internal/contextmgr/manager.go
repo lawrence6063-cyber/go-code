@@ -81,9 +81,10 @@ func (m *Manager) ShouldCompact(usedTokens int, _ string) bool {
 }
 
 // Compact 压缩历史消息：保留尾部最近消息、平移切点保 function calling 配对、
-// 对丢弃段调 LLM 生成摘要后重建为 [system]+[摘要]+[尾部]。
+// 对丢弃段调 LLM 生成摘要后重建为 [system]+[摘要]+[尾部]。model 为摘要调用使用的模型名
+// （必须与主循环一致，否则部分提供方会因空模型名报 400）。
 // 失败累加计数，达熔断阈值返回 ErrCompactGiveUp；任何失败都返回原消息，绝不丢历史。
-func (m *Manager) Compact(ctx context.Context, msgs []types.Message, llmc llm.Client) ([]types.Message, error) {
+func (m *Manager) Compact(ctx context.Context, msgs []types.Message, llmc llm.Client, model string) ([]types.Message, error) {
 	if len(msgs) < 2 {
 		return msgs, nil // 仅有系统提示，无可压缩历史
 	}
@@ -91,7 +92,7 @@ func (m *Manager) Compact(ctx context.Context, msgs []types.Message, llmc llm.Cl
 	if cut <= 1 {
 		return msgs, nil // 尾部已覆盖全部历史，无需压缩
 	}
-	summary, err := summarize(ctx, llmc, msgs[1:cut], m.reserved)
+	summary, err := summarize(ctx, llmc, msgs[1:cut], m.reserved, model)
 	if err != nil {
 		return m.recordFailure(msgs, err)
 	}
@@ -132,12 +133,14 @@ func adjustForPairing(msgs []types.Message, cut int) int {
 
 // summarize 把被丢弃段序列化后调 LLM 生成单条状态摘要；收齐全部文本增量。
 // maxTokens 用摘要预留 token 限制输出长度，与有效窗口的预留形成闭环；低温保证稳定。
-func summarize(ctx context.Context, llmc llm.Client, discarded []types.Message, maxTokens int) (string, error) {
+// model 必须显式传入并与主循环一致——某些提供方（如 DeepSeek）对空模型名返回 400。
+func summarize(ctx context.Context, llmc llm.Client, discarded []types.Message, maxTokens int, model string) (string, error) {
 	req := llm.Request{
 		Messages: []types.Message{
 			{Role: types.RoleSystem, Text: summaryPrompt},
 			{Role: types.RoleUser, Text: serialize(discarded)},
 		},
+		Model:       model,
 		Temperature: summaryTemperature,
 		MaxTokens:   maxTokens,
 	}

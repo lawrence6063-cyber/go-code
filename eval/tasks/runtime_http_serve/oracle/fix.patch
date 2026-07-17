@@ -1,0 +1,14 @@
+diff --git a/eval/tasks/runtime_http_serve/repo/server.go b/eval/tasks/runtime_http_serve/repo/server.go
+index 1299a304..0358021b 100644
+--- a/eval/tasks/runtime_http_serve/repo/server.go
++++ b/eval/tasks/runtime_http_serve/repo/server.go
+@@ -14,8 +14,7 @@ func NewHandler() http.Handler {
+ 		if name == "" {
+ 			name = "world"
+ 		}
+-		// BUG: 未按要求返回 "hello, <name>"，而是写了占位响应
+-		fmt.Fprint(w, "TODO")
++		fmt.Fprintf(w, "hello, %s", name)
+ 	})
+ 	return mux
+ }

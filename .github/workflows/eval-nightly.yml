@@ -1,0 +1,43 @@
+# eval-nightly — 非门禁的夜间评测跑分（EVAL_SPEC E5-2「质量基线，非 CI 门禁」）。
+# 每日定时跑 cogent 评测集，产出报告并与基线 compare（退化仅告警，不阻断主干）。
+# 密钥仅从 GitHub secret 注入为环境变量，绝不硬编码。
+name: eval-nightly
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 每日 UTC 18:00
+  workflow_dispatch:
+    inputs:
+      eval_args:
+        description: "额外透传给 eval run 的参数（如 --capability=convergence）"
+        required: false
+        default: ""
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    # 非门禁：跑分失败不影响仓库其它检查
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run nightly eval (non-gating quality baseline)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          COGENT_LLM_BASE_URL: https://api.deepseek.com/v1
+          COGENT_MODEL: deepseek-chat
+          EVAL_ARGS: ${{ github.event.inputs.eval_args }}
+        run: bash scripts/eval-nightly.sh
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-nightly-report
+          path: eval-artifacts/nightly/
+          if-no-files-found: ignore

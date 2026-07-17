@@ -1,0 +1,15 @@
+# task.yaml —— runtime_perf_optimize 评测元数据（EVAL_SPEC §4.6 运行期任务 · perf）。
+id: runtime_perf_optimize
+difficulty: medium
+languages: [go]
+capabilities: [runtime]          # runtime：优化热点函数使其在性能预算内完成
+workdir: repo
+budget:
+  max_iterations: 8
+  max_cost_usd: 1.0
+  max_wallclock: 6m
+expected_outcome: achieved
+verifier: script
+timeout: 4m
+oracle: oracle/fix.patch
+solvability_check: true

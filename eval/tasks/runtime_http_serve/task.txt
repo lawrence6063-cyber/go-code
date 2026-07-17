@@ -1,0 +1,8 @@
+补全 repo/ 下的 HTTP 服务处理器，使其正确响应问候请求。
+
+repo 是一个 Go 包（serveapp），`NewHandler()` 返回一个 HTTP 处理器，
+其 `/greet` 路由当前返回的是占位响应体（`TODO`），不符合要求。
+
+要求：仅修改 repo/server.go 的处理器，使 `GET /greet?name=X` 返回状态码 200、
+响应体为 `hello, X`（当 name 缺省时用 `world`，即 `hello, world`）。
+不要修改 repo/server_test.go。

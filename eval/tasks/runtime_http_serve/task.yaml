@@ -1,0 +1,15 @@
+# task.yaml —— runtime_http_serve 评测元数据（EVAL_SPEC §4.6 运行期任务 · serve）。
+id: runtime_http_serve
+difficulty: medium
+languages: [go]
+capabilities: [runtime]          # runtime：起真实 HTTP 服务，curl 探活断言响应
+workdir: repo
+budget:
+  max_iterations: 8
+  max_cost_usd: 1.0
+  max_wallclock: 6m
+expected_outcome: achieved
+verifier: script
+timeout: 4m
+oracle: oracle/fix.patch
+solvability_check: true

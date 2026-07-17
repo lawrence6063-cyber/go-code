@@ -26,6 +26,7 @@ type fakeLLM struct {
 	call        int
 	gotMessages [][]types.Message
 	gotTools    [][]llm.ToolSchema
+	gotTemps    []float32     // 每次调用收到的采样温度，供温度旋钮测试断言
 	block       chan struct{} // 非 nil 时在发送前阻塞，直至关闭或 ctx 取消（用于取消测试）
 }
 
@@ -36,6 +37,7 @@ func (f *fakeLLM) Stream(ctx context.Context, req llm.Request) (<-chan llm.Delta
 	msgs := append([]types.Message(nil), req.Messages...)
 	f.gotMessages = append(f.gotMessages, msgs)
 	f.gotTools = append(f.gotTools, append([]llm.ToolSchema(nil), req.Tools...))
+	f.gotTemps = append(f.gotTemps, req.Temperature)
 	var deltas []llm.Delta
 	if idx < len(f.turns) {
 		deltas = f.turns[idx]

@@ -87,13 +87,13 @@ func TestManager_CircuitBreaker(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if _, err := m.Compact(ctx, msgs, f); err == nil || errors.Is(err, ErrCompactGiveUp) {
+	if _, err := m.Compact(ctx, msgs, f, "test-model"); err == nil || errors.Is(err, ErrCompactGiveUp) {
 		t.Fatalf("first failure err = %v, want a non-giveup error", err)
 	}
-	if _, err := m.Compact(ctx, msgs, f); err == nil || errors.Is(err, ErrCompactGiveUp) {
+	if _, err := m.Compact(ctx, msgs, f, "test-model"); err == nil || errors.Is(err, ErrCompactGiveUp) {
 		t.Fatalf("second failure err = %v, want a non-giveup error", err)
 	}
-	if _, err := m.Compact(ctx, msgs, f); !errors.Is(err, ErrCompactGiveUp) {
+	if _, err := m.Compact(ctx, msgs, f, "test-model"); !errors.Is(err, ErrCompactGiveUp) {
 		t.Fatalf("third failure err = %v, want ErrCompactGiveUp", err)
 	}
 	if m.ShouldCompact(1<<30, "test-model") {
@@ -112,9 +112,12 @@ func TestManager_Compact_Success(t *testing.T) {
 		{Role: types.RoleUser, Text: "latest question"},
 	}
 
-	out, err := m.Compact(context.Background(), msgs, f)
+	out, err := m.Compact(context.Background(), msgs, f, "test-model")
 	if err != nil {
 		t.Fatalf("Compact: %v", err)
+	}
+	if f.lastReq.Model != "test-model" {
+		t.Errorf("summary request Model = %q, want test-model (empty model breaks DeepSeek 400)", f.lastReq.Model)
 	}
 	if len(out) != 3 {
 		t.Fatalf("rebuilt len = %d, want 3: %+v", len(out), out)
@@ -133,7 +136,7 @@ func TestManager_Compact_Success(t *testing.T) {
 func TestManager_Compact_NoHistory(t *testing.T) {
 	m := New()
 	msgs := []types.Message{{Role: types.RoleSystem, Text: "sys"}}
-	out, err := m.Compact(context.Background(), msgs, &fakeLLM{text: "x"})
+	out, err := m.Compact(context.Background(), msgs, &fakeLLM{text: "x"}, "test-model")
 	if err != nil {
 		t.Fatalf("Compact: %v", err)
 	}
@@ -161,7 +164,7 @@ func TestAdjustForPairing(t *testing.T) {
 func TestManager_Compact_PreservesPairing(t *testing.T) {
 	t.Setenv(envKeep, "2") // 让切点尽量靠尾部，可能落在 tool_result 上
 	m := New()
-	out, err := m.Compact(context.Background(), pairedHistory(), &fakeLLM{text: "S"})
+	out, err := m.Compact(context.Background(), pairedHistory(), &fakeLLM{text: "S"}, "test-model")
 	if err != nil {
 		t.Fatalf("Compact: %v", err)
 	}
@@ -194,8 +197,11 @@ func TestManager_Compact_SummaryRequestBudget(t *testing.T) {
 		{Role: types.RoleUser, Text: "latest question"},
 	}
 
-	if _, err := m.Compact(context.Background(), msgs, f); err != nil {
+	if _, err := m.Compact(context.Background(), msgs, f, "sum-model"); err != nil {
 		t.Fatalf("Compact: %v", err)
+	}
+	if f.lastReq.Model != "sum-model" {
+		t.Errorf("summary request Model = %q, want sum-model", f.lastReq.Model)
 	}
 	if f.lastReq.MaxTokens != 1234 {
 		t.Errorf("summary MaxTokens = %d, want 1234 (= ReservedForSummary)", f.lastReq.MaxTokens)
